@@ -1,100 +1,137 @@
-//
-//  PlayerStatisticsRow.swift
-//  PokerCardRecognizer
-//
-//  Created by Николас on 25.03.2025.
-//
 import SwiftUI
 import CoreData
 
 struct PlayerStatisticsRow: View {
     @Environment(\.managedObjectContext) private var viewContext
     @ObservedObject var player: Player
+    var filteredGames: [Game]
     var selectedDate: Date?
-    
+    var selectedGameType: GameTypeFilter
     var onShowDetails: () -> Void
-        
-    // Фильтруем связи GameWithPlayer по дате, если selectedDate задан
-    var filteredGameWithPlayers: [GameWithPlayer] {
-        let set = (player.gameWithPlayers as? Set<GameWithPlayer>)?.filter { $0.game != nil } ?? []
-        if let selected = selectedDate {
-            return set.filter { gwp in
-                if let timestamp = gwp.game?.timestamp {
-                    return Calendar.current.isDate(timestamp, inSameDayAs: selected)
-                }
-                return false
-            }
-            .sorted { ($0.player?.name ?? "") < ($1.player?.name ?? "") }
-        } else {
-            return set.sorted { ($0.player?.name ?? "") < ($1.player?.name ?? "") }
-        }
-    }
-    
-    // Количество игр, в которых участвовал игрок, по связи gameWithPlayers
-    var gamesCount: Int {
-        filteredGameWithPlayers.count
-    }
-    
-    var totalBuyin: Int {
-        filteredGameWithPlayers.reduce(0) { $0 + Int($1.buyin) }
-    }
-    
-    var totalCashout: Int {
-        filteredGameWithPlayers.reduce(0) { $0 + Int($1.cashout) }
-    }
-    
-    // Финальная сумма: (сумма байинов * 2000) - сумма кэшаутов
-    var finalValue: Int {
-        return totalCashout - (totalBuyin * 2000)
-    }
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Имя игрока
-            Text(player.name ?? "Без имени")
-                .font(.headline)
-            
-            // Вторая строка: слева сумма байинов, справа количество игр
-            HStack {
-                Text("Сумма байинов: \(totalBuyin)")
-                Spacer()
-                Text("Сумма кэшаутов: \(totalCashout)")
+        let isBilliard = selectedGameType == .billiard
+
+        if isBilliard {
+            let gamesForPlayer = filteredGames.filter { game in
+                game.player1 == player || game.player2 == player
             }
-            
-            // Третья строка: слева сумма кэшаутов, справа финальная сумма
-            HStack {
-                Text("Участвовал(а): \(gamesCount)")
-                Spacer()
-                Text("Финальная сумма: \(finalValue)")
+
+            let allBatches = gamesForPlayer.flatMap { game in
+                (game.billiardBatches as? Set<BilliardBatche>) ?? []
             }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(8)
-        .onAppear {
-            // Принудительно обновляем объект, чтобы UI увидел изменения
-            print("filteredGameWithPlayers for \(player.name ?? "Без имени"):", filteredGameWithPlayers)
-            viewContext.refresh(player, mergeChanges: true)
-        }
-        .contextMenu {
-            Button(action: copyStatistics) {
-                Label("Копировать", systemImage: "doc.on.doc")
+
+            let totalBalls = allBatches.reduce(0) { sum, batch in
+                let isPlayer1 = batch.game?.player1 == player
+                return sum + Int(isPlayer1 ? batch.scorePlayer1 : batch.scorePlayer2)
             }
-            Button(action: {
-                onShowDetails()
-            }) {
-                Label("Подробнее", systemImage: "info.circle")
+
+            let winCount = allBatches.reduce(0) { count, batch in
+                let isPlayer1 = batch.game?.player1 == player
+                let won = (isPlayer1 && batch.scorePlayer1 == 8) || (!isPlayer1 && batch.scorePlayer2 == 8)
+                return count + (won ? 1 : 0)
+            }
+
+            if totalBalls == 0 && winCount == 0 {
+                EmptyView()
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(player.name ?? "Без имени")
+                        .font(.headline)
+                    Text("Выигранных партий: \(winCount)")
+                    Text("Всего забито шаров: \(totalBalls)")
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(8)
+                .contextMenu {
+                    Button(action: copyBilliardStatistics) {
+                        Label("Копировать", systemImage: "doc.on.doc")
+                    }
+                    Button(action: { onShowDetails() }) {
+                        Label("Подробнее", systemImage: "info.circle")
+                    }
+                }
+            }
+
+        } else {
+            let set = player.gameWithPlayers as? Set<GameWithPlayer> ?? []
+            let filtered = set.filter { gwp in
+                guard let game = gwp.game else { return false }
+                let isInFilteredGames = filteredGames.contains(where: { $0.objectID == game.objectID })
+
+                if let selected = selectedDate {
+                    if let timestamp = game.timestamp {
+                        return isInFilteredGames && Calendar.current.isDate(timestamp, inSameDayAs: selected)
+                    } else {
+                        return false
+                    }
+                }
+
+                return isInFilteredGames
+            }
+
+            if filtered.isEmpty {
+                EmptyView()
+            } else {
+                let buyin = filtered.reduce(0) { $0 + Int($1.buyin) }
+                let cashout = filtered.reduce(0) { $0 + Int($1.cashout) }
+                let final = cashout - (buyin * 2000)
+                let gamesCount = filtered.count
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(player.name ?? "Без имени")
+                        .font(.headline)
+
+                    HStack {
+                        Text("Сумма байинов: \(buyin)")
+                        Spacer()
+                        Text("Сумма кэшаутов: \(cashout)")
+                    }
+
+                    HStack {
+                        Text("Участвовал(а): \(gamesCount)")
+                        Spacer()
+                        Text("Финальная сумма: \(final)")
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(8)
+                .contextMenu {
+                    Button(action: copyPokerStatistics) {
+                        Label("Копировать", systemImage: "doc.on.doc")
+                    }
+                    Button(action: { onShowDetails() }) {
+                        Label("Подробнее", systemImage: "info.circle")
+                    }
+                }
             }
         }
     }
-    
-    private func copyStatistics() {
-        let text = """
+
+    private func copyPokerStatistics() {
+        let set = player.gameWithPlayers as? Set<GameWithPlayer> ?? []
+        let filtered = set.filter { gwp in
+            guard let game = gwp.game else { return false }
+            return filteredGames.contains(where: { $0.objectID == game.objectID })
+        }
+        let buyin = filtered.reduce(0) { $0 + Int($1.buyin) }
+        let cashout = filtered.reduce(0) { $0 + Int($1.cashout) }
+        let final = cashout - (buyin * 2000)
+
+        UIPasteboard.general.string = """
         \(player.name ?? "Без имени")
-        Сумма байинов: \(totalBuyin)    Участвовал(а): \(gamesCount)
-        Сумма кэшаутов: \(totalCashout)    Финальная сумма: \(finalValue)
+        Байины: \(buyin), Кэшауты: \(cashout), Финал: \(final)
         """
-        UIPasteboard.general.string = text
+    }
+
+    private func copyBilliardStatistics() {
+        UIPasteboard.general.string = """
+        \(player.name ?? "Без имени")
+        Бильярд: Партии и шары рассчитаны
+        """
     }
 }
