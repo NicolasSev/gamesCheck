@@ -2,7 +2,7 @@
 //  Game+CoreDataProperties.swift
 //  PokerCardRecognizer
 //
-//  Created by Николас on 31.03.2025.
+//  Created by Николас on 05.04.2025.
 //
 //
 
