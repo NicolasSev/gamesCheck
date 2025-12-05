@@ -259,7 +259,7 @@ struct CalendarView: View {
                     .padding(.horizontal, 8)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Все игры выбранного типа:")
+                        Text("Выбранные игры")
                             .font(.headline)
                         if games.isEmpty {
                             Text("Нет игр для отображения")
