@@ -230,27 +230,19 @@ struct CalendarView: View {
                                     HStack {
                                         if let type = game.gameType, type == "Бильярд" {
                                             let info = GameResultInfo(game: game)
-                                            // Для игр по бильярду — иконка бильярдного шара (замените на нужное изображение, например, из Assets)
-                                            NavigationLink(destination: {
-                                                if game.gameType == "Бильярд" {
-                                                    BilliardGameDetailView(game: game)
-                                                } else {
-                                                    GameDetailView(game: game)
-                                                }
-                                            }, label: {
-                                                VStack(alignment: .leading) {
-                                                    Text(formattedTime(from: game.timestamp))
-                                                    Text("Дата: \(info.shortDate)")
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                    Text("Партии: \(info.batches.count)")
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                    Text("Результат: \(info.resultText)")
-                                                        .font(.caption2)
-                                                        .foregroundColor(.blue)
-                                                }
-                                            })
+                                            // Для игр по бильярду — отображаем информацию о партиях
+                                            VStack(alignment: .leading) {
+                                                Text(formattedTime(from: game.timestamp))
+                                                Text("Дата: \(info.shortDate)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("Партии: \(info.batches.count)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("Результат: \(info.resultText)")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.blue)
+                                            }
                                         } else {
                                             // Для покера — иконка карты (например, spade)
                                             Image(systemName: "suit.spade.fill")
@@ -285,26 +277,19 @@ struct CalendarView: View {
                                     HStack {
                                         if let type = game.gameType, type == "Бильярд" {
                                             let info = GameResultInfo(game: game)
-                                            NavigationLink(destination: {
-                                                if game.gameType == "Бильярд" {
-                                                    BilliardGameDetailView(game: game)
-                                                } else {
-                                                    GameDetailView(game: game)
-                                                }
-                                            }, label: {
-                                                VStack(alignment: .leading) {
-                                                    Text(formattedTime(from: game.timestamp))
-                                                    Text("Дата: \(info.shortDate)")
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                    Text("Партии: \(info.batches.count)")
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                    Text("Результат: \(info.resultText)")
-                                                        .font(.caption2)
-                                                        .foregroundColor(.blue)
-                                                }
-                                            })
+                                            // Для игр по бильярду — отображаем информацию о партиях
+                                            VStack(alignment: .leading) {
+                                                Text(formattedTime(from: game.timestamp))
+                                                Text("Дата: \(info.shortDate)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("Партии: \(info.batches.count)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("Результат: \(info.resultText)")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.blue)
+                                            }
                                         } else {
                                             Image(systemName: "suit.spade.fill")
                                                 .foregroundColor(.red)

@@ -199,10 +199,6 @@ struct ImportDataSheet: View {
         errorMessage = nil
         successMessage = nil
         
-        isImporting = true
-        errorMessage = nil
-        successMessage = nil
-        
         let service = DataImportService(viewContext: viewContext)
         let parsedGames = service.parseText(inputText)
         let calendar = Calendar.current
@@ -267,4 +263,3 @@ struct ImportDataSheet: View {
         return formatter
     }
 }
-

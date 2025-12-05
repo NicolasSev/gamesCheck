@@ -18,16 +18,30 @@ struct GameResultInfo {
 
         let player1Score = batches.reduce(0) {
             let baseScore = $0 + Int($1.scorePlayer1) * 100
-            let bonusForEight = (Int($1.scorePlayer1) == 8) ? 1000 : 0
-            let bonusForEightZero = (Int($1.scorePlayer1) == 8 && Int($1.scorePlayer2) == 0) ? 1000 : 0
-            return baseScore + bonusForEight + bonusForEightZero
+            // Бонус 8-0 заменяет обычный бонус за 8, а не дополняет его
+            let bonus: Int
+            if Int($1.scorePlayer1) == 8 && Int($1.scorePlayer2) == 0 {
+                bonus = 1000 // Бонус за 8-0
+            } else if Int($1.scorePlayer1) == 8 {
+                bonus = 1000 // Обычный бонус за 8
+            } else {
+                bonus = 0
+            }
+            return baseScore + bonus
         }
 
         let player2Score = batches.reduce(0) {
             let baseScore = $0 + Int($1.scorePlayer2) * 100
-            let bonusForEight = (Int($1.scorePlayer2) == 8) ? 1000 : 0
-            let bonusForEightZero = (Int($1.scorePlayer2) == 8 && Int($1.scorePlayer1) == 0) ? 1000 : 0
-            return baseScore + bonusForEight + bonusForEightZero
+            // Бонус 8-0 заменяет обычный бонус за 8, а не дополняет его
+            let bonus: Int
+            if Int($1.scorePlayer2) == 8 && Int($1.scorePlayer1) == 0 {
+                bonus = 1000 // Бонус за 8-0
+            } else if Int($1.scorePlayer2) == 8 {
+                bonus = 1000 // Обычный бонус за 8
+            } else {
+                bonus = 0
+            }
+            return baseScore + bonus
         }
 
         let diff = player1Score - player2Score
