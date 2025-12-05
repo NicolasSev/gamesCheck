@@ -38,6 +38,7 @@ struct MainView: View {
     @State private var isAddPlayerSheetPresented = false
     @State private var isAddGameSheetPresented = false
     @State private var isCameraSheetPresented = false
+    @State private var isImportDataSheetPresented = false
 
     @State private var selectedDate: Date? = nil
     @State private var dateRange: ClosedRange<Date>? = nil
@@ -149,16 +150,26 @@ struct MainView: View {
                             Text("Нет данных").padding()
                         } else {
                             ForEach(sortedPlayers) { player in
-                                PlayerStatisticsRow(
-                                    player: player,
-                                    filteredGames: filteredGames,
-                                    selectedDate: selectedDate,
-                                    selectedGameType: selectedGameType,
-                                    onShowDetails: {
-                                        selectedPlayerForDetails = player
-                                    }
-                                )
-                                .padding(.horizontal)
+                                if selectedGameType == .poker {
+                                    PlayerStatisticsRowPoker(
+                                        player: player,
+                                        filteredGames: filteredGames,
+                                        selectedDate: selectedDate,
+                                        onShowDetails: {
+                                            selectedPlayerForDetails = player
+                                        }
+                                    )
+                                    .padding(.horizontal)
+                                } else {
+                                    PlayerStatisticsRowBilliard(
+                                        player: player,
+                                        filteredGames: filteredGames,
+                                        onShowDetails: {
+                                            selectedPlayerForDetails = player
+                                        }
+                                    )
+                                    .padding(.horizontal)
+                                }
                             }
                         }
 
@@ -178,6 +189,9 @@ struct MainView: View {
             .navigationTitle("Игры")
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button(action: { isImportDataSheetPresented = true }) {
+                        Label("Импорт", systemImage: "square.and.arrow.down")
+                    }
                     Button(action: { isCameraSheetPresented = true }) {
                         Label("Камера", systemImage: "camera.fill")
                     }
@@ -192,7 +206,9 @@ struct MainView: View {
                     }
                 }
             }
-            .sheet(isPresented: $isCameraSheetPresented) { CameraView() }
+            .sheet(isPresented: $isCameraSheetPresented) {
+                CameraViewWrapper()
+            }
             .sheet(isPresented: $isAddPlayerSheetPresented) {
                 AddPlayerSheet(isPresented: $isAddPlayerSheetPresented)
                     .environment(\.managedObjectContext, viewContext)
@@ -202,11 +218,19 @@ struct MainView: View {
                     .environment(\.managedObjectContext, viewContext)
             }
             .sheet(item: $selectedPlayerForDetails) { player in
-                PlayerDetailSheet(player: player, selectedDate: selectedDate)
-                    .environment(\.managedObjectContext, viewContext)
+                PlayerStatisticsChartView(
+                    player: player,
+                    filteredGames: filteredGames,
+                    selectedDate: selectedDate
+                )
+                .environment(\.managedObjectContext, viewContext)
             }
             .sheet(item: $shareData) { data in
                 ShareSheet(activityItems: data.items)
+            }
+            .sheet(isPresented: $isImportDataSheetPresented) {
+                ImportDataSheet(isPresented: $isImportDataSheetPresented)
+                    .environment(\.managedObjectContext, viewContext)
             }
         }
     }

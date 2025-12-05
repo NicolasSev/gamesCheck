@@ -1,3 +1,11 @@
+//
+//  PlayerStatisticsRowPoker.swift
+//  PokerCardRecognizer
+//
+//  Created by Николас on 06.04.2025.
+//
+
+
 import SwiftUI
 import CoreData
 
@@ -53,6 +61,9 @@ struct PlayerStatisticsRowPoker: View {
             .frame(maxWidth: .infinity)
             .background(Color(.secondarySystemBackground))
             .cornerRadius(8)
+            .onTapGesture {
+                onShowDetails()
+            }
             .contextMenu {
                 Button(action: copyPokerStatistics) {
                     Label("Копировать", systemImage: "doc.on.doc")

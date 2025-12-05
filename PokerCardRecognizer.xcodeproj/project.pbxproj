@@ -6,17 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		171F35992DA175CE00430DDF /* GameWithPlayer+CoreDataProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35962DA175CE00430DDF /* GameWithPlayer+CoreDataProperties.swift */; };
-		171F359A2DA175CE00430DDF /* Player+CoreDataProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35982DA175CE00430DDF /* Player+CoreDataProperties.swift */; };
-		171F359B2DA175CE00430DDF /* Player+CoreDataClass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35972DA175CE00430DDF /* Player+CoreDataClass.swift */; };
-		171F359C2DA175CE00430DDF /* Game+CoreDataProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35942DA175CE00430DDF /* Game+CoreDataProperties.swift */; };
-		171F359D2DA175CE00430DDF /* Game+CoreDataClass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35932DA175CE00430DDF /* Game+CoreDataClass.swift */; };
-		171F359E2DA175CE00430DDF /* BilliardBatche+CoreDataClass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35912DA175CE00430DDF /* BilliardBatche+CoreDataClass.swift */; };
-		171F359F2DA175CE00430DDF /* BilliardBatche+CoreDataProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35922DA175CE00430DDF /* BilliardBatche+CoreDataProperties.swift */; };
-		171F35A02DA175CE00430DDF /* GameWithPlayer+CoreDataClass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171F35952DA175CE00430DDF /* GameWithPlayer+CoreDataClass.swift */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		179341162D91874400CDBF18 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,17 +41,29 @@
 		171F35B12DA1768E00430DDF /* Exceptions for "PokerCardRecognizer" folder in "PokerCardRecognizer" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Camera/CIImage.swift,
 				SupportingFiles/Info.plist,
 			);
 			target = 179340FF2D91874300CDBF18 /* PokerCardRecognizer */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		171C27722DAFD93C00A611CE /* Exceptions for "PokerCardRecognizer" folder in "Copy Bundle Resources" phase from "PokerCardRecognizer" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 179340FE2D91874300CDBF18 /* Resources */;
+			membershipExceptions = (
+				Camera/CIImage.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		179341022D91874300CDBF18 /* PokerCardRecognizer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				171F35B12DA1768E00430DDF /* Exceptions for "PokerCardRecognizer" folder in "PokerCardRecognizer" target */,
+				171C27722DAFD93C00A611CE /* Exceptions for "PokerCardRecognizer" folder in "Copy Bundle Resources" phase from "PokerCardRecognizer" target */,
 			);
 			path = PokerCardRecognizer;
 			sourceTree = "<group>";
@@ -211,7 +212,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 1630;
 				TargetAttributes = {
 					179340FF2D91874300CDBF18 = {
 						CreatedOnToolsVersion = 16.2;
@@ -276,14 +277,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				171F35992DA175CE00430DDF /* GameWithPlayer+CoreDataProperties.swift in Sources */,
-				171F359A2DA175CE00430DDF /* Player+CoreDataProperties.swift in Sources */,
-				171F359B2DA175CE00430DDF /* Player+CoreDataClass.swift in Sources */,
-				171F359C2DA175CE00430DDF /* Game+CoreDataProperties.swift in Sources */,
-				171F359D2DA175CE00430DDF /* Game+CoreDataClass.swift in Sources */,
-				171F359E2DA175CE00430DDF /* BilliardBatche+CoreDataClass.swift in Sources */,
-				171F359F2DA175CE00430DDF /* BilliardBatche+CoreDataProperties.swift in Sources */,
-				171F35A02DA175CE00430DDF /* GameWithPlayer+CoreDataClass.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,6 +345,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = HDMKFW79LT;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -415,6 +409,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = HDMKFW79LT;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -445,7 +440,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"PokerCardRecognizer/Preview Content\"";
-				DEVELOPMENT_TEAM = HDMKFW79LT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PokerCardRecognizer/SupportingFiles/Info.plist;
@@ -458,6 +452,20 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/PIL/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/numpy/_core/lib",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/numpy/random/lib",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/scipy/special",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/scipy/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/cv2/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/torch/lib",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/torchvision/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/google/_upb",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/onnxruntime/capi",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/coremltools",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nicolascooper.PokerCardRecognizer;
@@ -477,7 +485,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"PokerCardRecognizer/Preview Content\"";
-				DEVELOPMENT_TEAM = HDMKFW79LT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PokerCardRecognizer/SupportingFiles/Info.plist;
@@ -490,6 +497,20 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/PIL/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/numpy/_core/lib",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/numpy/random/lib",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/scipy/special",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/scipy/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/cv2/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/torch/lib",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/torchvision/.dylibs",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/google/_upb",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/onnxruntime/capi",
+					"$(PROJECT_DIR)/PokerCardRecognizer/ML/yolovenv/lib/python3.11/site-packages/coremltools",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nicolascooper.PokerCardRecognizer;
@@ -506,7 +527,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HDMKFW79LT;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -525,7 +545,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HDMKFW79LT;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -543,7 +562,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HDMKFW79LT;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nicolascooper.PokerCardRecognizerUITests;
@@ -560,7 +578,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HDMKFW79LT;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nicolascooper.PokerCardRecognizerUITests;

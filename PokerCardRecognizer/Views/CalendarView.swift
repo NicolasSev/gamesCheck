@@ -178,34 +178,25 @@ struct CalendarView: View {
                             let count = periodGames.count
                             let listHeight: CGFloat = count <= 1 ? 100 : 100 + CGFloat(count - 1) * 40
                             List(periodGames) { game in
+                                let info = GameResultInfo(game: game)
                                 NavigationLink(destination: {
-                                    // Если тип игры "billiards", открываем специальное вью, иначе стандартное GameDetailView
-                                    
-                                    if let type = game.gameType, type == "Бильярд" {
+                                    if game.gameType == "Бильярд" {
                                         BilliardGameDetailView(game: game)
                                     } else {
                                         GameDetailView(game: game)
                                     }
                                 }, label: {
-                                    HStack {
-                                        if let type = game.gameType, type == "Бильярд" {
-                                            // Для игр по бильярду — иконка бильярдного шара (замените на нужное изображение, например, из Assets)
-                                            Image(systemName: "circle.fill")
-                                                .foregroundColor(.green)
-                                            VStack(alignment: .leading) {
-                                                Text(formattedTime(from: game.timestamp))
-                                                // Предположим, что billiardsBatches хранит партии
-                                                let batchCount = (game.billiardBatches as? Set<BilliardBatche>)?.count ?? 0
-                                                Text("Партии: \(batchCount)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        } else {
-                                            // Для покера — иконка карты (например, spade)
-                                            Image(systemName: "suit.spade.fill")
-                                                .foregroundColor(.red)
-                                            Text("\(formattedTime(from: game.timestamp)) - Байины: \(totalBuyin(for: game)), Тип: - \(String(describing: game.gameType))")
-                                        }
+                                    VStack(alignment: .leading) {
+                                        Text(formattedTime(from: game.timestamp))
+                                        Text("Дата: \(info.shortDate)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("Партии: \(info.batches.count)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("Результат: \(info.resultText)")
+                                            .font(.caption2)
+                                            .foregroundColor(.blue)
                                     }
                                 })
                             }
@@ -230,7 +221,6 @@ struct CalendarView: View {
                             List(selectedDayGames) { game in
                                 NavigationLink(destination: {
                                     // Если тип игры "billiards", открываем специальное вью, иначе стандартное GameDetailView
-                                    
                                     if let type = game.gameType, type == "Бильярд" {
                                         BilliardGameDetailView(game: game)
                                     } else {
@@ -239,22 +229,33 @@ struct CalendarView: View {
                                 }, label: {
                                     HStack {
                                         if let type = game.gameType, type == "Бильярд" {
+                                            let info = GameResultInfo(game: game)
                                             // Для игр по бильярду — иконка бильярдного шара (замените на нужное изображение, например, из Assets)
-                                            Image(systemName: "circle.fill")
-                                                .foregroundColor(.green)
-                                            VStack(alignment: .leading) {
-                                                Text(formattedTime(from: game.timestamp))
-                                                // Предположим, что billiardsBatches хранит партии
-                                                let batchCount = (game.billiardBatches as? Set<BilliardBatche>)?.count ?? 0
-                                                Text("Партии: \(batchCount)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
+                                            NavigationLink(destination: {
+                                                if game.gameType == "Бильярд" {
+                                                    BilliardGameDetailView(game: game)
+                                                } else {
+                                                    GameDetailView(game: game)
+                                                }
+                                            }, label: {
+                                                VStack(alignment: .leading) {
+                                                    Text(formattedTime(from: game.timestamp))
+                                                    Text("Дата: \(info.shortDate)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    Text("Партии: \(info.batches.count)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    Text("Результат: \(info.resultText)")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.blue)
+                                                }
+                                            })
                                         } else {
                                             // Для покера — иконка карты (например, spade)
                                             Image(systemName: "suit.spade.fill")
                                                 .foregroundColor(.red)
-                                            Text("\(formattedTime(from: game.timestamp)) - Байины: \(totalBuyin(for: game)), Тип: - \(String(describing: game.gameType))")
+                                            Text("\(formattedShortDate(from: game.timestamp)) - Байины: \(totalBuyin(for: game)), Тип: - \(String(describing: game.gameType))")
                                         }
                                     }
                                 })
@@ -283,19 +284,31 @@ struct CalendarView: View {
                                 }, label: {
                                     HStack {
                                         if let type = game.gameType, type == "Бильярд" {
-                                            Image(systemName: "circle.fill")
-                                                .foregroundColor(.green)
-                                            VStack(alignment: .leading) {
-                                                Text(formattedTime(from: game.timestamp))
-                                                let batchCount = (game.billiardBatches as? Set<BilliardBatche>)?.count ?? 0
-                                                Text("Партии: \(batchCount)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
+                                            let info = GameResultInfo(game: game)
+                                            NavigationLink(destination: {
+                                                if game.gameType == "Бильярд" {
+                                                    BilliardGameDetailView(game: game)
+                                                } else {
+                                                    GameDetailView(game: game)
+                                                }
+                                            }, label: {
+                                                VStack(alignment: .leading) {
+                                                    Text(formattedTime(from: game.timestamp))
+                                                    Text("Дата: \(info.shortDate)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    Text("Партии: \(info.batches.count)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    Text("Результат: \(info.resultText)")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.blue)
+                                                }
+                                            })
                                         } else {
                                             Image(systemName: "suit.spade.fill")
                                                 .foregroundColor(.red)
-                                            Text("\(formattedTime(from: game.timestamp)) - Байины: \(totalBuyin(for: game))")
+                                            Text("\(formattedShortDate(from: game.timestamp)) - Байины: \(totalBuyin(for: game))")
                                         }
                                     }
                                 })
@@ -310,6 +323,13 @@ struct CalendarView: View {
             Spacer()
         }
         .padding(.top, 8)
+    }
+    
+    private func formattedShortDate(from date: Date?) -> String {
+        guard let date = date else { return "--.--" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM"
+        return formatter.string(from: date)
     }
     
     // Возвращает первый день текущего отображаемого месяца
@@ -348,45 +368,5 @@ struct CalendarView: View {
     private func isSameDay(_ d1: Date, _ d2: Date?) -> Bool {
         guard let d2 = d2 else { return false }
         return Calendar.current.isDate(d1, inSameDayAs: d2)
-    }
-}
- 
-// Ячейка для одного дня в календаре
-struct DayCell: View {
-    let date: Date
-    let count: Int
-    let isSelected: Bool
-    let onTap: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 2) {
-            Text(dayNumber(date))
-                .font(.system(size: 14))
-                .fontWeight(isSelected ? .bold : .regular)
-                .foregroundColor(isSelected ? .blue : .primary)
-            
-            if count > 0 {
-                Text("\(count)")
-                    .font(.system(size: 10))
-                    .padding(4)
-                    .background(Color.blue.opacity(0.2))
-                    .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(Color.clear)
-                    .frame(width: 14, height: 14)
-            }
-        }
-        .frame(width: 36, height: 40)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-        .cornerRadius(6)
-        .onTapGesture {
-            onTap()
-        }
-    }
-    
-    private func dayNumber(_ date: Date) -> String {
-        let day = Calendar.current.component(.day, from: date)
-        return "\(day)"
     }
 }

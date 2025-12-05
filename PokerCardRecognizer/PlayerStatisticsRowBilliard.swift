@@ -1,3 +1,11 @@
+//
+//  PlayerStatisticsRowBilliard.swift
+//  PokerCardRecognizer
+//
+//  Created by Николас on 06.04.2025.
+//
+
+
 import SwiftUI
 import CoreData
 
