@@ -24,6 +24,7 @@ extension User {
 
     // Relationships
     @NSManaged public var createdGames: NSSet?
+    @NSManaged public var playerProfile: PlayerProfile?
 }
 
 // MARK: - Computed Properties

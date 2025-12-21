@@ -27,6 +27,19 @@
         <attribute name="cashout" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="game" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Game" inverseName="gameWithPlayers" inverseEntity="Game"/>
         <relationship name="player" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player" inverseName="gameWithPlayers" inverseEntity="Player"/>
+        <relationship name="playerProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PlayerProfile" inverseName="gameParticipations" inverseEntity="PlayerProfile"/>
+    </entity>
+    <entity name="PlayerProfile" representedClassName="PlayerProfile" syncable="YES">
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="displayName" attributeType="String"/>
+        <attribute name="isAnonymous" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="profileId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="totalBuyins" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
+        <attribute name="totalCashouts" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
+        <attribute name="totalGamesPlayed" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="userId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="gameParticipations" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="playerProfile" inverseEntity="GameWithPlayer"/>
+        <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="playerProfile" inverseEntity="User"/>
     </entity>
     <entity name="Player" representedClassName="Player" syncable="YES">
         <attribute name="buyin" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
@@ -44,6 +57,7 @@
         <attribute name="userId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="username" attributeType="String"/>
         <relationship name="createdGames" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Game" inverseName="creator" inverseEntity="Game"/>
+        <relationship name="playerProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PlayerProfile" inverseName="user" inverseEntity="PlayerProfile"/>
         <uniquenessConstraints>
             <constraint value="username"/>
         </uniquenessConstraints>
