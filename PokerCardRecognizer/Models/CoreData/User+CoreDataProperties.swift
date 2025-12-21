@@ -22,8 +22,7 @@ extension User {
     @NSManaged public var subscriptionStatus: String
     @NSManaged public var subscriptionExpiresAt: Date?
 
-    // Relationships (будут добавлены позже)
-    @NSManaged public var createdGames: NSSet?
+    // Relationships будут добавлены в следующих задачах (Task 1.2+)
 }
 
 // MARK: - Computed Properties
@@ -44,18 +43,5 @@ extension User {
     }
 }
 
-// MARK: - Collection Helpers
-extension User {
-    @objc(addCreatedGamesObject:)
-    @NSManaged public func addToCreatedGames(_ value: Game)
-
-    @objc(removeCreatedGamesObject:)
-    @NSManaged public func removeFromCreatedGames(_ value: Game)
-
-    @objc(addCreatedGames:)
-    @NSManaged public func addToCreatedGames(_ values: NSSet)
-
-    @objc(removeCreatedGames:)
-    @NSManaged public func removeFromCreatedGames(_ values: NSSet)
-}
+// Collection helpers будут добавлены после появления relationships в модели.
 
