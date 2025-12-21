@@ -1,56 +1,110 @@
 import SwiftUI
 
 struct LoginView: View {
-    @ObservedObject var authViewModel: AuthViewModel
+    @EnvironmentObject var authViewModel: AuthViewModel
+
+    @State private var username = ""
+    @State private var password = ""
+    @State private var showingRegistration = false
+    @State private var showingError = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Вход в приложение")
-                .font(.title)
-                .padding(.top, 40)
+        NavigationView {
+            VStack(spacing: 20) {
+                Image(systemName: "suit.spade.fill")
+                    .font(.system(size: 80))
+                    .foregroundStyle(.linearGradient(
+                        colors: [.green, .blue],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .padding(.bottom, 30)
 
-            TextField("Логин", text: $authViewModel.login)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+                Text("PokerTracker")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
 
-            SecureField("Пароль", text: $authViewModel.password)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+                VStack(spacing: 15) {
+                    TextField("Имя пользователя", text: $username)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
 
-            if let error = authViewModel.errorMessage {
-                Text(error)
-                    .foregroundColor(.red)
+                    SecureField("Пароль", text: $password)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button(action: login) {
+                        if authViewModel.isLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Войти")
+                                .frame(maxWidth: .infinity)
+                                .fontWeight(.semibold)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(username.isEmpty || password.isEmpty || authViewModel.isLoading)
+                }
+                .padding(.horizontal, 30)
+
+                if authViewModel.canUseBiometric && authViewModel.isBiometricEnabled {
+                    Button(action: authenticateWithBiometric) {
+                        Label(
+                            "Войти с \(authViewModel.biometricName)",
+                            systemImage: authViewModel.biometricType == .faceID ? "faceid" : "touchid"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Spacer()
+
+                Button("Нет аккаунта? Зарегистрироваться") {
+                    showingRegistration = true
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.blue)
             }
-
-            // Стандартный вход через логин и пароль
-            Button(action: {
-                authViewModel.signIn()
-            }) {
-                Text("Войти")
-                    .font(.headline)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            .padding()
+            .navigationBarHidden(true)
+            .alert("Ошибка", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(authViewModel.errorMessage ?? "Неизвестная ошибка")
             }
-            .padding(.horizontal)
-            
-            // Кнопка для входа через Face ID
-            Button(action: {
-                authViewModel.authenticateBiometrically()
-            }) {
-                Label("Войти с Face ID", systemImage: "faceid")
-                    .font(.headline)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            .sheet(isPresented: $showingRegistration) {
+                RegistrationView()
+                    .environmentObject(authViewModel)
             }
-            .padding(.horizontal)
+        }
+    }
 
-            Spacer()
+    private func login() {
+        Task {
+            do {
+                try await authViewModel.login(username: username, password: password)
+            } catch let error as AuthenticationError {
+                authViewModel.errorMessage = error.errorDescription
+                showingError = true
+            } catch {
+                authViewModel.errorMessage = "Неизвестная ошибка"
+                showingError = true
+            }
+        }
+    }
+
+    private func authenticateWithBiometric() {
+        Task {
+            do {
+                try await authViewModel.authenticateWithBiometric()
+            } catch let error as AuthenticationError {
+                authViewModel.errorMessage = error.errorDescription
+                showingError = true
+            } catch {
+                authViewModel.errorMessage = "Неизвестная ошибка"
+                showingError = true
+            }
         }
     }
 }

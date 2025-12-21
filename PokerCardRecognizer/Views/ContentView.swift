@@ -1,29 +1,38 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject var authViewModel = AuthViewModel()
-    
-    // Проверка, запущено ли на симуляторе
-    private var isSimulator: Bool {
-        #if targetEnvironment(simulator)
-        return true
-        #else
-        return false
-        #endif
-    }
+    @StateObject private var authViewModel = AuthViewModel()
 
     var body: some View {
         Group {
-            if authViewModel.isLoggedIn {
-                MainView(authViewModel: authViewModel)
-            } else {
-                LoginView(authViewModel: authViewModel)
-            }
-        }
-        .onAppear {
-            // На симуляторе автоматически пропускаем авторизацию
-            if isSimulator {
-                authViewModel.isLoggedIn = true
+            switch authViewModel.authState {
+            case .unauthenticated:
+                LoginView()
+                    .environmentObject(authViewModel)
+
+            case .biometricAvailable:
+                BiometricPromptView()
+                    .environmentObject(authViewModel)
+
+            case .authenticated:
+                MainView()
+                    .environmentObject(authViewModel)
+
+            case .authenticating:
+                ProgressView("Вход...")
+
+            case .error(let message):
+                VStack(spacing: 16) {
+                    Text("Ошибка")
+                        .font(.headline)
+                    Text(message)
+                        .foregroundColor(.secondary)
+                    Button("Попробовать снова") {
+                        authViewModel.checkAuthenticationStatus()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
             }
         }
     }

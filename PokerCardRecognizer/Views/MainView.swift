@@ -27,7 +27,7 @@ struct ShareContentViewData: Identifiable {
 
 struct MainView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject var authViewModel: AuthViewModel
+    @EnvironmentObject var authViewModel: AuthViewModel
 
     @FetchRequest(sortDescriptors: [NSSortDescriptor(keyPath: \Game.timestamp, ascending: false)])
     private var games: FetchedResults<Game>
