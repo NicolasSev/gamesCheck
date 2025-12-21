@@ -9,9 +9,14 @@
     <entity name="Game" representedClassName="Game" isAbstract="YES" syncable="YES">
         <attribute name="attribute" optional="YES" attributeType="String"/>
         <attribute name="attribute1" optional="YES" attributeType="String"/>
+        <attribute name="creatorUserId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="gameType" optional="YES" attributeType="String"/>
+        <attribute name="gameId" attributeType="UUID" defaultValueString="00000000-0000-0000-0000-000000000000" usesScalarValueType="NO"/>
+        <attribute name="isDeleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <relationship name="billiardBatches" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="BilliardBatche" inverseName="game" inverseEntity="BilliardBatche"/>
+        <relationship name="creator" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="createdGames" inverseEntity="User"/>
         <relationship name="gameWithPlayers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="game" inverseEntity="GameWithPlayer"/>
         <relationship name="player1" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player"/>
         <relationship name="player2" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player"/>
@@ -38,6 +43,7 @@
         <attribute name="subscriptionStatus" attributeType="String" defaultValueString="free"/>
         <attribute name="userId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="username" attributeType="String"/>
+        <relationship name="createdGames" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Game" inverseName="creator" inverseEntity="Game"/>
         <uniquenessConstraints>
             <constraint value="username"/>
         </uniquenessConstraints>

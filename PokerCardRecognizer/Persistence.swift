@@ -11,6 +11,8 @@ struct PersistenceController {
         for _ in 0..<10 {
             let newGame = Game(context: viewContext)
             newGame.timestamp = Date()
+            newGame.gameId = UUID()
+            newGame.isDeleted = false
         }
 
         do {
@@ -116,5 +118,111 @@ extension PersistenceController {
         user.subscriptionStatus = status
         user.subscriptionExpiresAt = expiresAt
         saveContext()
+    }
+}
+
+// MARK: - Game Management (Task 1.2)
+extension PersistenceController {
+    func createGame(
+        gameType: String,
+        creatorUserId: UUID?,
+        timestamp: Date = Date(),
+        notes: String? = nil
+    ) -> Game {
+        let context = container.viewContext
+        let game = Game(context: context)
+        game.gameId = UUID()
+        game.gameType = gameType
+        game.timestamp = timestamp
+        game.creatorUserId = creatorUserId
+        game.notes = notes
+        game.isDeleted = false
+
+        // Установить relationship если пользователь существует
+        if let userId = creatorUserId,
+           let creator = fetchUser(byId: userId) {
+            game.creator = creator
+        }
+
+        saveContext()
+        return game
+    }
+
+    func fetchGames(createdBy userId: UUID) -> [Game] {
+        let context = container.viewContext
+        let request: NSFetchRequest<Game> = Game.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "creatorUserId == %@ AND isDeleted == NO",
+            userId as CVarArg
+        )
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \Game.timestamp, ascending: false)]
+
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error fetching games: \(error)")
+            return []
+        }
+    }
+
+    func fetchAllActiveGames() -> [Game] {
+        let context = container.viewContext
+        let request: NSFetchRequest<Game> = Game.fetchRequest()
+        request.predicate = NSPredicate(format: "isDeleted == NO")
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \Game.timestamp, ascending: false)]
+
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error fetching games: \(error)")
+            return []
+        }
+    }
+
+    func softDeleteGame(_ game: Game) {
+        game.isDeleted = true
+        saveContext()
+    }
+
+    func updateGameNotes(_ game: Game, notes: String) {
+        game.notes = notes
+        saveContext()
+    }
+
+    /// Миграция существующих игр после добавления новых полей (Task 1.2)
+    /// Вызывать один раз при первом запуске после обновления.
+    func migrateExistingGames() {
+        let context = container.viewContext
+        let request: NSFetchRequest<Game> = Game.fetchRequest()
+
+        let zeroUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")
+
+        do {
+            let games = try context.fetch(request)
+            var migratedCount = 0
+
+            for game in games {
+                if let zeroUUID, game.gameId == zeroUUID {
+                    game.gameId = UUID()
+                    migratedCount += 1
+                }
+
+                // Установить isDeleted по умолчанию
+                // (после миграции он уже должен быть false через defaultValueString)
+                if game.isDeleted != true {
+                    game.isDeleted = false
+                }
+            }
+
+            if context.hasChanges {
+                try context.save()
+            }
+
+            if migratedCount > 0 {
+                print("Migrated \(migratedCount) existing games (assigned gameId)")
+            }
+        } catch {
+            print("Error migrating games: \(error)")
+        }
     }
 }
