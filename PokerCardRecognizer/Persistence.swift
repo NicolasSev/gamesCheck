@@ -219,6 +219,112 @@ extension PersistenceController {
     }
 }
 
+// MARK: - PlayerAlias Management (Task 1.4)
+extension PersistenceController {
+    func createAlias(
+        aliasName: String,
+        forProfile profile: PlayerProfile
+    ) -> PlayerAlias? {
+        let trimmed = aliasName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Проверить что имя еще не занято
+        if fetchAlias(byName: trimmed) != nil {
+            print("Alias '\(trimmed)' already exists")
+            return nil
+        }
+
+        let context = container.viewContext
+        let alias = PlayerAlias(context: context)
+        alias.aliasId = UUID()
+        alias.profileId = profile.profileId
+        alias.aliasName = trimmed
+        alias.claimedAt = Date()
+        alias.gamesCount = 0
+        alias.profile = profile
+
+        saveContext()
+        return alias
+    }
+
+    func fetchAlias(byName name: String) -> PlayerAlias? {
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
+        request.predicate = NSPredicate(format: "aliasName ==[c] %@", name)
+        request.fetchLimit = 1
+
+        do {
+            return try context.fetch(request).first
+        } catch {
+            print("Error fetching alias: \(error)")
+            return nil
+        }
+    }
+
+    func fetchAliases(forProfile profile: PlayerProfile) -> [PlayerAlias] {
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
+        request.predicate = NSPredicate(format: "profileId == %@", profile.profileId as CVarArg)
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \PlayerAlias.claimedAt, ascending: false)]
+
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error fetching aliases: \(error)")
+            return []
+        }
+    }
+
+    func fetchAllUniquePlayerNames() -> [String] {
+        // Получить все уникальные имена из Player (старая модель)
+        // Это будет использоваться для UI "Claim player"
+        let context = container.viewContext
+        let request: NSFetchRequest<Player> = Player.fetchRequest()
+
+        do {
+            let players = try context.fetch(request)
+            let names = players.compactMap { $0.name }
+            return Array(Set(names)).sorted()
+        } catch {
+            print("Error fetching player names: \(error)")
+            return []
+        }
+    }
+
+    func fetchUnclaimedPlayerNames() -> [String] {
+        // Получить имена игроков, которые еще не присвоены
+        let allNames = fetchAllUniquePlayerNames()
+
+        // Получить уже присвоенные имена
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
+
+        do {
+            let aliases = try context.fetch(request)
+            let claimedNames = Set(aliases.map { $0.aliasName })
+            return allNames.filter { !claimedNames.contains($0) }
+        } catch {
+            print("Error fetching unclaimed names: \(error)")
+            return allNames
+        }
+    }
+
+    func updateAliasGamesCount(_ alias: PlayerAlias) {
+        // Подсчитать "использования" имени в старой таблице Player
+        let context = container.viewContext
+        let request: NSFetchRequest<Player> = Player.fetchRequest()
+        request.predicate = NSPredicate(format: "name ==[c] %@", alias.aliasName)
+
+        do {
+            let count = try context.count(for: request)
+            alias.gamesCount = Int32(count)
+            saveContext()
+        } catch {
+            print("Error counting games: \(error)")
+        }
+    }
+}
+
 // MARK: - Game Management (Task 1.2)
 extension PersistenceController {
     func createGame(

@@ -38,8 +38,20 @@
         <attribute name="totalCashouts" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
         <attribute name="totalGamesPlayed" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="userId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="aliases" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PlayerAlias" inverseName="profile" inverseEntity="PlayerAlias"/>
         <relationship name="gameParticipations" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="playerProfile" inverseEntity="GameWithPlayer"/>
         <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="playerProfile" inverseEntity="User"/>
+    </entity>
+    <entity name="PlayerAlias" representedClassName="PlayerAlias" syncable="YES">
+        <attribute name="aliasId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="aliasName" attributeType="String"/>
+        <attribute name="claimedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="gamesCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="profileId" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="profile" maxCount="1" deletionRule="Nullify" destinationEntity="PlayerProfile" inverseName="aliases" inverseEntity="PlayerProfile"/>
+        <uniquenessConstraints>
+            <constraint value="aliasName"/>
+        </uniquenessConstraints>
     </entity>
     <entity name="Player" representedClassName="Player" syncable="YES">
         <attribute name="buyin" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>

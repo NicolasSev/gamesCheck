@@ -24,6 +24,7 @@ extension PlayerProfile {
 
     // Relationships
     @NSManaged public var user: User?
+    @NSManaged public var aliases: NSSet?
     @NSManaged public var gameParticipations: NSSet?
 }
 
@@ -54,6 +55,17 @@ extension PlayerProfile {
         let set = gameParticipations as? Set<GameWithPlayer> ?? []
         return set.sorted { ($0.game?.timestamp ?? Date()) > ($1.game?.timestamp ?? Date()) }
     }
+
+    var aliasesArray: [PlayerAlias] {
+        let set = aliases as? Set<PlayerAlias> ?? []
+        return set.sorted { $0.aliasName < $1.aliasName }
+    }
+
+    var allKnownNames: [String] {
+        var names = [displayName]
+        names.append(contentsOf: aliasesArray.map { $0.aliasName })
+        return Array(Set(names))
+    }
 }
 
 // MARK: - Statistics Update
@@ -81,6 +93,18 @@ extension PlayerProfile {
 
 // MARK: - Collection Helpers
 extension PlayerProfile {
+    @objc(addAliasesObject:)
+    @NSManaged public func addToAliases(_ value: PlayerAlias)
+
+    @objc(removeAliasesObject:)
+    @NSManaged public func removeFromAliases(_ value: PlayerAlias)
+
+    @objc(addAliases:)
+    @NSManaged public func addToAliases(_ values: NSSet)
+
+    @objc(removeAliases:)
+    @NSManaged public func removeFromAliases(_ values: NSSet)
+
     @objc(addGameParticipationsObject:)
     @NSManaged public func addToGameParticipations(_ value: GameWithPlayer)
 
