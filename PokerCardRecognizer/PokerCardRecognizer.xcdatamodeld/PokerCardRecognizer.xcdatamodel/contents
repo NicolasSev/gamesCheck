@@ -29,4 +29,17 @@
         <relationship name="game" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Game" inverseName="players" inverseEntity="Game"/>
         <relationship name="gameWithPlayers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="player" inverseEntity="GameWithPlayer"/>
     </entity>
+    <entity name="User" representedClassName="User" syncable="YES">
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="lastLoginAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="passwordHash" attributeType="String"/>
+        <attribute name="subscriptionExpiresAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="subscriptionStatus" attributeType="String" defaultValueString="free"/>
+        <attribute name="userId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="username" attributeType="String"/>
+        <uniquenessConstraints>
+            <constraint value="username"/>
+        </uniquenessConstraints>
+    </entity>
 </model>
