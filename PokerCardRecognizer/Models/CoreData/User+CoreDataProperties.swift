@@ -22,8 +22,9 @@ extension User {
     @NSManaged public var subscriptionStatus: String
     @NSManaged public var subscriptionExpiresAt: Date?
 
-    // Relationships (будут добавлены позже)
+    // Relationships
     @NSManaged public var createdGames: NSSet?
+    @NSManaged public var playerProfile: PlayerProfile?
 }
 
 // MARK: - Computed Properties

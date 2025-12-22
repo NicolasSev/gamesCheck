@@ -18,14 +18,53 @@ extension Game {
 
     @NSManaged public var attribute: String?
     @NSManaged public var attribute1: String?
+    @NSManaged public var creatorUserId: UUID?
     @NSManaged public var gameType: String?
+    @NSManaged public var gameId: UUID
+    @NSManaged public var notes: String?
+    @NSManaged public var isDeleted: Bool
     @NSManaged public var timestamp: Date?
     @NSManaged public var billiardBatches: NSSet?
+    @NSManaged public var creator: User?
     @NSManaged public var gameWithPlayers: NSSet?
     @NSManaged public var player1: Player?
     @NSManaged public var player2: Player?
     @NSManaged public var players: NSSet?
 
+}
+
+// MARK: - Computed Properties (Task 1.2)
+extension Game {
+    var isOwnedByCurrentUser: Bool {
+        guard let currentUserId = UserDefaults.standard.string(forKey: "currentUserId"),
+              let currentUUID = UUID(uuidString: currentUserId) else {
+            return false
+        }
+        return creatorUserId == currentUUID
+    }
+
+    var displayTimestamp: String {
+        guard let timestamp = timestamp else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: timestamp)
+    }
+
+    /// Сумма buyin по связям `GameWithPlayer` (в текущей модели buyin/cashout = Int)
+    var totalBuyins: Decimal {
+        let set = gameWithPlayers as? Set<GameWithPlayer> ?? []
+        return set.reduce(Decimal(0)) { $0 + Decimal(Int($1.buyin)) }
+    }
+
+    var totalCashouts: Decimal {
+        let set = gameWithPlayers as? Set<GameWithPlayer> ?? []
+        return set.reduce(Decimal(0)) { $0 + Decimal(Int($1.cashout)) }
+    }
+
+    var isBalanced: Bool {
+        totalBuyins == totalCashouts
+    }
 }
 
 // MARK: Generated accessors for billiardBatches

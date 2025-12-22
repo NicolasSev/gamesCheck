@@ -20,7 +20,15 @@ extension GameWithPlayer {
     @NSManaged public var cashout: Int64
     @NSManaged public var game: Game?
     @NSManaged public var player: Player?
+    @NSManaged public var playerProfile: PlayerProfile?
 
+}
+
+// MARK: - Computed
+extension GameWithPlayer {
+    var profit: Decimal {
+        Decimal(Int(cashout)) - Decimal(Int(buyin))
+    }
 }
 
 extension GameWithPlayer : Identifiable {

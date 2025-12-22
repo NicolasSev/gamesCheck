@@ -10,6 +10,7 @@ enum GameType: String, CaseIterable, Identifiable {
 
 struct AddGameSheet: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject var authViewModel: AuthViewModel
     @Binding var isPresented: Bool
     
     @State private var selectedDate: Date = Date()
@@ -51,8 +52,11 @@ struct AddGameSheet: View {
     
     private func createGame() {
         let newGame = Game(context: viewContext)
+        newGame.gameId = UUID()
         newGame.timestamp = selectedDate
         newGame.gameType = gameType.rawValue // Устанавливаем тип игры: "Покер" или "Бильярд"
+        newGame.creatorUserId = authViewModel.currentUserId
+        newGame.isDeleted = false
         do {
             try viewContext.save()
         } catch {
