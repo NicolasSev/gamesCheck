@@ -21,6 +21,7 @@ extension User {
     @NSManaged public var lastLoginAt: Date?
     @NSManaged public var subscriptionStatus: String
     @NSManaged public var subscriptionExpiresAt: Date?
+    @NSManaged public var isSuperAdmin: Bool
 
     // Relationships
     @NSManaged public var createdGames: NSSet?

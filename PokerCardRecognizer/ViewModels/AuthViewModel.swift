@@ -132,6 +132,13 @@ final class AuthViewModel: ObservableObject {
         }
 
         persistence.updateUserLastLogin(user)
+        
+        // Устанавливаем супер админа для пользователя "Ник"
+        if username == "Ник" {
+            persistence.setSuperAdmin(username: "Ник", isSuperAdmin: true)
+            user.isSuperAdmin = true
+        }
+        
         userDefaults.set(user.userId.uuidString, forKey: currentUserIdKey)
 
         currentUser = user

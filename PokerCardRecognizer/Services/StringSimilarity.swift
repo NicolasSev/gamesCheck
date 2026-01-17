@@ -26,7 +26,7 @@ extension String {
             curr[0] = i
             for j in 1...n {
                 let cost = (a[i - 1] == b[j - 1]) ? 0 : 1
-                curr[j] = min(
+                curr[j] = Swift.min(
                     prev[j] + 1,
                     curr[j - 1] + 1,
                     prev[j - 1] + cost
@@ -41,7 +41,7 @@ extension String {
     /// Проверить схожесть с другой строкой (0.0 - 1.0)
     func similarity(to other: String) -> Double {
         let distance = levenshteinDistance(to: other)
-        let maxLength = max(self.count, other.count)
+        let maxLength = Swift.max(self.count, other.count)
         guard maxLength > 0 else { return 1.0 }
         return 1.0 - (Double(distance) / Double(maxLength))
     }

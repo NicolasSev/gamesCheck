@@ -56,7 +56,7 @@ struct AddGameSheet: View {
         newGame.timestamp = selectedDate
         newGame.gameType = gameType.rawValue // Устанавливаем тип игры: "Покер" или "Бильярд"
         newGame.creatorUserId = authViewModel.currentUserId
-        newGame.isDeleted = false
+        newGame.softDeleted = false
         do {
             try viewContext.save()
         } catch {

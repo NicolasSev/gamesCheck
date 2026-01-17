@@ -7,9 +7,59 @@
 
 import SwiftUI
 import CoreData
+import UIKit
+
+struct SimpleTextEditor: UIViewRepresentable {
+    @Binding var text: String
+    
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.font = UIFont.monospacedSystemFont(ofSize: 17, weight: .regular)
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 4, bottom: 8, right: 4)
+        // Критически важно для отключения AutoFill
+        // Используем .none или nil - оба должны отключить AutoFill
+        textView.textContentType = nil
+        textView.isSecureTextEntry = false
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        // Отключаем все умные функции, которые могут вызвать AutoFill
+        textView.smartDashesType = .no
+        textView.smartQuotesType = .no
+        textView.smartInsertDeleteType = .no
+        return textView
+    }
+    
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        if uiView.text != text {
+            uiView.text = text
+        }
+        // Каждый раз принудительно отключаем AutoFill
+        uiView.textContentType = nil
+        uiView.isSecureTextEntry = false
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UITextViewDelegate {
+        var parent: SimpleTextEditor
+        
+        init(_ parent: SimpleTextEditor) {
+            self.parent = parent
+        }
+        
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+        }
+    }
+}
 
 struct ImportDataSheet: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject var authViewModel: AuthViewModel
     @Binding var isPresented: Bool
     
     @State private var inputText: String = ""
@@ -28,29 +78,26 @@ struct ImportDataSheet: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 16) {
+            Form {
+                Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Формат данных:")
                             .font(.headline)
                         
                         Text("""
-                        DD.MM
+                        DD.MM.YYYY
                         Имя Количество(Кэшаут)
                         Имя Количество
                         """)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(8)
                         
                         Text("Пример:")
                             .font(.headline)
                             .padding(.top, 8)
                         
                         Text("""
-                        25.11
+                        25.11.2024
                         Антон С 3(8,000)
                         Коля 8(4,000)
                         Антон 10
@@ -59,34 +106,32 @@ struct ImportDataSheet: View {
                         """)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(8)
                     }
-                    .padding(.horizontal)
-                    
-                    TextEditor(text: $inputText)
-                        .font(.system(.body, design: .monospaced))
-                        .padding(8)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(8)
+                }
+                
+                Section {
+                    SimpleTextEditor(text: $inputText)
                         .frame(minHeight: 200)
-                        .padding(.horizontal)
-                    
-                    if let error = errorMessage {
+                }
+                
+                if let error = errorMessage {
+                    Section {
                         Text(error)
                             .foregroundColor(.red)
-                            .padding(.horizontal)
+                            .font(.caption)
                     }
-                    
-                    if let success = successMessage {
+                }
+                
+                if let success = successMessage {
+                    Section {
                         Text(success)
                             .foregroundColor(.green)
-                            .padding(.horizontal)
+                            .font(.caption)
                     }
-                    
-                    // Диалог конфликта/конфликтов
-                    if !conflictData.isEmpty {
+                }
+                
+                if !conflictData.isEmpty {
+                    Section {
                         ConflictsResolutionView(
                             conflicts: conflictData,
                             skippedDates: $skippedDates,
@@ -101,27 +146,22 @@ struct ImportDataSheet: View {
                                 skippedDates = []
                             }
                         )
-                        .padding(.horizontal)
                     }
-                    
-                Button(action: importData) {
-                    HStack {
-                        if isImporting {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        }
-                        Text(isImporting ? "Валидация..." : "Валидировать данные")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isImporting ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
                 }
-                .disabled(isImporting || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .padding(.horizontal)
-                .padding(.bottom, 20)
+                
+                Section {
+                    Button(action: importData) {
+                        HStack {
+                            if isImporting {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            }
+                            Text(isImporting ? "Валидация..." : "Валидировать данные")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .disabled(isImporting || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .navigationTitle("Импорт данных")
@@ -144,13 +184,13 @@ struct ImportDataSheet: View {
         conflictData = []
         skippedDates = []
         
-        let service = DataImportService(viewContext: viewContext)
+        let service = DataImportService(viewContext: viewContext, userId: authViewModel.currentUserId)
         
         // Парсим данные
         let parsedGames = service.parseText(inputText)
         
         guard !parsedGames.isEmpty else {
-            errorMessage = "Не удалось распарсить данные. Проверьте формат.\n\nУбедитесь, что:\n- Дата указана в формате DD.MM\n- Каждая строка с игроком содержит имя и количество байинов"
+            errorMessage = "Не удалось распарсить данные. Проверьте формат.\n\nУбедитесь, что:\n- Дата указана в формате DD.MM.YYYY\n- Каждая строка с игроком содержит имя и количество байинов"
             isImporting = false
             return
         }
@@ -199,7 +239,7 @@ struct ImportDataSheet: View {
         errorMessage = nil
         successMessage = nil
         
-        let service = DataImportService(viewContext: viewContext)
+        let service = DataImportService(viewContext: viewContext, userId: authViewModel.currentUserId)
         let parsedGames = service.parseText(inputText)
         let calendar = Calendar.current
         

@@ -54,10 +54,14 @@ public struct ExistingPlayerData {
 
 class DataImportService {
     private let viewContext: NSManagedObjectContext
+    private let userId: UUID?
+    private let persistence: PersistenceController
     private let currentUserName: String = "Ник" // Имя пользователя, заменяет "Я"
     
-    init(viewContext: NSManagedObjectContext) {
+    init(viewContext: NSManagedObjectContext, userId: UUID? = nil) {
         self.viewContext = viewContext
+        self.userId = userId
+        self.persistence = PersistenceController.shared
     }
     
     /// Парсит текст и возвращает массив игр
@@ -71,7 +75,7 @@ class DataImportService {
         var currentPlayers: [ParsedPlayer] = []
         
         for line in lines {
-            // Проверяем, является ли строка датой (формат DD.MM)
+            // Проверяем, является ли строка датой (формат DD.MM.YYYY)
             if let date = parseDate(line) {
                 // Сохраняем предыдущую игру, если есть
                 if let date = currentDate, !currentPlayers.isEmpty {
@@ -96,12 +100,12 @@ class DataImportService {
         return games
     }
     
-    /// Парсит дату в формате DD.MM
+    /// Парсит дату в формате DD.MM.YYYY
     private func parseDate(_ line: String) -> Date? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Проверяем формат DD.MM
-        let datePattern = #"^(\d{1,2})\.(\d{1,2})$"#
+        // Проверяем формат DD.MM.YYYY
+        let datePattern = #"^(\d{1,2})\.(\d{1,2})\.(\d{4})$"#
         guard let regex = try? NSRegularExpression(pattern: datePattern),
               let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) else {
             return nil
@@ -109,27 +113,24 @@ class DataImportService {
         
         guard let dayRange = Range(match.range(at: 1), in: trimmed),
               let monthRange = Range(match.range(at: 2), in: trimmed),
+              let yearRange = Range(match.range(at: 3), in: trimmed),
               let day = Int(trimmed[dayRange]),
               let month = Int(trimmed[monthRange]),
+              let year = Int(trimmed[yearRange]),
               day >= 1 && day <= 31,
-              month >= 1 && month <= 12 else {
+              month >= 1 && month <= 12,
+              year >= 2000 && year <= 2100 else {
             return nil
         }
         
-        // Используем текущий год, если дата в будущем - используем прошлый год
+        // Создаем дату с указанным годом
         let calendar = Calendar.current
-        let now = Date()
-        var components = calendar.dateComponents([.year], from: now)
+        var components = DateComponents()
         components.day = day
         components.month = month
+        components.year = year
         
-        guard var date = calendar.date(from: components) else { return nil }
-        
-        // Если дата в будущем, используем прошлый год
-        if date > now {
-            components.year = (components.year ?? calendar.component(.year, from: now)) - 1
-            date = calendar.date(from: components) ?? date
-        }
+        guard let date = calendar.date(from: components) else { return nil }
         
         return date
     }
@@ -237,6 +238,12 @@ class DataImportService {
                     game = existingGame
                     game.timestamp = parsedGame.date
                     game.gameType = "Покер"
+                    // Убеждаемся, что обязательные поля установлены
+                    let zeroUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")
+                    if let zeroUUID = zeroUUID, game.gameId == zeroUUID {
+                        game.gameId = UUID()
+                    }
+                    game.softDeleted = false
                 } else {
                     // Пропускаем, если не заменяем
                     continue
@@ -244,8 +251,16 @@ class DataImportService {
             } else {
                 // Создаем новую игру
                 game = Game(context: viewContext)
+                game.gameId = UUID()
                 game.timestamp = parsedGame.date
                 game.gameType = "Покер"
+                game.softDeleted = false
+                game.creatorUserId = userId
+            }
+            
+            // Устанавливаем creatorUserId для существующих игр при замене
+            if replaceExisting {
+                game.creatorUserId = userId
             }
             
             // Создаем или находим игроков и связываем их с игрой
@@ -254,7 +269,7 @@ class DataImportService {
                     continue // Пропускаем игроков без имени
                 }
                 
-                // Ищем существующего игрока по имени
+                // Ищем существующего игрока по имени (старая модель)
                 let playerFetchRequest: NSFetchRequest<Player> = Player.fetchRequest()
                 playerFetchRequest.predicate = NSPredicate(format: "name == %@", parsedPlayer.name)
                 playerFetchRequest.fetchLimit = 1
@@ -270,10 +285,23 @@ class DataImportService {
                     player.name = parsedPlayer.name
                 }
                 
+                // Ищем PlayerAlias для связи с PlayerProfile (новая модель)
+                var playerProfile: PlayerProfile? = nil
+                if let alias = persistence.fetchAlias(byName: parsedPlayer.name) {
+                    playerProfile = alias.profile
+                } else if let userId = userId {
+                    // Если это текущий пользователь ("Я" заменяется на currentUserName)
+                    // или имя совпадает с именем пользователя, используем его профиль
+                    if parsedPlayer.name == currentUserName || parsedPlayer.name == "Я" {
+                        playerProfile = persistence.fetchPlayerProfile(byUserId: userId)
+                    }
+                }
+                
                 // Создаем связь GameWithPlayer
                 let gameWithPlayer = GameWithPlayer(context: viewContext)
                 gameWithPlayer.game = game
-                gameWithPlayer.player = player
+                gameWithPlayer.player = player // Старая модель для обратной совместимости
+                gameWithPlayer.playerProfile = playerProfile // Новая модель для фильтрации
                 gameWithPlayer.buyin = parsedPlayer.buyin
                 gameWithPlayer.cashout = parsedPlayer.cashout
             }

@@ -21,8 +21,9 @@ extension Game {
     @NSManaged public var creatorUserId: UUID?
     @NSManaged public var gameType: String?
     @NSManaged public var gameId: UUID
+    @NSManaged public var isPublic: Bool
     @NSManaged public var notes: String?
-    @NSManaged public var isDeleted: Bool
+    @NSManaged public var softDeleted: Bool
     @NSManaged public var timestamp: Date?
     @NSManaged public var billiardBatches: NSSet?
     @NSManaged public var creator: User?

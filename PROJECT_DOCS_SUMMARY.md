@@ -5,8 +5,15 @@
 Система задач для полного рефакторинга и улучшения iOS приложения PokerCardRecognizer.
 
 **Создано:** 2025-12-21  
+**Обновлено:** 2025-12-21 (CloudKit план, UI улучшения)  
 **Статус:** Готово к работе  
-**Всего задач:** 38 (детально расписано 13, остальные в README фаз)
+**Всего задач:** 39 (детально расписано 13, остальные в README фаз)
+
+**Последние изменения:**
+- Добавлен план реализации системы заявок через CloudKit
+- Обновлена документация Phase 2 с CloudKit подходом
+- Phase 3 отмечена как будущая миграция
+- Добавлена информация о UI улучшениях (MVP статистика, дата в снипетах)
 
 ---
 
@@ -21,6 +28,7 @@
 3. **[docs/QUICKSTART.md](docs/QUICKSTART.md)** - Быстрый старт для агентов
 4. **[docs/PROGRESS.md](docs/PROGRESS.md)** - Трекер прогресса выполнения
 5. **[docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md)** - Полная техническая спецификация
+6. **[docs/PLAN_USER_CLAIMS.md](docs/PLAN_USER_CLAIMS.md)** - План реализации системы заявок (CloudKit)
 
 ### ✅ Phase 1: Модели данных (7 задач) - ПОЛНОСТЬЮ ДЕТАЛЬНО
 
@@ -33,19 +41,29 @@
 - [x] Task 1.6: GameService (детально)
 - [x] Task 1.7: MainView filtering (детально)
 
-### ✅ Phase 2: Claim Players (4 задачи) - ЧАСТИЧНО ДЕТАЛЬНО
+### ✅ Phase 2: Claim Players (CloudKit) (5 задач) - ОБНОВЛЕНО
 
-- [x] README с обзором фазы
-- [x] Task 2.1: ClaimPlayerView UI (детально)
-- [x] Task 2.2: PlayerClaimService (детально)
-- [ ] Task 2.3: Логика присвоения (шаблон в README)
-- [ ] Task 2.4: История присвоений (шаблон в README)
+**Подход:** CloudKit для синхронизации между устройствами
 
-### ✅ Phase 3: Backend API (9 задач) - ЧАСТИЧНО ДЕТАЛЬНО
+- [x] README с обзором фазы (обновлен с CloudKit подходом)
+- [ ] Task 2.0: Настройка CloudKit (новая задача)
+- [ ] Task 2.1: Миграция CoreData → CloudKit (новая задача)
+- [x] Task 2.2: ClaimPlayerView UI (детально, требует обновления для CloudKit)
+- [x] Task 2.3: PlayerClaimService (детально, требует обновления для CloudKit)
+- [ ] Task 2.4: Логика присвоения через CloudKit
+- [ ] Task 2.5: История присвоений
 
-- [x] README с обзором фазы
+**План:** См. [docs/PLAN_USER_CLAIMS.md](docs/PLAN_USER_CLAIMS.md)
+
+### ✅ Phase 3: Backend API (9 задач) - БУДУЩАЯ МИГРАЦИЯ
+
+**Статус:** Реализуется после Phase 2 (CloudKit)
+
+- [x] README с обзором фазы (обновлен - будущая миграция)
 - [x] Task 3.1: Setup FastAPI (детально)
 - [ ] Task 3.2-3.9: Остальные задачи (описаны в README, создать по аналогии)
+
+**План миграции:** См. [docs/PLAN_USER_CLAIMS.md](docs/PLAN_USER_CLAIMS.md) - Вариант 3
 
 ### ✅ Phase 4-7: Остальные фазы (20 задач) - ОБЗОРЫ ГОТОВЫ
 

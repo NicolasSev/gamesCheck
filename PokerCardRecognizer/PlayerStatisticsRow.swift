@@ -6,11 +6,11 @@ struct PlayerStatisticsRow: View {
     @ObservedObject var player: Player
     var filteredGames: [Game]
     var selectedDate: Date?
-    var selectedGameType: GameTypeFilter
+    var selectedGameType: GameType
     var onShowDetails: () -> Void
 
     var body: some View {
-        let isBilliard = selectedGameType == .billiard
+        let isBilliard = selectedGameType == .billiards
 
         if isBilliard {
             let gamesForPlayer = filteredGames.filter { game in

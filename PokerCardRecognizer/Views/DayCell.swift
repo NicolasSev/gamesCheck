@@ -20,13 +20,14 @@ struct DayCell: View {
             Text(dayNumber(date))
                 .font(.system(size: 14))
                 .fontWeight(isSelected ? .bold : .regular)
-                .foregroundColor(isSelected ? .blue : .primary)
+                .foregroundColor(isSelected ? .white : .white.opacity(0.9))
             
             if count > 0 {
                 Text("\(count)")
                     .font(.system(size: 10))
+                    .foregroundColor(.white)
                     .padding(4)
-                    .background(Color.blue.opacity(0.2))
+                    .background(Color.blue.opacity(0.6))
                     .clipShape(Circle())
             } else {
                 Circle()
@@ -35,7 +36,7 @@ struct DayCell: View {
             }
         }
         .frame(width: 36, height: 40)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .background(isSelected ? Color.blue.opacity(0.4) : Color.clear)
         .cornerRadius(6)
         .onTapGesture {
             onTap()

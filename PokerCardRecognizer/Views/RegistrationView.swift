@@ -30,9 +30,8 @@ struct RegistrationView: View {
                     SecureField("Подтвердите пароль", text: $confirmPassword)
 
                     if !password.isEmpty {
-                        let validation = authViewModel.validatePassword(password)
-                        if !validation.isValid {
-                            Text(validation.message ?? "")
+                        if !authViewModel.validatePassword(password).isValid {
+                            Text(authViewModel.validatePassword(password).message ?? "")
                                 .font(.caption)
                                 .foregroundColor(.red)
                         }

@@ -12,7 +12,7 @@ struct PersistenceController {
             let newGame = Game(context: viewContext)
             newGame.timestamp = Date()
             newGame.gameId = UUID()
-            newGame.isDeleted = false
+            newGame.softDeleted = false
         }
 
         do {
@@ -31,11 +31,72 @@ struct PersistenceController {
         container = NSPersistentContainer(name: "PokerCardRecognizer") // Убедись, что имя совпадает с .xcdatamodeld
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+        } else {
+            // Включаем lightweight migration для автоматической миграции совместимых изменений
+            let description = container.persistentStoreDescriptions.first
+            description?.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+            description?.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
         }
-        container.loadPersistentStores { _, error in
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var loadError: NSError?
+        var storeURL: URL?
+        
+        container.loadPersistentStores { description, error in
             if let error = error as NSError? {
-                fatalError("Unresolved error \(error), \(error.userInfo)")
+                loadError = error
+                storeURL = description.url
             }
+            semaphore.signal()
+        }
+        
+        semaphore.wait()
+        
+        // Если была ошибка миграции схемы (134110), удаляем старую базу и пытаемся загрузить снова
+        if let error = loadError, error.code == 134110, let url = storeURL {
+            print("Core Data migration error detected (code 134110). Removing old database...")
+            removeOldDatabaseFiles(at: url)
+            
+            // Пытаемся загрузить снова после удаления файлов
+            let retrySemaphore = DispatchSemaphore(value: 0)
+            var retryError: NSError?
+            
+            container.loadPersistentStores { _, error in
+                if let error = error as NSError? {
+                    retryError = error
+                } else {
+                    print("Successfully recreated database after migration")
+                }
+                retrySemaphore.signal()
+            }
+            
+            retrySemaphore.wait()
+            
+            if let error = retryError {
+                fatalError("Failed to recreate database after migration error: \(error), \(error.userInfo)")
+            }
+        } else if let error = loadError {
+            fatalError("Unresolved error \(error), \(error.userInfo)")
+        }
+    }
+    
+    private func removeOldDatabaseFiles(at url: URL) {
+        let fileManager = FileManager.default
+        let storeDirectory = url.deletingLastPathComponent()
+        let storeName = url.deletingPathExtension().lastPathComponent
+        
+        // Удаляем все файлы базы данных (sqlite, sqlite-wal, sqlite-shm)
+        do {
+            let storeFiles = try fileManager.contentsOfDirectory(at: storeDirectory, includingPropertiesForKeys: nil)
+            for file in storeFiles {
+                let fileName = file.deletingPathExtension().lastPathComponent
+                if fileName == storeName && (file.pathExtension == "sqlite" || file.pathExtension == "sqlite-wal" || file.pathExtension == "sqlite-shm") {
+                    try fileManager.removeItem(at: file)
+                    print("Removed old database file: \(file.lastPathComponent)")
+                }
+            }
+        } catch {
+            print("Warning: Failed to remove some old database files: \(error)")
         }
     }
 }
@@ -117,6 +178,12 @@ extension PersistenceController {
     func updateUserSubscription(_ user: User, status: String, expiresAt: Date?) {
         user.subscriptionStatus = status
         user.subscriptionExpiresAt = expiresAt
+        saveContext()
+    }
+    
+    func setSuperAdmin(username: String, isSuperAdmin: Bool) {
+        guard let user = fetchUser(byUsername: username) else { return }
+        user.isSuperAdmin = isSuperAdmin
         saveContext()
     }
 }
@@ -290,6 +357,71 @@ extension PersistenceController {
             return []
         }
     }
+    
+    // Получаем все уникальные имена игроков (без учета регистра) и информацию о привязке к пользователям
+    func fetchAllUniquePlayerNamesWithInfo() -> [(name: String, userId: UUID?, isLinked: Bool)] {
+        let context = container.viewContext
+        
+        // Получаем всех игроков из Player
+        let playerRequest: NSFetchRequest<Player> = Player.fetchRequest()
+        playerRequest.propertiesToFetch = ["name"]
+        
+        // Получаем все PlayerProfile с userId
+        let profileRequest: NSFetchRequest<PlayerProfile> = PlayerProfile.fetchRequest()
+        profileRequest.predicate = NSPredicate(format: "userId != nil")
+        
+        var uniqueNames: [String: (userId: UUID?, isLinked: Bool)] = [:]
+        
+        do {
+            // Добавляем имена из Player
+            let players = try context.fetch(playerRequest)
+            for player in players {
+                if let name = player.name, !name.isEmpty {
+                    let lowercasedName = name.lowercased()
+                    if uniqueNames[lowercasedName] == nil {
+                        uniqueNames[lowercasedName] = (nil, false)
+                    }
+                }
+            }
+            
+            // Добавляем имена из PlayerProfile и помечаем как привязанные
+            let profiles = try context.fetch(profileRequest)
+            for profile in profiles {
+                let lowercasedName = profile.displayName.lowercased()
+                uniqueNames[lowercasedName] = (profile.userId, true)
+            }
+            
+            // Преобразуем в массив, сохраняя оригинальное имя (первое найденное)
+            var nameMap: [String: String] = [:] // lowercase -> original
+            
+            // Сначала собираем оригинальные имена из Player
+            for player in players {
+                if let name = player.name, !name.isEmpty {
+                    let lowercasedName = name.lowercased()
+                    if nameMap[lowercasedName] == nil {
+                        nameMap[lowercasedName] = name
+                    }
+                }
+            }
+            
+            // Затем из PlayerProfile
+            for profile in profiles {
+                let lowercasedName = profile.displayName.lowercased()
+                if nameMap[lowercasedName] == nil {
+                    nameMap[lowercasedName] = profile.displayName
+                }
+            }
+            
+            // Создаем результат
+            return uniqueNames.map { (lowercased, info) in
+                (name: nameMap[lowercased] ?? lowercased, userId: info.userId, isLinked: info.isLinked)
+            }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            
+        } catch {
+            print("Error fetching unique player names with info: \(error)")
+            return []
+        }
+    }
 
     func fetchUnclaimedPlayerNames() -> [String] {
         // Получить имена игроков, которые еще не присвоены
@@ -340,7 +472,7 @@ extension PersistenceController {
         game.timestamp = timestamp
         game.creatorUserId = creatorUserId
         game.notes = notes
-        game.isDeleted = false
+        game.softDeleted = false
 
         // Установить relationship если пользователь существует
         if let userId = creatorUserId,
@@ -356,7 +488,7 @@ extension PersistenceController {
         let context = container.viewContext
         let request: NSFetchRequest<Game> = Game.fetchRequest()
         request.predicate = NSPredicate(
-            format: "creatorUserId == %@ AND isDeleted == NO",
+            format: "creatorUserId == %@ AND softDeleted == NO",
             userId as CVarArg
         )
         request.sortDescriptors = [NSSortDescriptor(keyPath: \Game.timestamp, ascending: false)]
@@ -372,7 +504,7 @@ extension PersistenceController {
     func fetchAllActiveGames() -> [Game] {
         let context = container.viewContext
         let request: NSFetchRequest<Game> = Game.fetchRequest()
-        request.predicate = NSPredicate(format: "isDeleted == NO")
+        request.predicate = NSPredicate(format: "softDeleted == NO")
         request.sortDescriptors = [NSSortDescriptor(keyPath: \Game.timestamp, ascending: false)]
 
         do {
@@ -383,8 +515,22 @@ extension PersistenceController {
         }
     }
 
+    func fetchGame(byId gameId: UUID) -> Game? {
+        let context = container.viewContext
+        let request: NSFetchRequest<Game> = Game.fetchRequest()
+        request.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            return try context.fetch(request).first
+        } catch {
+            print("Error fetching game by id: \(error)")
+            return nil
+        }
+    }
+
     func softDeleteGame(_ game: Game) {
-        game.isDeleted = true
+        game.softDeleted = true
         saveContext()
     }
 
@@ -411,10 +557,11 @@ extension PersistenceController {
                     migratedCount += 1
                 }
 
-                // Установить isDeleted по умолчанию
+                // Установить softDeleted по умолчанию
                 // (после миграции он уже должен быть false через defaultValueString)
-                if game.isDeleted != true {
-                    game.isDeleted = false
+                let gameSoftDeleted = game.value(forKey: "softDeleted") as? Bool ?? false
+                if !gameSoftDeleted {
+                    game.setValue(false, forKey: "softDeleted")
                 }
             }
 
@@ -427,6 +574,81 @@ extension PersistenceController {
             }
         } catch {
             print("Error migrating games: \(error)")
+        }
+    }
+}
+
+// MARK: - PlayerClaim Management
+extension PersistenceController {
+    func createPlayerClaim(
+        gameWithPlayer: GameWithPlayer,
+        claimantUserId: UUID
+    ) -> PlayerClaim? {
+        let context = container.viewContext
+        
+        guard let game = gameWithPlayer.game,
+              let player = gameWithPlayer.player,
+              let playerName = player.name,
+              let hostUserId = game.creatorUserId else {
+            return nil
+        }
+        
+        let claim = PlayerClaim(context: context)
+        claim.claimId = UUID()
+        claim.playerName = playerName
+        claim.gameId = game.gameId
+        claim.gameWithPlayerObjectId = gameWithPlayer.objectID.uriRepresentation().absoluteString
+        claim.claimantUserId = claimantUserId
+        claim.hostUserId = hostUserId
+        claim.status = "pending"
+        claim.createdAt = Date()
+        claim.claimantUser = fetchUser(byId: claimantUserId)
+        claim.hostUser = fetchUser(byId: hostUserId)
+        claim.game = game
+        
+        saveContext()
+        return claim
+    }
+    
+    func fetchPlayerClaim(byId claimId: UUID) -> PlayerClaim? {
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+        request.predicate = NSPredicate(format: "claimId == %@", claimId as CVarArg)
+        request.fetchLimit = 1
+        
+        do {
+            return try context.fetch(request).first
+        } catch {
+            print("Error fetching player claim: \(error)")
+            return nil
+        }
+    }
+    
+    func fetchPendingClaimsForHost(hostUserId: UUID) -> [PlayerClaim] {
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+        request.predicate = NSPredicate(format: "hostUserId == %@ AND status == %@", hostUserId as CVarArg, "pending")
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false)]
+        
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error fetching pending claims: \(error)")
+            return []
+        }
+    }
+    
+    func fetchMyClaims(userId: UUID) -> [PlayerClaim] {
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+        request.predicate = NSPredicate(format: "claimantUserId == %@", userId as CVarArg)
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false)]
+        
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error fetching my claims: \(error)")
+            return []
         }
     }
 }

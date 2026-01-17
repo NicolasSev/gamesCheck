@@ -17,81 +17,85 @@ struct BilliardGameDetailView: View {
     @State private var isEditPlayersSheetPresented: Bool = false
     @State private var showDeleteAlert = false
     @State private var selectedBatchToDelete: BilliardBatche?
+    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
-                // Заголовок с информацией об игре
-                VStack(spacing: 8) {
-                    if let gameDate = game.timestamp {
-                        Text("Дата игры: \(formattedDate(gameDate))")
-                            .font(.headline)
-                    }
-                    HStack {
-                        if let player1 = game.player1 {
-                            Text("Игрок 1: \(player1.name ?? "Без имени")")
-                        } else {
-                            Text("Игрок 1: не выбран")
+                    // Заголовок с информацией об игре
+                    VStack(spacing: 8) {
+                        if let gameDate = game.timestamp {
+                            Text("Дата игры: \(formattedDate(gameDate))")
+                                .font(.headline)
+                                .foregroundColor(.white)
                         }
-                        if let player2 = game.player2 {
-                            Text("Игрок 2: \(player2.name ?? "Без имени")")
-                        } else {
-                            Text("Игрок 2: не выбран")
+                        HStack {
+                            if let player1 = game.player1 {
+                                Text("Игрок 1: \(player1.name ?? "Без имени")")
+                            } else {
+                                Text("Игрок 1: не выбран")
+                            }
+                            if let player2 = game.player2 {
+                                Text("Игрок 2: \(player2.name ?? "Без имени")")
+                            } else {
+                                Text("Игрок 2: не выбран")
+                            }
                         }
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
                     }
-                    .font(.subheadline)
-                }
-                .padding()
-                
-                Divider()
-                
-                // Список партий
-                if batches.isEmpty {
-                    Text("Нет партий для этой игры")
-                        .foregroundColor(.secondary)
-                        .padding()
-                } else {
-                    List {
-                        ForEach(Array(batches.enumerated()), id: \.element) { index, batch in
-                            BilliardBatchRowView(
-                                batch: batch,
-                                player1Name: game.player1?.name ?? "Игрок 1",
-                                player2Name: game.player2?.name ?? "Игрок 2",
-                                saveContext: saveContext,
-                                onDeleteConfirmed: {
-                                    viewContext.delete(batch)
-                                    saveContext()
-                                }
-                            )
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    selectedBatchToDelete = batch
-                                    showDeleteAlert = true
-                                } label: {
-                                    Label("Удалить", systemImage: "trash")
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+                    .padding(.horizontal)
+                    
+                    // Список партий
+                    if batches.isEmpty {
+                        Text("Нет партий для этой игры")
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding()
+                    } else {
+                        List {
+                            ForEach(Array(batches.enumerated()), id: \.element) { index, batch in
+                                BilliardBatchRowView(
+                                    batch: batch,
+                                    player1Name: game.player1?.name ?? "Игрок 1",
+                                    player2Name: game.player2?.name ?? "Игрок 2",
+                                    saveContext: saveContext,
+                                    onDeleteConfirmed: {
+                                        viewContext.delete(batch)
+                                        saveContext()
+                                    }
+                                )
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        selectedBatchToDelete = batch
+                                        showDeleteAlert = true
+                                    } label: {
+                                        Label("Удалить", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
-                    }
-                    .alert("Удалить партию?", isPresented: $showDeleteAlert) {
-                        Button("Удалить", role: .destructive) {
-                            withAnimation {
-                                if let batch = selectedBatchToDelete {
-                                    viewContext.delete(batch)
-                                    saveContext()
-                                    selectedBatchToDelete = nil
+                        .scrollContentBackground(.hidden)
+                        .alert("Удалить партию?", isPresented: $showDeleteAlert) {
+                            Button("Удалить", role: .destructive) {
+                                withAnimation {
+                                    if let batch = selectedBatchToDelete {
+                                        viewContext.delete(batch)
+                                        saveContext()
+                                        selectedBatchToDelete = nil
+                                    }
                                 }
                             }
+                            Button("Отмена", role: .cancel) {
+                                selectedBatchToDelete = nil
+                            }
+                        } message: {
+                            Text("Это действие нельзя отменить.")
                         }
-                        Button("Отмена", role: .cancel) {
-                            selectedBatchToDelete = nil
-                        }
-                    } message: {
-                        Text("Это действие нельзя отменить.")
                     }
-                }
-                
-                Spacer()
+                    
+                    Spacer()
             }
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -111,6 +115,29 @@ struct BilliardGameDetailView: View {
                 EditBilliardsPlayersSheet(isPresented: $isEditPlayersSheetPresented, game: game)
                     .environment(\.managedObjectContext, viewContext)
             }
+            .background(
+                Group {
+                    if let image = backgroundImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .ignoresSafeArea()
+                            .overlay(
+                                LinearGradient(
+                                    colors: [
+                                        Color.black.opacity(0.4),
+                                        Color.black.opacity(0.6)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .ignoresSafeArea()
+                            )
+                    } else {
+                        Color.black.ignoresSafeArea()
+                    }
+                }
+            )
         }
     }
     

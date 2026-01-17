@@ -114,8 +114,15 @@ struct ConflictItemView: View {
     let onSkip: () -> Void
     
     // Создаем словарь существующих игроков для быстрого поиска
+    // Обрабатываем дубликаты имен, оставляя первого игрока с таким именем
     private var existingPlayersDict: [String: ExistingPlayerData] {
-        Dictionary(uniqueKeysWithValues: conflict.existingPlayers.map { ($0.name, $0) })
+        var dict: [String: ExistingPlayerData] = [:]
+        for player in conflict.existingPlayers {
+            if dict[player.name] == nil {
+                dict[player.name] = player
+            }
+        }
+        return dict
     }
     
     // Сортируем существующих игроков по имени (ascending)
