@@ -222,7 +222,9 @@ struct GameDetailView: View {
     @State private var isAddPlayerSheetPresented = false
     @State private var showDeleteConfirmation = false
     @State private var isClaimPlayerSheetPresented = false
+    @State private var isHandAddSheetPresented = false
     @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
+    @State private var refreshHandsToggle = false // Для обновления списка раздач
 
     // Вместо флагов и массивов используем один @State shareData
     @State private var shareData: ShareData?
@@ -250,6 +252,12 @@ struct GameDetailView: View {
     var gameWithPlayers: [GameWithPlayer] {
         let set = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
         return set.sorted { ($0.player?.name ?? "") < ($1.player?.name ?? "") }
+    }
+    
+    // Получаем раздачи для текущей игры
+    private var handsForThisGame: [HandModel] {
+        HandsStorageService.shared.getHands(forGameId: game.gameId)
+            .sorted { $0.timestamp > $1.timestamp } // Новые вверху
     }
     
     // Вычисляем результаты игроков для гистограммы
@@ -326,40 +334,78 @@ struct GameDetailView: View {
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         .padding(.vertical, 8)
                     
-                    // Список игроков
-                    ForEach(gameWithPlayers, id: \.self) { gwp in
-                        VStack(spacing: 8) {
-                            PlayerRow(
-                                gameWithPlayer: gwp,
-                                updateBuyIn: updateBuyIn,
-                                setCashout: setCashout,
-                                isHost: isHost
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            
-                            // Показать статус заявки если не хост
-                            if canClaim, let userId = currentUserId {
-                                ClaimStatusView(gameWithPlayer: gwp, userId: userId)
-                            }
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if isHost {
-                                Button(role: .destructive) {
-                                    removeGameWithPlayer(gwp: gwp)
-                                } label: {
-                                    VStack {
-                                        Image(systemName: "trash")
-                                        Text("Удалить")
-                                            .font(.caption)
+                    // Список раздач
+                    Section {
+                        ForEach(handsForThisGame) { hand in
+                            HandRowView(hand: hand, game: game)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        deleteHand(hand)
+                                    } label: {
+                                        VStack {
+                                            Image(systemName: "trash")
+                                            Text("Удалить")
+                                                .font(.caption)
+                                        }
                                     }
+                                    .tint(.red)
                                 }
-                                .tint(.red)
+                        }
+                    } header: {
+                        if !handsForThisGame.isEmpty {
+                            Text("Раздачи (\(handsForThisGame.count))")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.top, 8)
+                                .padding(.bottom, 8)
+                        }
+                    }
+                    
+                    // Список игроков
+                    Section {
+                        ForEach(gameWithPlayers, id: \.self) { gwp in
+                            VStack(spacing: 8) {
+                                PlayerRow(
+                                    gameWithPlayer: gwp,
+                                    updateBuyIn: updateBuyIn,
+                                    setCashout: setCashout,
+                                    isHost: isHost
+                                )
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                
+                                // Показать статус заявки если не хост
+                                if canClaim, let userId = currentUserId {
+                                    ClaimStatusView(gameWithPlayer: gwp, userId: userId)
+                                }
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if isHost {
+                                    Button(role: .destructive) {
+                                        removeGameWithPlayer(gwp: gwp)
+                                    } label: {
+                                        VStack {
+                                            Image(systemName: "trash")
+                                            Text("Удалить")
+                                                .font(.caption)
+                                        }
+                                    }
+                                    .tint(.red)
+                                }
                             }
                         }
+                    } header: {
+                        Text("Игроки (\(gameWithPlayers.count))")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.top, 8)
+                            .padding(.bottom, 8)
                     }
                 }
                 .listStyle(.plain)
@@ -458,6 +504,13 @@ struct GameDetailView: View {
                     }
                 }
                 
+                // Кнопка "Добавить раздачу"
+                Button {
+                    isHandAddSheetPresented = true
+                } label: {
+                    Label("Добавить раздачу", systemImage: "rectangle.stack.fill.badge.plus")
+                }
+                
                 // Кнопка "Удалить игру" (только для хоста)
                 if isHost {
                     Button(role: .destructive) {
@@ -478,6 +531,14 @@ struct GameDetailView: View {
             ClaimPlayerView(game: game)
                 .environment(\.managedObjectContext, viewContext)
         }
+        // Лист добавления раздачи
+        .sheet(isPresented: $isHandAddSheetPresented) {
+            // При закрытии листа обновляем список
+            refreshHandsToggle.toggle()
+        } content: {
+            HandAddView(game: game)
+                .environment(\.managedObjectContext, viewContext)
+        }
         // Лист шаринга - вызывается только если shareData != nil
         .sheet(item: $shareData) { data in
             ShareSheet(activityItems: data.items)
@@ -489,6 +550,9 @@ struct GameDetailView: View {
             Button("Отмена", role: .cancel) { }
         } message: {
             Text("Вы уверены, что хотите удалить игру и все связанные данные?")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .handDidUpdate)) { _ in
+            refreshHandsToggle.toggle()
         }
     }
 
@@ -508,6 +572,11 @@ struct GameDetailView: View {
     private func removeGameWithPlayer(gwp: GameWithPlayer) {
         viewContext.delete(gwp)
         saveContext()
+    }
+    
+    private func deleteHand(_ hand: HandModel) {
+        HandsStorageService.shared.deleteHand(id: hand.id)
+        refreshHandsToggle.toggle()
     }
 
     private func saveContext() {
