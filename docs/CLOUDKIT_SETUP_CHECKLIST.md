@@ -12,16 +12,16 @@
 - [ ] Статус аккаунта "Active" в Developer Portal
 
 ### 2. App Identifier и CloudKit Container
-- [ ] App ID создан: `com.nicolascooper.PokerCardRecognizer`
+- [ ] App ID создан: `com.nicolascooper.FishAndChips`
 - [ ] CloudKit capability включена в App ID
-- [ ] CloudKit Container создан: `iCloud.com.nicolascooper.PokerCardRecognizer`
+- [ ] CloudKit Container создан: `iCloud.com.nicolascooper.FishAndChips`
 - [ ] Container виден в [CloudKit Dashboard](https://icloud.developer.apple.com/dashboard)
 
 ### 3. Настройка Xcode проекта
-- [ ] Bundle Identifier: `com.nicolascooper.PokerCardRecognizer` (проверено ✅)
+- [ ] Bundle Identifier: `com.nicolascooper.FishAndChips` (проверено ✅)
 - [ ] Team выбран в Signing & Capabilities
 - [ ] CloudKit capability добавлена в проект
-- [ ] Container выбран: `iCloud.com.nicolascooper.PokerCardRecognizer`
+- [ ] Container выбран: `iCloud.com.nicolascooper.FishAndChips`
 - [ ] Файл `PokerCardRecognizer.entitlements` создан автоматически
 
 ### 4. Тестирование
@@ -38,8 +38,8 @@
 
 ```
 ✅ Apple Developer аккаунт: активен
-✅ Bundle Identifier: com.nicolascooper.PokerCardRecognizer
-✅ CloudKit Container: iCloud.com.nicolascooper.PokerCardRecognizer
+✅ Bundle Identifier: com.nicolascooper.FishAndChips
+✅ CloudKit Container: iCloud.com.nicolascooper.FishAndChips
 ✅ Team ID: [ваш Team ID из Developer Portal]
 ✅ Тестирование: пройдено успешно
 ```
@@ -54,8 +54,8 @@
 
 ## ⚠️ Важные замечания
 
-1. **Bundle Identifier уже правильный:** `com.nicolascooper.PokerCardRecognizer` ✅
-2. **CloudKit Container ID:** должен быть `iCloud.com.nicolascooper.PokerCardRecognizer`
+1. **Bundle Identifier уже правильный:** `com.nicolascooper.FishAndChips` ✅
+2. **CloudKit Container ID:** должен быть `iCloud.com.nicolascooper.FishAndChips`
 3. **Тестирование:** CloudKit лучше тестировать на физическом устройстве, не в симуляторе
 4. **Активация аккаунта:** может занять 24-48 часов после оплаты
 

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788" systemVersion="24D81" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="BilliardBatche" representedClassName="BilliardBatche" syncable="YES">
+        <attribute name="scorePlayer1" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="scorePlayer2" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="game" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Game" inverseName="billiardBatches" inverseEntity="Game"/>
+    </entity>
+    <entity name="Game" representedClassName="Game" isAbstract="YES" syncable="YES">
+        <attribute name="attribute" optional="YES" attributeType="String"/>
+        <attribute name="attribute1" optional="YES" attributeType="String"/>
+        <attribute name="creatorUserId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="gameType" optional="YES" attributeType="String"/>
+        <attribute name="gameId" attributeType="UUID" defaultValueString="00000000-0000-0000-0000-000000000000" usesScalarValueType="NO"/>
+        <attribute name="isPublic" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="softDeleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="billiardBatches" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="BilliardBatche" inverseName="game" inverseEntity="BilliardBatche"/>
+        <relationship name="creator" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="createdGames" inverseEntity="User"/>
+        <relationship name="gameWithPlayers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="game" inverseEntity="GameWithPlayer"/>
+        <relationship name="player1" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player"/>
+        <relationship name="player2" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player"/>
+        <relationship name="players" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Player" inverseName="game" inverseEntity="Player"/>
+    </entity>
+    <entity name="GameWithPlayer" representedClassName="GameWithPlayer" syncable="YES">
+        <attribute name="buyin" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="cashout" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="game" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Game" inverseName="gameWithPlayers" inverseEntity="Game"/>
+        <relationship name="player" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player" inverseName="gameWithPlayers" inverseEntity="Player"/>
+        <relationship name="playerProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PlayerProfile" inverseName="gameParticipations" inverseEntity="PlayerProfile"/>
+    </entity>
+    <entity name="PlayerProfile" representedClassName="PlayerProfile" syncable="YES">
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="displayName" attributeType="String"/>
+        <attribute name="isAnonymous" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="profileId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="totalBuyins" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
+        <attribute name="totalCashouts" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
+        <attribute name="totalGamesPlayed" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="userId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="aliases" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PlayerAlias" inverseName="profile" inverseEntity="PlayerAlias"/>
+        <relationship name="gameParticipations" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="playerProfile" inverseEntity="GameWithPlayer"/>
+        <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="playerProfile" inverseEntity="User"/>
+    </entity>
+    <entity name="PlayerAlias" representedClassName="PlayerAlias" syncable="YES">
+        <attribute name="aliasId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="aliasName" attributeType="String"/>
+        <attribute name="claimedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="gamesCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="profileId" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="profile" maxCount="1" deletionRule="Nullify" destinationEntity="PlayerProfile" inverseName="aliases" inverseEntity="PlayerProfile"/>
+        <uniquenessConstraints>
+            <constraint value="aliasName"/>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="Player" representedClassName="Player" syncable="YES">
+        <attribute name="buyin" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <relationship name="game" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Game" inverseName="players" inverseEntity="Game"/>
+        <relationship name="gameWithPlayers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="player" inverseEntity="GameWithPlayer"/>
+    </entity>
+    <entity name="User" representedClassName="User" syncable="YES">
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="isSuperAdmin" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastLoginAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="passwordHash" attributeType="String"/>
+        <attribute name="subscriptionExpiresAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="subscriptionStatus" attributeType="String" defaultValueString="free"/>
+        <attribute name="userId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="username" attributeType="String"/>
+        <relationship name="createdGames" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Game" inverseName="creator" inverseEntity="Game"/>
+        <relationship name="playerProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PlayerProfile" inverseName="user" inverseEntity="PlayerProfile"/>
+        <uniquenessConstraints>
+            <constraint value="username"/>
+            <constraint value="email"/>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="PlayerClaim" representedClassName="PlayerClaim" syncable="YES">
+        <attribute name="claimId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="playerName" attributeType="String"/>
+        <attribute name="gameId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="gameWithPlayerObjectId" attributeType="String"/>
+        <attribute name="claimantUserId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="hostUserId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="status" attributeType="String" defaultValueString="pending"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="resolvedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="resolvedByUserId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <relationship name="claimantUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User"/>
+        <relationship name="hostUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User"/>
+        <relationship name="resolvedByUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User"/>
+        <relationship name="game" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Game"/>
+    </entity>
+</model>

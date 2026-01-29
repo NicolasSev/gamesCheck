@@ -56,8 +56,8 @@
 5. Выберите **App IDs** → **Continue**
 6. Выберите **App** → **Continue**
 7. Заполните форму:
-   - **Description:** `PokerCardRecognizer`
-   - **Bundle ID:** Выберите **Explicit** и введите: `com.nicolascooper.PokerCardRecognizer`
+   - **Description:** `FishAndChips`
+   - **Bundle ID:** Выберите **Explicit** и введите: `com.nicolascooper.FishAndChips`
      - ⚠️ **ВАЖНО:** Должен совпадать с Bundle Identifier в Xcode проекте
 8. Прокрутите вниз и включите **CloudKit** capability
 9. Нажмите **Continue** → **Register**
@@ -70,7 +70,7 @@
 4. Нажмите **Configure** рядом с CloudKit
 5. В разделе **CloudKit Containers** нажмите **+** для создания нового Container
 6. Введите:
-   - **Container Identifier:** `iCloud.com.nicolascooper.PokerCardRecognizer`
+   - **Container Identifier:** `iCloud.com.nicolascooper.FishAndChips`
    - ⚠️ **ВАЖНО:** Формат должен быть `iCloud.com.{bundle-id}`
 7. Нажмите **Continue** → **Save**
 8. Вернитесь к App ID и убедитесь, что Container привязан
@@ -79,7 +79,7 @@
 
 1. Перейдите в [CloudKit Dashboard](https://icloud.developer.apple.com/dashboard)
 2. Войдите с вашим Apple Developer аккаунтом
-3. Выберите созданный Container: `iCloud.com.nicolascooper.PokerCardRecognizer`
+3. Выберите созданный Container: `iCloud.com.nicolascooper.FishAndChips`
 4. Убедитесь, что Container активен и доступен
 
 ---
@@ -93,7 +93,7 @@
 3. Выберите target **PokerCardRecognizer**
 4. Перейдите на вкладку **General**
 5. Проверьте **Bundle Identifier:**
-   - Должно быть: `com.nicolascooper.PokerCardRecognizer`
+   - Должно быть: `com.nicolascooper.FishAndChips`
    - Должно совпадать с App ID в Developer Portal
 
 ### 3.2. Настройка Signing & Capabilities
@@ -109,7 +109,7 @@
 2. Найдите и выберите **CloudKit**
 3. В появившемся разделе **CloudKit Containers:**
    - Нажмите на выпадающий список
-   - Выберите созданный Container: `iCloud.com.nicolascooper.PokerCardRecognizer`
+   - Выберите созданный Container: `iCloud.com.nicolascooper.FishAndChips`
    - Если Container не виден, нажмите **+** и введите идентификатор вручную
 
 ### 3.4. Проверка Entitlements
@@ -119,7 +119,7 @@
    ```xml
    <key>com.apple.developer.icloud-container-identifiers</key>
    <array>
-       <string>iCloud.com.nicolascooper.PokerCardRecognizer</string>
+       <string>iCloud.com.nicolascooper.FishAndChips</string>
    </array>
    <key>com.apple.developer.icloud-services</key>
    <array>
@@ -149,7 +149,7 @@ import CloudKit
 
 class CloudKitTest {
     static func testConnection() async {
-        let container = CKContainer(identifier: "iCloud.com.nicolascooper.PokerCardRecognizer")
+        let container = CKContainer(identifier: "iCloud.com.nicolascooper.FishAndChips")
         let database = container.publicCloudDatabase
         
         do {
@@ -213,8 +213,8 @@ struct PokerCardRecognizerApp: App {
 
 ### 5.1. Информация о проекте
 
-- [ ] **Bundle Identifier:** `com.nicolascooper.PokerCardRecognizer`
-- [ ] **CloudKit Container ID:** `iCloud.com.nicolascooper.PokerCardRecognizer`
+- [ ] **Bundle Identifier:** `com.nicolascooper.FishAndChips`
+- [ ] **CloudKit Container ID:** `iCloud.com.nicolascooper.FishAndChips`
 - [ ] **Team ID:** (найдите в Developer Portal → Membership)
 - [ ] **Apple Developer аккаунт:** активен и оплачен
 

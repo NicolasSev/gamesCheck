@@ -1,0 +1,190 @@
+{
+  "recordTypes": [
+    {
+      "name": "User",
+      "fields": [
+        {
+          "name": "username",
+          "type": "String",
+          "indexed": true,
+          "queryable": true,
+          "sortable": true
+        },
+        {
+          "name": "email",
+          "type": "String",
+          "indexed": true,
+          "queryable": true
+        },
+        {
+          "name": "passwordHash",
+          "type": "String"
+        },
+        {
+          "name": "subscriptionStatus",
+          "type": "String"
+        },
+        {
+          "name": "isSuperAdmin",
+          "type": "Int64"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime"
+        },
+        {
+          "name": "lastLoginAt",
+          "type": "DateTime"
+        },
+        {
+          "name": "subscriptionExpiresAt",
+          "type": "DateTime"
+        }
+      ]
+    },
+    {
+      "name": "Game",
+      "fields": [
+        {
+          "name": "gameType",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "DateTime",
+          "indexed": true
+        },
+        {
+          "name": "isPublic",
+          "type": "Int64"
+        },
+        {
+          "name": "softDeleted",
+          "type": "Int64"
+        },
+        {
+          "name": "notes",
+          "type": "String"
+        },
+        {
+          "name": "creator",
+          "type": "Reference",
+          "referenceType": "User"
+        }
+      ]
+    },
+    {
+      "name": "PlayerProfile",
+      "fields": [
+        {
+          "name": "displayName",
+          "type": "String",
+          "indexed": true,
+          "queryable": true
+        },
+        {
+          "name": "isAnonymous",
+          "type": "Int64"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime"
+        },
+        {
+          "name": "totalGamesPlayed",
+          "type": "Int64"
+        },
+        {
+          "name": "totalBuyins",
+          "type": "Double"
+        },
+        {
+          "name": "totalCashouts",
+          "type": "Double"
+        },
+        {
+          "name": "user",
+          "type": "Reference",
+          "referenceType": "User"
+        }
+      ]
+    },
+    {
+      "name": "PlayerAlias",
+      "fields": [
+        {
+          "name": "aliasName",
+          "type": "String",
+          "indexed": true,
+          "queryable": true
+        },
+        {
+          "name": "claimedAt",
+          "type": "DateTime"
+        },
+        {
+          "name": "gamesCount",
+          "type": "Int64"
+        },
+        {
+          "name": "profile",
+          "type": "Reference",
+          "referenceType": "PlayerProfile"
+        }
+      ]
+    },
+    {
+      "name": "PlayerClaim",
+      "fields": [
+        {
+          "name": "playerName",
+          "type": "String",
+          "indexed": true
+        },
+        {
+          "name": "gameWithPlayerObjectId",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "indexed": true,
+          "queryable": true
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "indexed": true
+        },
+        {
+          "name": "resolvedAt",
+          "type": "DateTime"
+        },
+        {
+          "name": "notes",
+          "type": "String"
+        },
+        {
+          "name": "game",
+          "type": "Reference",
+          "referenceType": "Game"
+        },
+        {
+          "name": "claimantUser",
+          "type": "Reference",
+          "referenceType": "User"
+        },
+        {
+          "name": "hostUser",
+          "type": "Reference",
+          "referenceType": "User"
+        },
+        {
+          "name": "resolvedByUser",
+          "type": "Reference",
+          "referenceType": "User"
+        }
+      ]
+    }
+  ]
+}

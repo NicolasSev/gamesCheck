@@ -1,6 +1,6 @@
 //
-//  PokerCardRecognizerApp.swift
-//  PokerCardRecognizer
+//  FishAndChipsApp.swift
+//  FishAndChips
 //
 //  Created by Николас on 24.03.2025.
 //
@@ -9,7 +9,7 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct PokerCardRecognizerApp: App {
+struct FishAndChipsApp: App {
     let persistenceController = PersistenceController.shared
     
     @StateObject private var notificationService = NotificationService.shared
@@ -23,7 +23,7 @@ struct PokerCardRecognizerApp: App {
             UserDefaults.standard.set(true, forKey: "hasMigratedGamesToV2")
         }
     }
-
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -60,21 +60,6 @@ struct PokerCardRecognizerApp: App {
                             print("❌ CloudKit Status Check Failed: \(error.localizedDescription)")
                         }
                     }
-                    
-                    // TEMPORARY: Create CloudKit schema in Development mode
-                    // ⚠️ Remove this code after schema is deployed to Production!
-                    #if DEBUG
-                    Task {
-                        do {
-                            print("🔧 Starting CloudKit schema creation...")
-                            try await CloudKitSchemaCreator().createDevelopmentSchema()
-                            print("✅ Schema creation completed! Check CloudKit Dashboard.")
-                        } catch {
-                            print("❌ Schema creation failed: \(error)")
-                            print("   Details: \(error.localizedDescription)")
-                        }
-                    }
-                    #endif
                 }
         }
     }

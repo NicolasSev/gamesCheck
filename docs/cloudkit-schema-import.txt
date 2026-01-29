@@ -1,0 +1,35 @@
+CloudKit Schema Configuration for References
+
+Since the CloudKit Dashboard UI doesn't provide clear way to configure references,
+here's what each reference field should point to:
+
+## Game Record Type
+- creator → User
+
+## PlayerProfile Record Type  
+- user → User
+
+## PlayerAlias Record Type
+- profile → PlayerProfile
+
+## PlayerClaim Record Type
+- game → Game
+- claimantUser → User
+- hostUser → User
+- resolvedByUser → User
+
+---
+
+## How to configure in CloudKit Dashboard:
+
+1. Click on the Record Type (e.g., "PlayerClaim")
+2. Click on a reference field (e.g., "game")
+3. Look for these configuration options:
+   - "Reference Type" dropdown
+   - "Action" settings
+   - "Delete Action" (Cascade/None/Validate)
+4. Set the appropriate target record type
+
+If the UI still doesn't cooperate, the references will work anyway,
+but queries that filter by reference type won't be as efficient.
+The app code explicitly sets the reference types when creating records.
