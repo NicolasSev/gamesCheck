@@ -7,6 +7,7 @@ struct ProfileView: View {
     @State private var showingPendingClaims = false
     @State private var showingMyClaims = false
     @State private var showingEditUsername = false
+    @State private var showingDebug = false
     @State private var newUsername = ""
     @State private var isUpdatingUsername = false
     @State private var showingError = false
@@ -158,6 +159,24 @@ struct ProfileView: View {
                         .liquidGlass(cornerRadius: 15)
                         .padding(.horizontal)
 
+                        // Debug (только в DEBUG режиме)
+                        #if DEBUG
+                        Button(action: {
+                            showingDebug = true
+                        }) {
+                            HStack {
+                                Image(systemName: "ladybug")
+                                Text("Debug")
+                            }
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .liquidGlass(cornerRadius: 15)
+                        }
+                        .padding(.horizontal)
+                        #endif
+                        
                         // Выйти
                         Button(action: {
                             authViewModel.logout()
@@ -212,6 +231,10 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showingMyClaims) {
                 MyClaimsView()
+                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+            }
+            .sheet(isPresented: $showingDebug) {
+                DebugView()
                     .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
             }
             .alert("Изменить имя пользователя", isPresented: $showingEditUsername) {

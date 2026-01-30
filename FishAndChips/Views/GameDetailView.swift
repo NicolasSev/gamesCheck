@@ -234,14 +234,21 @@ struct GameDetailView: View {
     private var currentUserId: UUID? {
         guard let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
               let userId = UUID(uuidString: userIdString) else {
+            print("❌ No currentUserId in UserDefaults")
             return nil
         }
+        print("✅ Current userId: \(userId)")
         return userId
     }
     
     private var isHost: Bool {
-        guard let userId = currentUserId else { return false }
-        return game.creatorUserId == userId
+        guard let userId = currentUserId else {
+            print("❌ isHost: false - no currentUserId")
+            return false
+        }
+        let result = game.creatorUserId == userId
+        print("🔍 isHost check: game.creatorUserId=\(game.creatorUserId?.uuidString ?? "nil"), currentUserId=\(userId.uuidString), isHost=\(result)")
+        return result
     }
     
     private var canClaim: Bool {

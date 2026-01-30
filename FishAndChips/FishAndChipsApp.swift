@@ -25,16 +25,23 @@ struct FishAndChipsApp: App {
         
         // Миграция creatorUserId — один раз для исправления импортированных игр
         let hasMigratedCreatorUserId = UserDefaults.standard.bool(forKey: "hasMigratedCreatorUserId")
+        print("🔧 hasMigratedCreatorUserId: \(hasMigratedCreatorUserId)")
         if !hasMigratedCreatorUserId {
             if let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
                let userId = UUID(uuidString: userIdString) {
+                print("🔧 Starting creatorUserId migration for user: \(userId)")
                 let importService = DataImportService(
                     viewContext: persistenceController.container.viewContext,
                     userId: userId
                 )
                 try? importService.updateCreatorUserIdForAllGames()
                 UserDefaults.standard.set(true, forKey: "hasMigratedCreatorUserId")
+                print("🔧 Migration completed and flag set")
+            } else {
+                print("⚠️ Cannot migrate: no currentUserId found")
             }
+        } else {
+            print("✅ Migration already completed")
         }
     }
     
