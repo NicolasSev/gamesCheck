@@ -2,13 +2,16 @@ import SwiftUI
 import UIKit
 
 struct MainView: View {
+    @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
+    @EnvironmentObject var deepLinkService: DeepLinkService
     @StateObject private var viewModel = MainViewModel()
 
     @State private var selectedTab: MainTab = .overview
     @State private var showingProfile = false
     @State private var showingAddGame = false
     @State private var showingImportGames = false
+    @State private var deepLinkGame: Game?
 
     enum MainTab: Hashable {
         case overview
@@ -103,6 +106,18 @@ struct MainView: View {
                     .environmentObject(authViewModel)
                     .onDisappear { viewModel.refresh() }
             }
+            .sheet(item: $deepLinkGame) { game in
+                NavigationView {
+                    if let type = game.gameType, type == "Бильярд" {
+                        BilliardGameDetailView(game: game)
+                    } else {
+                        GameDetailView(game: game)
+                    }
+                }
+            }
+            .onChange(of: deepLinkService.activeDeepLink) { newDeepLink in
+                handleDeepLink(newDeepLink)
+            }
             .onAppear {
                 // Настройка цвета текста и иконки активного таба
                 let tabBarAppearance = UITabBarAppearance()
@@ -140,6 +155,26 @@ struct MainView: View {
         case .overview: return "Обзор"
         case .games: return "Игры"
         case .statistics: return "Статистика"
+        }
+    }
+    
+    private func handleDeepLink(_ deepLink: DeepLink) {
+        switch deepLink {
+        case .game(let gameId):
+            print("🔗 MainView: Opening game \(gameId)")
+            
+            // Fetch game from CoreData
+            if let game = PersistenceController.shared.fetchGame(byId: gameId) {
+                print("✅ MainView: Found game, showing detail view")
+                deepLinkGame = game
+                deepLinkService.clearDeepLink()
+            } else {
+                print("❌ MainView: Game not found with id \(gameId)")
+                // TODO: Show alert that game was not found
+            }
+            
+        case .none:
+            break
         }
     }
 }

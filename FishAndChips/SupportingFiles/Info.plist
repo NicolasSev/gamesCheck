@@ -36,5 +36,19 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.nicolascooper.FishAndChips</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fishandchips</string>
+				<string>pokertracker</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

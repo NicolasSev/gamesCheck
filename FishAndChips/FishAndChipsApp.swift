@@ -13,6 +13,7 @@ struct FishAndChipsApp: App {
     let persistenceController = PersistenceController.shared
     
     @StateObject private var notificationService = NotificationService.shared
+    @StateObject private var deepLinkService = DeepLinkService()
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     init() {
@@ -51,6 +52,11 @@ struct FishAndChipsApp: App {
             ContentView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(notificationService)
+                .environmentObject(deepLinkService)
+                .onOpenURL { url in
+                    print("🔗 App received URL: \(url)")
+                    deepLinkService.handleURL(url)
+                }
                 .onAppear {
                     // Request notification permissions
                     Task {

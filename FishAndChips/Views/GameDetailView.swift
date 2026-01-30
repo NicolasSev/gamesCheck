@@ -646,10 +646,26 @@ struct GameDetailView: View {
     
     /// Генерирует ссылку на игру и открывает Share Sheet
     private func shareGameLink() {
+        // Автоматически делаем игру публичной при sharing
+        if !game.isPublic {
+            game.isPublic = true
+            saveContext()
+            print("✅ Game automatically set to public when sharing")
+        }
+        
         let gameId = game.gameId
-        let urlString = "pokertracker://game/\(gameId.uuidString)"
+        let urlString = "fishandchips://game/\(gameId.uuidString)"
         guard let url = URL(string: urlString) else { return }
         
-        shareData = ShareData(items: [url])
+        let message = """
+        🎮 Присоединяйтесь к игре в Fish & Chips!
+        
+        Откройте ссылку на устройстве с приложением Fish & Chips:
+        \(urlString)
+        
+        Или скопируйте код игры: \(gameId.uuidString)
+        """
+        
+        shareData = ShareData(items: [url, message])
     }
 }
