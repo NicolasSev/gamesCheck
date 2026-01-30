@@ -172,6 +172,14 @@ class NotificationService: NSObject, ObservableObject {
     // MARK: - Player Claim Notifications
     
     func notifyNewClaim(claimId: String, playerName: String, gameName: String, hostUserId: String) async throws {
+        // Check if current user is the host - only show notification to host
+        let keychain = KeychainService.shared
+        guard let currentUserId = keychain.getUserId(),
+              currentUserId == hostUserId else {
+            print("⚠️ Skipping notification: current user (\(keychain.getUserId() ?? "none")) is not host (\(hostUserId))")
+            return
+        }
+        
         let content = UNMutableNotificationContent()
         content.title = "Новая заявка на игрока"
         content.body = "\(playerName) хочет присвоить себя в игре \(gameName)"
@@ -181,6 +189,7 @@ class NotificationService: NSObject, ObservableObject {
             "claimId": claimId,
             "playerName": playerName,
             "gameName": gameName,
+            "hostUserId": hostUserId,
             "type": "new_claim"
         ]
         
@@ -195,10 +204,18 @@ class NotificationService: NSObject, ObservableObject {
         )
         
         try await notificationCenter.add(request)
-        print("📬 Sent claim notification for: \(playerName)")
+        print("📬 Sent claim notification to host \(hostUserId): \(playerName)")
     }
     
-    func notifyClaimApproved(claimId: String, playerName: String, gameName: String) async throws {
+    func notifyClaimApproved(claimId: String, playerName: String, gameName: String, claimantUserId: String) async throws {
+        // Check if current user is the claimant - only show notification to claimant
+        let keychain = KeychainService.shared
+        guard let currentUserId = keychain.getUserId(),
+              currentUserId == claimantUserId else {
+            print("⚠️ Skipping approval notification: current user (\(keychain.getUserId() ?? "none")) is not claimant (\(claimantUserId))")
+            return
+        }
+        
         let content = UNMutableNotificationContent()
         content.title = "Заявка одобрена ✅"
         content.body = "Ваша заявка на \(playerName) в игре \(gameName) была одобрена"
@@ -208,6 +225,7 @@ class NotificationService: NSObject, ObservableObject {
             "claimId": claimId,
             "playerName": playerName,
             "gameName": gameName,
+            "claimantUserId": claimantUserId,
             "type": "claim_approved"
         ]
         
@@ -219,10 +237,18 @@ class NotificationService: NSObject, ObservableObject {
         )
         
         try await notificationCenter.add(request)
-        print("✅ Sent approval notification for: \(playerName)")
+        print("✅ Sent approval notification to claimant \(claimantUserId): \(playerName)")
     }
     
-    func notifyClaimRejected(claimId: String, playerName: String, gameName: String, reason: String?) async throws {
+    func notifyClaimRejected(claimId: String, playerName: String, gameName: String, reason: String?, claimantUserId: String) async throws {
+        // Check if current user is the claimant - only show notification to claimant
+        let keychain = KeychainService.shared
+        guard let currentUserId = keychain.getUserId(),
+              currentUserId == claimantUserId else {
+            print("⚠️ Skipping rejection notification: current user (\(keychain.getUserId() ?? "none")) is not claimant (\(claimantUserId))")
+            return
+        }
+        
         let content = UNMutableNotificationContent()
         content.title = "Заявка отклонена ❌"
         var body = "Ваша заявка на \(playerName) в игре \(gameName) была отклонена"
@@ -236,6 +262,7 @@ class NotificationService: NSObject, ObservableObject {
             "claimId": claimId,
             "playerName": playerName,
             "gameName": gameName,
+            "claimantUserId": claimantUserId,
             "type": "claim_rejected"
         ]
         
@@ -247,7 +274,7 @@ class NotificationService: NSObject, ObservableObject {
         )
         
         try await notificationCenter.add(request)
-        print("❌ Sent rejection notification for: \(playerName)")
+        print("❌ Sent rejection notification to claimant \(claimantUserId): \(playerName)")
     }
     
     // MARK: - Badge Management

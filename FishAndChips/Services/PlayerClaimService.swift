@@ -229,7 +229,8 @@ class PlayerClaimService {
                 try await notificationService.notifyClaimApproved(
                     claimId: claim.claimId.uuidString,
                     playerName: claim.playerName,
-                    gameName: "игра от \(claim.game?.timestamp?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")"
+                    gameName: "игра от \(claim.game?.timestamp?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")",
+                    claimantUserId: claim.claimantUserId.uuidString
                 )
             } catch {
                 print("Failed to send notification: \(error)")
@@ -275,7 +276,8 @@ class PlayerClaimService {
                     claimId: claim.claimId.uuidString,
                     playerName: claim.playerName,
                     gameName: "игра от \(claim.game?.timestamp?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")",
-                    reason: notes
+                    reason: notes,
+                    claimantUserId: claim.claimantUserId.uuidString
                 )
             } catch {
                 print("Failed to send notification: \(error)")
