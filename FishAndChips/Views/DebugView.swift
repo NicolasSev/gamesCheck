@@ -5,6 +5,8 @@ import CoreData
 struct DebugView: View {
     @Environment(\.managedObjectContext) private var viewContext
     
+    private let keychain = KeychainService.shared
+    
     @State private var migrationStatus = ""
     @State private var userInfo = ""
     @State private var gamesInfo = ""
@@ -60,14 +62,18 @@ struct DebugView: View {
     }
     
     private func loadUserInfo() {
-        if let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+        if let userIdString = keychain.getUserId(),
            let userId = UUID(uuidString: userIdString) {
             userInfo = """
             currentUserId: \(userId.uuidString)
             hasMigratedCreatorUserId: \(UserDefaults.standard.bool(forKey: "hasMigratedCreatorUserId"))
+            Source: Keychain ✅
             """
         } else {
-            userInfo = "No currentUserId found"
+            userInfo = """
+            No currentUserId found in Keychain ❌
+            Checking UserDefaults (legacy): \(UserDefaults.standard.string(forKey: "currentUserId") ?? "none")
+            """
         }
     }
     
@@ -99,9 +105,9 @@ struct DebugView: View {
     }
     
     private func runMigration() {
-        guard let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+        guard let userIdString = keychain.getUserId(),
               let userId = UUID(uuidString: userIdString) else {
-            migrationStatus = "❌ No currentUserId found"
+            migrationStatus = "❌ No currentUserId found in Keychain"
             return
         }
         

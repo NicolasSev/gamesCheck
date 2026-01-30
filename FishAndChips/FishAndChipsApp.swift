@@ -27,7 +27,8 @@ struct FishAndChipsApp: App {
         let hasMigratedCreatorUserId = UserDefaults.standard.bool(forKey: "hasMigratedCreatorUserId")
         print("🔧 hasMigratedCreatorUserId: \(hasMigratedCreatorUserId)")
         if !hasMigratedCreatorUserId {
-            if let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+            let keychain = KeychainService.shared
+            if let userIdString = keychain.getUserId(),
                let userId = UUID(uuidString: userIdString) {
                 print("🔧 Starting creatorUserId migration for user: \(userId)")
                 let importService = DataImportService(
@@ -38,7 +39,7 @@ struct FishAndChipsApp: App {
                 UserDefaults.standard.set(true, forKey: "hasMigratedCreatorUserId")
                 print("🔧 Migration completed and flag set")
             } else {
-                print("⚠️ Cannot migrate: no currentUserId found")
+                print("⚠️ Cannot migrate: no currentUserId found in Keychain")
             }
         } else {
             print("✅ Migration already completed")
