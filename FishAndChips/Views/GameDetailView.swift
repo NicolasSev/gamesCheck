@@ -646,13 +646,6 @@ struct GameDetailView: View {
     
     /// Генерирует ссылку на игру и открывает Share Sheet
     private func shareGameLink() {
-        // Автоматически делаем игру публичной при sharing
-        if !game.isPublic {
-            game.isPublic = true
-            saveContext()
-            print("✅ Game automatically set to public when sharing")
-        }
-        
         let gameId = game.gameId
         let urlString = "fishandchips://game/\(gameId.uuidString)"
         guard let url = URL(string: urlString) else { return }
