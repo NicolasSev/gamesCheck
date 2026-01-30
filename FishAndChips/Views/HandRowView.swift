@@ -348,6 +348,7 @@ struct CardDisplayView: View {
                 
                 Text(card.suit.symbol)
                     .font(.system(size: 12))
+                    .foregroundColor(cardColor(card))
             }
             .frame(width: 35, height: 50)
             .background(
@@ -388,6 +389,7 @@ struct HandDetailBoardCardView: View {
                 
                 Text(card.suit.symbol)
                     .font(.system(size: 14))
+                    .foregroundColor(cardColor(card))
             }
             .frame(width: 44, height: 64)
             .background(
@@ -427,6 +429,7 @@ struct HandDetailPlayerCardView: View {
                 
                 Text(card.suit.symbol)
                     .font(.system(size: 11))
+                    .foregroundColor(cardColor(card))
             }
             .frame(width: 36, height: 52)
             .background(
@@ -466,6 +469,7 @@ struct MiniCardView: View {
                 
                 Text(card.suit.symbol)
                     .font(.system(size: 9))
+                    .foregroundColor(cardColor(card))
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
@@ -502,6 +506,7 @@ struct HandRowCardView: View {
                 
                 Text(card.suit.symbol)
                     .font(.system(size: 10))
+                    .foregroundColor(cardColor(card))
             }
             .frame(width: 32, height: 20)
             .padding(.horizontal, 5)
