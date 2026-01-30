@@ -204,7 +204,8 @@ class DataImportService {
     /// Обновляет creatorUserId для всех игр текущего пользователя, у которых он не установлен
     func updateCreatorUserIdForAllGames() throws {
         guard let userId = self.userId else {
-            throw ImportError.invalidFormat
+            print("⚠️ No userId provided, skipping creatorUserId migration")
+            return
         }
         
         let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
@@ -216,9 +217,12 @@ class DataImportService {
             game.creatorUserId = userId
         }
         
-        try viewContext.save()
-        
-        print("✅ Updated creatorUserId for \(games.count) games")
+        if !games.isEmpty {
+            try viewContext.save()
+            print("✅ Updated creatorUserId for \(games.count) games")
+        } else {
+            print("✅ No games need creatorUserId migration")
+        }
     }
     
     /// Импортирует игры в CoreData, заменяя существующие если нужно
