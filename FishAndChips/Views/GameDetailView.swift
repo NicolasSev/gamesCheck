@@ -646,19 +646,26 @@ struct GameDetailView: View {
     
     /// Генерирует ссылку на игру и открывает Share Sheet
     private func shareGameLink() {
-        let gameId = game.gameId
-        let urlString = "fishandchips://game/\(gameId.uuidString)"
-        guard let url = URL(string: urlString) else { return }
+        let gameId = game.gameId.uuidString
+        let urlString = "fishandchips://game/\(gameId)"
         
         let message = """
-        🎮 Присоединяйтесь к игре в Fish & Chips!
+        🎮 Приглашение в Fish & Chips!
         
-        Откройте ссылку на устройстве с приложением Fish & Chips:
+        📋 Код игры: \(gameId)
+        
+        🔗 Быстрый вход (если ссылка кликабельна):
         \(urlString)
         
-        Или скопируйте код игры: \(gameId.uuidString)
+        📱 Или вручную:
+        1. Откройте приложение Fish & Chips
+        2. Профиль → Мои заявки
+        3. Кнопка "Присоединиться к игре"
+        4. Вставьте код игры
+        
+        💡 Совет: долгое нажатие на код → Скопировать
         """
         
-        shareData = ShareData(items: [url, message])
+        shareData = ShareData(items: [message])
     }
 }

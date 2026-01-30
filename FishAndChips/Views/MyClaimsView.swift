@@ -12,11 +12,13 @@ struct MyClaimsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
     @State private var myClaims: [PlayerClaim] = []
+    @State private var showingJoinGameSheet = false
     
     private let claimService = PlayerClaimService()
+    private let keychain = KeychainService.shared
     
     private var currentUserId: UUID? {
-        guard let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+        guard let userIdString = keychain.getUserId(),
               let userId = UUID(uuidString: userIdString) else {
             return nil
         }
@@ -52,12 +54,28 @@ struct MyClaimsView: View {
             .navigationTitle("Мои заявки")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showingJoinGameSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "link.badge.plus")
+                            Text("Присоединиться")
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Закрыть") {
                         dismiss()
                     }
                     .foregroundColor(.white)
                 }
+            }
+            .sheet(isPresented: $showingJoinGameSheet) {
+                JoinGameByCodeSheet()
             }
             .onAppear {
                 loadMyClaims()
