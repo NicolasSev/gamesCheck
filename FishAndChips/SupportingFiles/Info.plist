@@ -27,6 +27,8 @@
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LauchScreen.storyboard</string>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
