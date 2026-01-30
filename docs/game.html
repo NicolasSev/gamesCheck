@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish & Chips - Присоединиться к игре</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+        }
+        
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        
+        .game-code {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .game-code:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 10px 5px;
+            transition: all 0.3s;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .instructions {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        
+        .instructions h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 10px 0;
+            opacity: 0.9;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            display: none;
+        }
+        
+        .status.show {
+            display: block;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🎮</div>
+        <h1>Fish & Chips</h1>
+        <p class="subtitle">Приглашение в игру</p>
+        
+        <div id="status" class="status">
+            <div class="spinner"></div>
+            <span id="status-text">Открываем приложение...</span>
+        </div>
+        
+        <div class="game-code" id="game-code" onclick="copyCode()">
+            <strong>Код игры:</strong><br>
+            <span id="code-value">Загрузка...</span>
+        </div>
+        
+        <button class="btn" onclick="openApp()">
+            📱 Открыть в приложении
+        </button>
+        
+        <button class="btn btn-secondary" onclick="copyCode()">
+            📋 Скопировать код
+        </button>
+        
+        <div class="instructions">
+            <h3>💡 Как присоединиться:</h3>
+            <ol>
+                <li>Установите приложение Fish & Chips (если еще не установлено)</li>
+                <li>Нажмите "Открыть в приложении" выше</li>
+                <li>Или скопируйте код и вставьте в приложении:<br>
+                    <em>Профиль → Мои заявки → Присоединиться</em>
+                </li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        // Получить gameId из URL параметров
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameId = urlParams.get('id');
+        
+        // Показать код игры
+        if (gameId) {
+            document.getElementById('code-value').textContent = gameId;
+            
+            // Автоматически попытаться открыть приложение через 1 секунду
+            setTimeout(() => {
+                showStatus('Пытаемся открыть приложение...');
+                openApp();
+                
+                // Через 3 секунды показать инструкции если приложение не открылось
+                setTimeout(() => {
+                    hideStatus();
+                }, 3000);
+            }, 1000);
+        } else {
+            document.getElementById('code-value').textContent = 'Код не найден';
+        }
+        
+        function openApp() {
+            if (!gameId) {
+                alert('Код игры не найден в ссылке');
+                return;
+            }
+            
+            showStatus('Открываем приложение...');
+            
+            // Попытка 1: fishandchips://
+            const deepLink1 = `fishandchips://game/${gameId}`;
+            window.location.href = deepLink1;
+            
+            // Попытка 2: pokertracker:// (legacy)
+            setTimeout(() => {
+                const deepLink2 = `pokertracker://game/${gameId}`;
+                window.location.href = deepLink2;
+            }, 500);
+            
+            // Через 2 секунды скрыть статус
+            setTimeout(() => {
+                hideStatus();
+            }, 2000);
+        }
+        
+        function copyCode() {
+            if (!gameId) {
+                alert('Код игры не найден');
+                return;
+            }
+            
+            navigator.clipboard.writeText(gameId).then(() => {
+                showStatus('✅ Код скопирован!');
+                setTimeout(hideStatus, 2000);
+            }).catch(err => {
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = gameId;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showStatus('✅ Код скопирован!');
+                setTimeout(hideStatus, 2000);
+            });
+        }
+        
+        function showStatus(text) {
+            const status = document.getElementById('status');
+            const statusText = document.getElementById('status-text');
+            statusText.textContent = text;
+            status.classList.add('show');
+        }
+        
+        function hideStatus() {
+            const status = document.getElementById('status');
+            status.classList.remove('show');
+        }
+    </script>
+</body>
+</html>
