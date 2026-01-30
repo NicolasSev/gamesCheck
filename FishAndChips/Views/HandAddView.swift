@@ -417,7 +417,8 @@ struct HandAddView: View {
     }
     
     private func getCurrentUserName() -> String {
-        guard let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+        let keychain = KeychainService.shared
+        guard let userIdString = keychain.getUserId(),
               let userId = UUID(uuidString: userIdString) else {
             return "Неизвестный"
         }

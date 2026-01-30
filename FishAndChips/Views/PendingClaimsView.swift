@@ -18,9 +18,10 @@ struct PendingClaimsView: View {
     
     private let persistence = PersistenceController.shared
     private let claimService = PlayerClaimService()
+    private let keychain = KeychainService.shared
     
     private var currentUserId: UUID? {
-        guard let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+        guard let userIdString = keychain.getUserId(),
               let userId = UUID(uuidString: userIdString) else {
             return nil
         }

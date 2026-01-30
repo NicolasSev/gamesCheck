@@ -37,7 +37,8 @@ extension Game {
 // MARK: - Computed Properties (Task 1.2)
 extension Game {
     var isOwnedByCurrentUser: Bool {
-        guard let currentUserId = UserDefaults.standard.string(forKey: "currentUserId"),
+        let keychain = KeychainService.shared
+        guard let currentUserId = keychain.getUserId(),
               let currentUUID = UUID(uuidString: currentUserId) else {
             return false
         }
