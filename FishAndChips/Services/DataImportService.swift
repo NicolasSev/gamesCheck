@@ -201,6 +201,26 @@ class DataImportService {
         return existingGames
     }
     
+    /// Обновляет creatorUserId для всех игр текущего пользователя, у которых он не установлен
+    func updateCreatorUserIdForAllGames() throws {
+        guard let userId = self.userId else {
+            throw ImportError.invalidFormat
+        }
+        
+        let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "creatorUserId == nil")
+        
+        let games = try viewContext.fetch(fetchRequest)
+        
+        for game in games {
+            game.creatorUserId = userId
+        }
+        
+        try viewContext.save()
+        
+        print("✅ Updated creatorUserId for \(games.count) games")
+    }
+    
     /// Импортирует игры в CoreData, заменяя существующие если нужно
     func importGames(_ parsedGames: [ParsedGame], replaceExisting: Bool = false) throws {
         guard !parsedGames.isEmpty else {
@@ -245,6 +265,11 @@ class DataImportService {
                     }
                     game.softDeleted = false
                 } else {
+                    // Обновляем creatorUserId если он не установлен
+                    if existingGame.creatorUserId == nil {
+                        existingGame.creatorUserId = userId
+                        try viewContext.save()
+                    }
                     // Пропускаем, если не заменяем
                     continue
                 }
@@ -255,13 +280,10 @@ class DataImportService {
                 game.timestamp = parsedGame.date
                 game.gameType = "Покер"
                 game.softDeleted = false
-                game.creatorUserId = userId
             }
             
-            // Устанавливаем creatorUserId для существующих игр при замене
-            if replaceExisting {
-                game.creatorUserId = userId
-            }
+            // Устанавливаем creatorUserId для всех импортированных игр
+            game.creatorUserId = userId
             
             // Создаем или находим игроков и связываем их с игрой
             for parsedPlayer in parsedGame.players {

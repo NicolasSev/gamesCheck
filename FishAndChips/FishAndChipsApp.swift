@@ -22,6 +22,20 @@ struct FishAndChipsApp: App {
             persistenceController.migrateExistingGames()
             UserDefaults.standard.set(true, forKey: "hasMigratedGamesToV2")
         }
+        
+        // Миграция creatorUserId — один раз для исправления импортированных игр
+        let hasMigratedCreatorUserId = UserDefaults.standard.bool(forKey: "hasMigratedCreatorUserId")
+        if !hasMigratedCreatorUserId {
+            if let userIdString = UserDefaults.standard.string(forKey: "currentUserId"),
+               let userId = UUID(uuidString: userIdString) {
+                let importService = DataImportService(
+                    viewContext: persistenceController.container.viewContext,
+                    userId: userId
+                )
+                try? importService.updateCreatorUserIdForAllGames()
+                UserDefaults.standard.set(true, forKey: "hasMigratedCreatorUserId")
+            }
+        }
     }
     
     var body: some Scene {
