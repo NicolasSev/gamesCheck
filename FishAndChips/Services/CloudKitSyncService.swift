@@ -387,7 +387,7 @@ class CloudKitSyncService: ObservableObject {
         // Query для поиска пользователя по username
         let predicate = NSPredicate(format: "username == %@", username)
         
-        let records = try await cloudKit.queryRecords(
+        let result = try await cloudKit.queryRecords(
             withType: .user,
             from: .privateDB,
             predicate: predicate,
@@ -395,7 +395,7 @@ class CloudKitSyncService: ObservableObject {
             resultsLimit: 1
         )
         
-        guard let userRecord = records.first else {
+        guard let userRecord = result.records.first else {
             print("❌ User '\(username)' not found in CloudKit")
             return nil
         }
@@ -421,7 +421,7 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             let predicate = NSPredicate(format: "userId == %@", userId.uuidString)
-            let records = try await cloudKit.queryRecords(
+            let result = try await cloudKit.queryRecords(
                 withType: .playerProfile,
                 from: .privateDB,
                 predicate: predicate,
@@ -429,7 +429,7 @@ class CloudKitSyncService: ObservableObject {
                 resultsLimit: 1
             )
             
-            guard let profileRecord = records.first else {
+            guard let profileRecord = result.records.first else {
                 print("⚠️ PlayerProfile not found in CloudKit")
                 return
             }
@@ -463,15 +463,24 @@ class CloudKitSyncService: ObservableObject {
             return existingUser
         }
         
+        // Извлекаем обязательные поля
+        guard let username = record["username"] as? String,
+              let passwordHash = record["passwordHash"] as? String,
+              let subscriptionStatus = record["subscriptionStatus"] as? String,
+              let createdAt = record["createdAt"] as? Date else {
+            print("❌ Missing required fields in User CKRecord")
+            return nil
+        }
+        
         // Создаем нового пользователя
         let user = User(context: context)
         user.userId = userId
-        user.username = record["username"] as? String
+        user.username = username
+        user.passwordHash = passwordHash
+        user.subscriptionStatus = subscriptionStatus
+        user.createdAt = createdAt
         user.email = record["email"] as? String
-        user.passwordHash = record["passwordHash"] as? String
-        user.subscriptionStatus = record["subscriptionStatus"] as? String
         user.isSuperAdmin = (record["isSuperAdmin"] as? Int64 == 1)
-        user.createdAt = record["createdAt"] as? Date
         user.lastLoginAt = record["lastLoginAt"] as? Date
         user.subscriptionExpiresAt = record["subscriptionExpiresAt"] as? Date
         
@@ -506,12 +515,29 @@ class CloudKitSyncService: ObservableObject {
         // Создаем новый профиль
         let profile = PlayerProfile(context: context)
         profile.profileId = profileId
-        profile.displayName = record["displayName"] as? String
+        profile.displayName = (record["displayName"] as? String) ?? ""
         profile.isAnonymous = (record["isAnonymous"] as? Int64 == 1)
-        profile.createdAt = record["createdAt"] as? Date
-        profile.totalGamesPlayed = record["totalGamesPlayed"] as? Int64 ?? 0
-        profile.totalBuyins = record["totalBuyins"] as? Double ?? 0.0
-        profile.totalCashouts = record["totalCashouts"] as? Double ?? 0.0
+        profile.createdAt = (record["createdAt"] as? Date) ?? Date()
+        
+        // Преобразуем Int64 → Int32
+        if let gamesPlayed = record["totalGamesPlayed"] as? Int64 {
+            profile.totalGamesPlayed = Int32(min(gamesPlayed, Int64(Int32.max)))
+        } else {
+            profile.totalGamesPlayed = 0
+        }
+        
+        // Преобразуем Double → NSDecimalNumber
+        if let buyins = record["totalBuyins"] as? Double {
+            profile.totalBuyins = NSDecimalNumber(value: buyins)
+        } else {
+            profile.totalBuyins = NSDecimalNumber.zero
+        }
+        
+        if let cashouts = record["totalCashouts"] as? Double {
+            profile.totalCashouts = NSDecimalNumber(value: cashouts)
+        } else {
+            profile.totalCashouts = NSDecimalNumber.zero
+        }
         
         // Связываем с пользователем если есть userId
         if let userIdString = record["userId"] as? String,
