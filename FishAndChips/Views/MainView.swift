@@ -115,6 +115,39 @@ struct MainView: View {
                     }
                 }
             }
+            .alert("Ошибка", isPresented: Binding(
+                get: { deepLinkService.loadError != nil },
+                set: { if !$0 { deepLinkService.clearDeepLink() } }
+            )) {
+                Button("Повторить") {
+                    deepLinkService.retryLoadGame()
+                }
+                Button("Отмена", role: .cancel) {
+                    deepLinkService.clearDeepLink()
+                }
+            } message: {
+                Text(deepLinkService.loadError ?? "")
+            }
+            .overlay {
+                if deepLinkService.isLoadingGame {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Загрузка игры...")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("Получение данных из CloudKit")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.systemBackground))
+                            .shadow(radius: 10)
+                    )
+                }
+            }
             .onChange(of: deepLinkService.activeDeepLink) { newDeepLink in
                 handleDeepLink(newDeepLink)
             }
@@ -163,14 +196,14 @@ struct MainView: View {
         case .game(let gameId):
             print("🔗 MainView: Opening game \(gameId)")
             
-            // Fetch game from CoreData
+            // Fetch game from CoreData (уже должна быть загружена DeepLinkService)
             if let game = PersistenceController.shared.fetchGame(byId: gameId) {
                 print("✅ MainView: Found game, showing detail view")
                 deepLinkGame = game
                 deepLinkService.clearDeepLink()
             } else {
-                print("❌ MainView: Game not found with id \(gameId)")
-                // TODO: Show alert that game was not found
+                print("⚠️ MainView: Game not found locally, DeepLinkService should be loading it...")
+                // DeepLinkService уже обрабатывает загрузку из CloudKit
             }
             
         case .none:

@@ -126,17 +126,35 @@ struct ProfileView: View {
                         
                         // CloudKit Sync
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Синхронизация")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                            HStack {
+                                Image(systemName: "icloud.and.arrow.up.fill")
+                                    .foregroundColor(.blue)
+                                Text("Синхронизация")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                            }
                             
-                            Text(syncService.syncStatusText)
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Image(systemName: "circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(syncService.isSyncing ? .orange : (syncService.syncError != nil ? .red : .green))
+                                    Text(syncService.syncStatusText)
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                
+                                if let error = syncService.syncError {
+                                    Text(error)
+                                        .font(.caption2)
+                                        .foregroundColor(.red.opacity(0.8))
+                                        .padding(.leading, 16)
+                                }
+                            }
                             
                             Button(action: {
                                 Task {
-                                    try? await syncService.sync()
+                                    try? await syncService.performFullSync()
                                 }
                             }) {
                                 HStack {
@@ -144,6 +162,7 @@ struct ProfileView: View {
                                         ProgressView()
                                             .progressViewStyle(.circular)
                                             .tint(.white)
+                                            .scaleEffect(0.8)
                                         Text("Синхронизация...")
                                     } else {
                                         Image(systemName: "arrow.triangle.2.circlepath")
@@ -152,8 +171,13 @@ struct ProfileView: View {
                                 }
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                             }
                             .disabled(syncService.isSyncing)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(syncService.isSyncing ? Color.gray.opacity(0.3) : Color.blue.opacity(0.3))
+                            )
                         }
                         .padding()
                         .liquidGlass(cornerRadius: 15)

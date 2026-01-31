@@ -14,7 +14,10 @@ struct FishAndChipsApp: App {
     
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var deepLinkService = DeepLinkService()
+    @StateObject private var syncService = CloudKitSyncService.shared
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
+    @State private var isInitialSyncComplete = false
 
     init() {
         // Миграция игр (Task 1.2) — один раз после обновления модели
@@ -49,46 +52,113 @@ struct FishAndChipsApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                .environmentObject(notificationService)
-                .environmentObject(deepLinkService)
-                .onOpenURL { url in
-                    print("🔗 App received URL: \(url)")
-                    deepLinkService.handleURL(url)
-                }
-                .onAppear {
-                    // Request notification permissions
-                    Task {
-                        try? await notificationService.requestAuthorization()
-                        await MainActor.run {
-                            notificationService.registerForRemoteNotifications()
-                        }
+            AppBodyView(
+                isInitialSyncComplete: $isInitialSyncComplete,
+                persistenceController: persistenceController,
+                notificationService: notificationService,
+                deepLinkService: deepLinkService,
+                syncService: syncService
+            )
+        }
+    }
+}
+
+struct AppBodyView: View {
+    @Binding var isInitialSyncComplete: Bool
+    let persistenceController: PersistenceController
+    @ObservedObject var notificationService: NotificationService
+    @ObservedObject var deepLinkService: DeepLinkService
+    @ObservedObject var syncService: CloudKitSyncService
+    
+    @Environment(\.scenePhase) private var scenePhase
+    
+    var body: some View {
+        Group {
+            if isInitialSyncComplete {
+                ContentView()
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                    .environmentObject(notificationService)
+                    .environmentObject(deepLinkService)
+                    .environmentObject(syncService)
+                    .onOpenURL { url in
+                        print("🔗 App received URL: \(url)")
+                        deepLinkService.handleURL(url)
                     }
-                    
-                    // Test CloudKit connection
-                    Task {
-                        do {
-                            let status = try await CloudKitService.shared.checkAccountStatus()
-                            switch status {
-                            case .available:
-                                print("✅ CloudKit Status: AVAILABLE - Ready to use!")
-                            case .noAccount:
-                                print("❌ CloudKit Status: NO ACCOUNT - Please sign in to iCloud")
-                            case .restricted:
-                                print("⚠️ CloudKit Status: RESTRICTED - iCloud access is restricted")
-                            case .couldNotDetermine:
-                                print("⚠️ CloudKit Status: COULD NOT DETERMINE")
-                            case .temporarilyUnavailable:
-                                print("⚠️ CloudKit Status: TEMPORARILY UNAVAILABLE")
-                            @unknown default:
-                                print("⚠️ CloudKit Status: UNKNOWN")
+                    .onAppear {
+                        // Request notification permissions
+                        Task {
+                            try? await notificationService.requestAuthorization()
+                            await MainActor.run {
+                                notificationService.registerForRemoteNotifications()
                             }
-                        } catch {
-                            print("❌ CloudKit Status Check Failed: \(error.localizedDescription)")
+                        }
+                        
+                        // Test CloudKit connection
+                        Task {
+                            do {
+                                let status = try await CloudKitService.shared.checkAccountStatus()
+                                switch status {
+                                case .available:
+                                    print("✅ CloudKit Status: AVAILABLE - Ready to use!")
+                                case .noAccount:
+                                    print("❌ CloudKit Status: NO ACCOUNT - Please sign in to iCloud")
+                                case .restricted:
+                                    print("⚠️ CloudKit Status: RESTRICTED - iCloud access is restricted")
+                                case .couldNotDetermine:
+                                    print("⚠️ CloudKit Status: COULD NOT DETERMINE")
+                                case .temporarilyUnavailable:
+                                    print("⚠️ CloudKit Status: TEMPORARILY UNAVAILABLE")
+                                @unknown default:
+                                    print("⚠️ CloudKit Status: UNKNOWN")
+                                }
+                            } catch {
+                                print("❌ CloudKit Status Check Failed: \(error.localizedDescription)")
+                            }
                         }
                     }
+            } else {
+                // Экран загрузки
+                VStack(spacing: 20) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Загрузка данных...")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Text("Синхронизация с CloudKit")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
+            }
+        }
+        .task {
+            // Запускаем первичную синхронизацию
+            do {
+                print("🚀 Starting initial CloudKit sync...")
+                try await syncService.performFullSync()
+                isInitialSyncComplete = true
+                print("✅ Initial sync completed")
+            } catch {
+                print("❌ Initial sync error: \(error)")
+                // Не блокируем запуск приложения при ошибке синхронизации
+                isInitialSyncComplete = true
+            }
+        }
+        // Синхронизация при возврате из фона
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                print("🔄 App became active, starting background sync...")
+                Task {
+                    do {
+                        // Используем incremental sync если возможно
+                        try await syncService.performIncrementalSync()
+                        print("✅ Background sync completed")
+                    } catch {
+                        print("❌ Background sync error: \(error)")
+                    }
+                }
+            }
         }
     }
 }

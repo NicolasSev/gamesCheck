@@ -16,6 +16,12 @@ class CloudKitService {
     private let publicDatabase: CKDatabase
     private let privateDatabase: CKDatabase
     
+    // MARK: - Database Type
+    enum DatabaseType {
+        case publicDB
+        case privateDB
+    }
+    
     // MARK: - Record Types
     enum RecordType: String {
         case user = "User"
@@ -52,11 +58,12 @@ class CloudKitService {
     
     // MARK: - Save Record
     
-    func save(record: CKRecord) async throws -> CKRecord {
-        return try await privateDatabase.save(record)
+    func save(record: CKRecord, to database: DatabaseType = .privateDB) async throws -> CKRecord {
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        return try await db.save(record)
     }
     
-    func saveRecords(_ records: [CKRecord]) async throws -> [CKRecord] {
+    func saveRecords(_ records: [CKRecord], to database: DatabaseType = .privateDB) async throws -> [CKRecord] {
         let operation = CKModifyRecordsOperation(recordsToSave: records)
         operation.savePolicy = .changedKeys
         operation.qualityOfService = .userInitiated
@@ -82,21 +89,29 @@ class CloudKitService {
                 }
             }
             
-            privateDatabase.add(operation)
+            let db = database == .publicDB ? publicDatabase : privateDatabase
+            db.add(operation)
         }
     }
     
     // MARK: - Fetch Record
     
-    func fetch(recordID: CKRecord.ID) async throws -> CKRecord {
-        return try await privateDatabase.record(for: recordID)
+    func fetch(recordID: CKRecord.ID, from database: DatabaseType = .privateDB) async throws -> CKRecord {
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        return try await db.record(for: recordID)
     }
     
-    func fetchRecords(withType type: RecordType, predicate: NSPredicate = NSPredicate(value: true), limit: Int = 100) async throws -> [CKRecord] {
+    func fetchRecords(
+        withType type: RecordType,
+        from database: DatabaseType = .privateDB,
+        predicate: NSPredicate = NSPredicate(value: true),
+        limit: Int = 100
+    ) async throws -> [CKRecord] {
         let query = CKQuery(recordType: type.rawValue, predicate: predicate)
         query.sortDescriptors = [NSSortDescriptor(key: "modificationDate", ascending: false)]
         
-        let (matchResults, _) = try await privateDatabase.records(matching: query, desiredKeys: nil, resultsLimit: limit)
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        let (matchResults, _) = try await db.records(matching: query, desiredKeys: nil, resultsLimit: limit)
         
         var records: [CKRecord] = []
         for (_, result) in matchResults {
@@ -113,11 +128,12 @@ class CloudKitService {
     
     // MARK: - Delete Record
     
-    func delete(recordID: CKRecord.ID) async throws {
-        _ = try await privateDatabase.deleteRecord(withID: recordID)
+    func delete(recordID: CKRecord.ID, from database: DatabaseType = .privateDB) async throws {
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        _ = try await db.deleteRecord(withID: recordID)
     }
     
-    func deleteRecords(_ recordIDs: [CKRecord.ID]) async throws {
+    func deleteRecords(_ recordIDs: [CKRecord.ID], from database: DatabaseType = .privateDB) async throws {
         let operation = CKModifyRecordsOperation(recordIDsToDelete: recordIDs)
         operation.qualityOfService = .userInitiated
         
@@ -131,7 +147,8 @@ class CloudKitService {
                 }
             }
             
-            privateDatabase.add(operation)
+            let db = database == .publicDB ? publicDatabase : privateDatabase
+            db.add(operation)
         }
     }
     
@@ -139,6 +156,7 @@ class CloudKitService {
     
     func queryRecords(
         withType type: RecordType,
+        from database: DatabaseType = .privateDB,
         predicate: NSPredicate = NSPredicate(value: true),
         sortDescriptors: [NSSortDescriptor]? = nil,
         resultsLimit: Int = 100
@@ -146,7 +164,8 @@ class CloudKitService {
         let query = CKQuery(recordType: type.rawValue, predicate: predicate)
         query.sortDescriptors = sortDescriptors ?? [NSSortDescriptor(key: "modificationDate", ascending: false)]
         
-        let (matchResults, cursor) = try await privateDatabase.records(matching: query, desiredKeys: nil, resultsLimit: resultsLimit)
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        let (matchResults, cursor) = try await db.records(matching: query, desiredKeys: nil, resultsLimit: resultsLimit)
         
         var records: [CKRecord] = []
         for (_, result) in matchResults {
