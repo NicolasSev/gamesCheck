@@ -377,6 +377,162 @@ class CloudKitSyncService: ObservableObject {
         try await performFullSync()
     }
     
+    // MARK: - Fetch User from CloudKit (for login recovery)
+    
+    /// Загружает пользователя из CloudKit Private Database по username
+    /// Используется при входе если пользователь не найден локально (например, после переустановки)
+    func fetchUser(byUsername username: String) async throws -> User? {
+        print("🔍 Trying to fetch user '\(username)' from CloudKit...")
+        
+        // Query для поиска пользователя по username
+        let predicate = NSPredicate(format: "username == %@", username)
+        
+        let records = try await cloudKit.queryRecords(
+            withType: .user,
+            from: .privateDB,
+            predicate: predicate,
+            sortDescriptors: nil,
+            resultsLimit: 1
+        )
+        
+        guard let userRecord = records.first else {
+            print("❌ User '\(username)' not found in CloudKit")
+            return nil
+        }
+        
+        print("✅ Found user '\(username)' in CloudKit, creating local copy...")
+        
+        // Создать локальную копию пользователя из CloudKit
+        let user = try await MainActor.run {
+            createUserFromCKRecord(userRecord, in: persistence.container.viewContext)
+        }
+        
+        // Также попробовать загрузить PlayerProfile пользователя
+        if let user = user {
+            await fetchPlayerProfile(forUserId: user.userId)
+        }
+        
+        return user
+    }
+    
+    /// Загружает PlayerProfile из CloudKit для пользователя
+    private func fetchPlayerProfile(forUserId userId: UUID) async {
+        print("🔍 Trying to fetch PlayerProfile for user \(userId)...")
+        
+        do {
+            let predicate = NSPredicate(format: "userId == %@", userId.uuidString)
+            let records = try await cloudKit.queryRecords(
+                withType: .playerProfile,
+                from: .privateDB,
+                predicate: predicate,
+                sortDescriptors: nil,
+                resultsLimit: 1
+            )
+            
+            guard let profileRecord = records.first else {
+                print("⚠️ PlayerProfile not found in CloudKit")
+                return
+            }
+            
+            print("✅ Found PlayerProfile in CloudKit, creating local copy...")
+            
+            await MainActor.run {
+                let context = persistence.container.viewContext
+                _ = createPlayerProfileFromCKRecord(profileRecord, in: context)
+            }
+        } catch {
+            print("❌ Failed to fetch PlayerProfile: \(error)")
+        }
+    }
+    
+    /// Создает User из CKRecord
+    @MainActor
+    private func createUserFromCKRecord(_ record: CKRecord, in context: NSManagedObjectContext) -> User? {
+        // Извлекаем userId из recordName
+        guard let userId = UUID(uuidString: record.recordID.recordName) else {
+            print("❌ Invalid userId in CKRecord")
+            return nil
+        }
+        
+        // Проверяем не существует ли уже локально
+        let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "userId == %@", userId as CVarArg)
+        
+        if let existingUser = try? context.fetch(fetchRequest).first {
+            print("ℹ️ User already exists locally, returning existing")
+            return existingUser
+        }
+        
+        // Создаем нового пользователя
+        let user = User(context: context)
+        user.userId = userId
+        user.username = record["username"] as? String
+        user.email = record["email"] as? String
+        user.passwordHash = record["passwordHash"] as? String
+        user.subscriptionStatus = record["subscriptionStatus"] as? String
+        user.isSuperAdmin = (record["isSuperAdmin"] as? Int64 == 1)
+        user.createdAt = record["createdAt"] as? Date
+        user.lastLoginAt = record["lastLoginAt"] as? Date
+        user.subscriptionExpiresAt = record["subscriptionExpiresAt"] as? Date
+        
+        do {
+            try context.save()
+            print("✅ User created locally from CloudKit")
+            return user
+        } catch {
+            print("❌ Failed to save user: \(error)")
+            return nil
+        }
+    }
+    
+    /// Создает PlayerProfile из CKRecord
+    @MainActor
+    private func createPlayerProfileFromCKRecord(_ record: CKRecord, in context: NSManagedObjectContext) -> PlayerProfile? {
+        // Извлекаем profileId из recordName
+        guard let profileId = UUID(uuidString: record.recordID.recordName) else {
+            print("❌ Invalid profileId in CKRecord")
+            return nil
+        }
+        
+        // Проверяем не существует ли уже локально
+        let fetchRequest: NSFetchRequest<PlayerProfile> = PlayerProfile.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "profileId == %@", profileId as CVarArg)
+        
+        if let existingProfile = try? context.fetch(fetchRequest).first {
+            print("ℹ️ PlayerProfile already exists locally, returning existing")
+            return existingProfile
+        }
+        
+        // Создаем новый профиль
+        let profile = PlayerProfile(context: context)
+        profile.profileId = profileId
+        profile.displayName = record["displayName"] as? String
+        profile.isAnonymous = (record["isAnonymous"] as? Int64 == 1)
+        profile.createdAt = record["createdAt"] as? Date
+        profile.totalGamesPlayed = record["totalGamesPlayed"] as? Int64 ?? 0
+        profile.totalBuyins = record["totalBuyins"] as? Double ?? 0.0
+        profile.totalCashouts = record["totalCashouts"] as? Double ?? 0.0
+        
+        // Связываем с пользователем если есть userId
+        if let userIdString = record["userId"] as? String,
+           let userId = UUID(uuidString: userIdString) {
+            let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
+            userFetchRequest.predicate = NSPredicate(format: "userId == %@", userId as CVarArg)
+            if let user = try? context.fetch(userFetchRequest).first {
+                profile.user = user
+            }
+        }
+        
+        do {
+            try context.save()
+            print("✅ PlayerProfile created locally from CloudKit")
+            return profile
+        } catch {
+            print("❌ Failed to save PlayerProfile: \(error)")
+            return nil
+        }
+    }
+    
     // MARK: - Conflict Resolution
     
     func resolveConflict(localRecord: CKRecord, serverRecord: CKRecord) -> CKRecord {

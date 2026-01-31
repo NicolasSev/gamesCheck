@@ -154,31 +154,49 @@ final class AuthViewModel: ObservableObject {
         // Небольшая задержка для UI
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        guard let user = persistence.fetchUser(byUsername: username) else {
+        // Попытка 1: Поиск пользователя локально
+        var user = persistence.fetchUser(byUsername: username)
+        
+        // Попытка 2: Если не найден локально - попробовать загрузить из CloudKit
+        if user == nil {
+            print("⚠️ User '\(username)' not found locally, trying CloudKit...")
+            do {
+                user = try await CloudKitSyncService.shared.fetchUser(byUsername: username)
+                if user != nil {
+                    print("✅ User '\(username)' restored from CloudKit")
+                }
+            } catch {
+                print("❌ Failed to fetch user from CloudKit: \(error)")
+                // Продолжаем - возможно CloudKit недоступен, но это не критично
+            }
+        }
+        
+        // Если пользователь все еще не найден - ошибка
+        guard let foundUser = user else {
             isLoading = false
             authState = .error("Пользователь не найден")
             throw AuthenticationError.userNotFound
         }
 
         let passwordHash = hashPassword(password)
-        guard user.passwordHash == passwordHash else {
+        guard foundUser.passwordHash == passwordHash else {
             isLoading = false
             authState = .error("Неверный пароль")
             throw AuthenticationError.invalidCredentials
         }
 
-        persistence.updateUserLastLogin(user)
+        persistence.updateUserLastLogin(foundUser)
         
         // Устанавливаем супер админа для пользователя "Ник"
         if username == "Ник" {
             persistence.setSuperAdmin(username: "Ник", isSuperAdmin: true)
-            user.isSuperAdmin = true
+            foundUser.isSuperAdmin = true
         }
         
-        _ = keychain.saveUserId(user.userId.uuidString)
-        _ = keychain.saveUsername(user.username)
+        _ = keychain.saveUserId(foundUser.userId.uuidString)
+        _ = keychain.saveUsername(foundUser.username)
 
-        currentUser = user
+        currentUser = foundUser
         isLoading = false
         authState = .authenticated
         errorMessage = nil
