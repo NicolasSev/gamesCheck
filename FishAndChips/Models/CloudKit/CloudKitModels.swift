@@ -20,7 +20,7 @@ extension User {
         record["email"] = (email ?? "") as CKRecordValue
         record["passwordHash"] = passwordHash as CKRecordValue
         record["subscriptionStatus"] = subscriptionStatus as CKRecordValue
-        record["isSuperAdmin"] = isSuperAdmin as CKRecordValue
+        record["isSuperAdmin"] = (isSuperAdmin ? 1 : 0) as CKRecordValue
         record["createdAt"] = createdAt as CKRecordValue
         
         if let lastLoginAt = lastLoginAt {
@@ -71,8 +71,8 @@ extension Game {
         let record = CKRecord(recordType: "Game", recordID: recordID)
         
         record["gameType"] = (gameType ?? "Poker") as CKRecordValue
-        record["isPublic"] = isPublic as CKRecordValue
-        record["softDeleted"] = softDeleted as CKRecordValue
+        record["isPublic"] = (isPublic ? 1 : 0) as CKRecordValue
+        record["softDeleted"] = (softDeleted ? 1 : 0) as CKRecordValue
         
         if let timestamp = timestamp {
             record["timestamp"] = timestamp as CKRecordValue
@@ -122,7 +122,7 @@ extension PlayerProfile {
         let record = CKRecord(recordType: "PlayerProfile", recordID: recordID)
         
         record["displayName"] = displayName as CKRecordValue
-        record["isAnonymous"] = isAnonymous as CKRecordValue
+        record["isAnonymous"] = (isAnonymous ? 1 : 0) as CKRecordValue
         record["createdAt"] = createdAt as CKRecordValue
         record["totalGamesPlayed"] = totalGamesPlayed as CKRecordValue
         record["totalBuyins"] = NSNumber(value: (totalBuyins as NSDecimalNumber).doubleValue)

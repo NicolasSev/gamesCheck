@@ -30,6 +30,19 @@ struct ProfileView: View {
         NavigationView {
             ScrollView {
                     VStack(spacing: 16) {
+                        // Версия и номер сборки
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                               let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                                Text("Версия \(version) (\(build))")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        
                         // Пользователь
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Пользователь")
@@ -183,8 +196,7 @@ struct ProfileView: View {
                         .liquidGlass(cornerRadius: 15)
                         .padding(.horizontal)
 
-                        // Debug (только в DEBUG режиме)
-                        #if DEBUG
+                        // Debug (доступно в TestFlight)
                         Button(action: {
                             showingDebug = true
                         }) {
@@ -199,7 +211,6 @@ struct ProfileView: View {
                             .liquidGlass(cornerRadius: 15)
                         }
                         .padding(.horizontal)
-                        #endif
                         
                         // Выйти
                         Button(action: {

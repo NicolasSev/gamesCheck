@@ -3,7 +3,7 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
 
-    @State private var username = ""
+    @State private var email = ""
     @State private var password = ""
     @State private var showingRegistration = false
     @State private var showingError = false
@@ -20,15 +20,16 @@ struct LoginView: View {
                     ))
                     .padding(.bottom, 30)
 
-                Text("PokerTracker")
+                Text("Fish & Chips")
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
                 VStack(spacing: 15) {
-                    TextField("Имя пользователя", text: $username)
+                    TextField("Email", text: $email)
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
 
                     SecureField("Пароль", text: $password)
                         .textFieldStyle(.roundedBorder)
@@ -44,7 +45,7 @@ struct LoginView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(username.isEmpty || password.isEmpty || authViewModel.isLoading)
+                    .disabled(email.isEmpty || password.isEmpty || authViewModel.isLoading)
                 }
                 .padding(.horizontal, 30)
 
@@ -83,7 +84,7 @@ struct LoginView: View {
     private func login() {
         Task {
             do {
-                try await authViewModel.login(username: username, password: password)
+                try await authViewModel.login(email: email, password: password)
             } catch let error as AuthenticationError {
                 authViewModel.errorMessage = error.errorDescription
                 showingError = true

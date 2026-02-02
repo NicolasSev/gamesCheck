@@ -108,7 +108,8 @@ class CloudKitService {
         limit: Int = 100
     ) async throws -> [CKRecord] {
         let query = CKQuery(recordType: type.rawValue, predicate: predicate)
-        query.sortDescriptors = [NSSortDescriptor(key: "modificationDate", ascending: false)]
+        // Don't use sort by default - CloudKit system fields may not be indexed
+        query.sortDescriptors = nil
         
         let db = database == .publicDB ? publicDatabase : privateDatabase
         let (matchResults, _) = try await db.records(matching: query, desiredKeys: nil, resultsLimit: limit)
@@ -162,7 +163,8 @@ class CloudKitService {
         resultsLimit: Int = 100
     ) async throws -> (records: [CKRecord], cursor: CKQueryOperation.Cursor?) {
         let query = CKQuery(recordType: type.rawValue, predicate: predicate)
-        query.sortDescriptors = sortDescriptors ?? [NSSortDescriptor(key: "modificationDate", ascending: false)]
+        // Don't use default sort - CloudKit system fields require special indexes
+        query.sortDescriptors = sortDescriptors
         
         let db = database == .publicDB ? publicDatabase : privateDatabase
         let (matchResults, cursor) = try await db.records(matching: query, desiredKeys: nil, resultsLimit: resultsLimit)

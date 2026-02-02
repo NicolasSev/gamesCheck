@@ -231,7 +231,9 @@ class CloudKitSyncService: ObservableObject {
     // MARK: - Fetch Public Games
     
     func fetchPublicGames() async throws {
-        let predicate = NSPredicate(format: "softDeleted == NO OR softDeleted == nil")
+        // CloudKit doesn't support OR in predicates
+        // We fetch all games and filter softDeleted locally
+        let predicate = NSPredicate(value: true)
         let records = try await cloudKit.fetchRecords(
             withType: .game,
             from: .publicDB,
@@ -272,6 +274,11 @@ class CloudKitSyncService: ObservableObject {
         let context = persistence.container.viewContext
         
         for record in cloudRecords {
+            // Filter out soft-deleted games
+            if let softDeleted = record["softDeleted"] as? Int64, softDeleted != 0 {
+                continue
+            }
+            
             let gameIdString = record.recordID.recordName
             guard let gameId = UUID(uuidString: gameIdString) else {
                 print("⚠️ Invalid game ID in CloudKit record: \(gameIdString)")
@@ -391,7 +398,7 @@ class CloudKitSyncService: ObservableObject {
             withType: .user,
             from: .privateDB,
             predicate: predicate,
-            sortDescriptors: nil,
+            sortDescriptors: [NSSortDescriptor(key: "createdAt", ascending: false)],
             resultsLimit: 1
         )
         
@@ -401,6 +408,42 @@ class CloudKitSyncService: ObservableObject {
         }
         
         print("✅ Found user '\(username)' in CloudKit, creating local copy...")
+        
+        // Создать локальную копию пользователя из CloudKit
+        let user = try await MainActor.run {
+            createUserFromCKRecord(userRecord, in: persistence.container.viewContext)
+        }
+        
+        // Также попробовать загрузить PlayerProfile пользователя
+        if let user = user {
+            await fetchPlayerProfile(forUserId: user.userId)
+        }
+        
+        return user
+    }
+    
+    /// Загружает пользователя из CloudKit Private Database по email
+    /// Используется при входе если пользователь не найден локально (например, после переустановки)
+    func fetchUser(byEmail email: String) async throws -> User? {
+        print("🔍 Trying to fetch user by email '\(email)' from CloudKit...")
+        
+        // Query для поиска пользователя по email
+        let predicate = NSPredicate(format: "email == %@", email)
+        
+        let result = try await cloudKit.queryRecords(
+            withType: .user,
+            from: .privateDB,
+            predicate: predicate,
+            sortDescriptors: [NSSortDescriptor(key: "createdAt", ascending: false)],
+            resultsLimit: 1
+        )
+        
+        guard let userRecord = result.records.first else {
+            print("❌ User with email '\(email)' not found in CloudKit")
+            return nil
+        }
+        
+        print("✅ Found user by email in CloudKit, creating local copy...")
         
         // Создать локальную копию пользователя из CloudKit
         let user = try await MainActor.run {

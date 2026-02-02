@@ -50,10 +50,12 @@ final class AuthViewModel: ObservableObject {
     @Published var currentUser: User?
     @Published var errorMessage: String?
     @Published var isLoading = false
+    
+    // Флаг: требуется ли повторная аутентификация после logout
+    private var requiresReauth = false
 
     private let persistence: PersistenceController
     private let keychain: KeychainService
-    private let context: LAContext
 
     // MARK: - UserDefaults Keys (Legacy - migrating to Keychain)
     private let currentUserIdKey = "currentUserId"
@@ -61,12 +63,10 @@ final class AuthViewModel: ObservableObject {
 
     init(
         persistence: PersistenceController = .shared,
-        keychain: KeychainService = .shared,
-        context: LAContext = LAContext()
+        keychain: KeychainService = .shared
     ) {
         self.persistence = persistence
         self.keychain = keychain
-        self.context = context
         
         // Migrate from UserDefaults to Keychain if needed
         migrateToKeychain()
@@ -76,19 +76,62 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Authentication Status
     func checkAuthenticationStatus() {
-        guard let userIdString = keychain.getUserId(),
-              let userId = UUID(uuidString: userIdString),
-              let user = persistence.fetchUser(byId: userId) else {
+        print("\n🔍 [AUTH STATUS] Checking authentication status...")
+        print("   - Requires reauth: \(requiresReauth)")
+        
+        guard let userIdString = keychain.getUserId() else {
+            print("⚠️ [AUTH STATUS] No userId in Keychain")
             authState = .unauthenticated
             currentUser = nil
+            requiresReauth = false
+            return
+        }
+        print("📱 [AUTH STATUS] Found userId in Keychain: \(userIdString)")
+        
+        guard let userId = UUID(uuidString: userIdString) else {
+            print("❌ [AUTH STATUS] Invalid UUID format: \(userIdString)")
+            authState = .unauthenticated
+            currentUser = nil
+            requiresReauth = false
+            return
+        }
+        
+        guard let user = persistence.fetchUser(byId: userId) else {
+            print("❌ [AUTH STATUS] User not found in database: \(userId)")
+            authState = .unauthenticated
+            currentUser = nil
+            requiresReauth = false
+            return
+        }
+        
+        print("✅ [AUTH STATUS] User found in database:")
+        print("   - Username: \(user.username)")
+        print("   - Email: \(user.email ?? "nil")")
+        print("   - UserId: \(user.userId)")
+
+        // Если требуется повторная аутентификация (после logout)
+        if requiresReauth {
+            print("⚠️ [AUTH STATUS] Reauth required after logout")
+            currentUser = nil
+            if isBiometricEnabled && canUseBiometric {
+                print("🔐 [AUTH STATUS] Biometric available -> .biometricAvailable")
+                authState = .biometricAvailable
+            } else {
+                print("🔑 [AUTH STATUS] Biometric not available -> .unauthenticated")
+                authState = .unauthenticated
+            }
+            requiresReauth = false
             return
         }
 
+        // Обычная проверка (при первом запуске)
         currentUser = user
 
         if isBiometricEnabled && canUseBiometric {
+            print("🔐 [AUTH STATUS] Biometric available and enabled -> .biometricAvailable")
             authState = .biometricAvailable
         } else {
+            print("✅ [AUTH STATUS] User authenticated -> .authenticated")
             authState = .authenticated
         }
     }
@@ -112,101 +155,182 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Registration
     func register(username: String, password: String, email: String) async throws {
-        guard !username.isEmpty else { throw AuthenticationError.invalidCredentials }
-        guard !email.isEmpty else { throw AuthenticationError.invalidEmail }
+        print("\n📝 [REGISTER] Starting registration process...")
+        print("👤 [REGISTER] Username: \(username)")
+        print("📧 [REGISTER] Email: \(email)")
+        print("🔒 [REGISTER] Password: ****** (length: \(password.count))")
+        
+        guard !username.isEmpty else {
+            print("❌ [REGISTER] FAILED: Username is empty")
+            throw AuthenticationError.invalidCredentials
+        }
+        guard !email.isEmpty else {
+            print("❌ [REGISTER] FAILED: Email is empty")
+            throw AuthenticationError.invalidEmail
+        }
 
+        print("🔍 [REGISTER] Validating password...")
         let passwordValidation = validatePassword(password)
-        guard passwordValidation.isValid else { throw AuthenticationError.weakPassword }
+        guard passwordValidation.isValid else {
+            print("❌ [REGISTER] FAILED: Weak password - \(passwordValidation.message ?? "unknown")")
+            throw AuthenticationError.weakPassword
+        }
+        print("✅ [REGISTER] Password validation passed")
         
         // Validate email format
-        guard validateEmail(email) else { throw AuthenticationError.invalidEmail }
+        print("🔍 [REGISTER] Validating email format...")
+        guard validateEmail(email) else {
+            print("❌ [REGISTER] FAILED: Invalid email format")
+            throw AuthenticationError.invalidEmail
+        }
+        print("✅ [REGISTER] Email format valid")
         
         // Check if email already exists
-        if persistence.fetchUser(byEmail: email) != nil {
+        print("🔍 [REGISTER] Checking if email already exists...")
+        if let existingUser = persistence.fetchUser(byEmail: email) {
+            print("❌ [REGISTER] FAILED: Email already exists (user: \(existingUser.username))")
             throw AuthenticationError.emailAlreadyExists
         }
+        print("✅ [REGISTER] Email is available")
 
-        if persistence.fetchUser(byUsername: username) != nil {
+        print("🔍 [REGISTER] Checking if username already exists...")
+        if let existingUser = persistence.fetchUser(byUsername: username) {
+            print("❌ [REGISTER] FAILED: Username already exists (email: \(existingUser.email ?? "nil"))")
             throw AuthenticationError.userAlreadyExists
         }
+        print("✅ [REGISTER] Username is available")
 
+        print("🔐 [REGISTER] Hashing password...")
         let passwordHash = hashPassword(password)
+        print("   - Hash: \(passwordHash.prefix(20))...")
 
+        print("💾 [REGISTER] Creating user in database...")
         guard let user = persistence.createUser(
             username: username,
             passwordHash: passwordHash,
             email: email
         ) else {
+            print("❌ [REGISTER] FAILED: Could not create user in database")
             throw AuthenticationError.unknown
         }
+        print("✅ [REGISTER] User created:")
+        print("   - UserId: \(user.userId)")
+        print("   - Username: \(user.username)")
+        print("   - Email: \(user.email ?? "nil")")
 
-        // Создать PlayerProfile для пользователя (Task 1.3)
-        _ = persistence.createPlayerProfile(displayName: username, userId: user.userId)
+        print("👤 [REGISTER] Creating PlayerProfile...")
+        let profile = persistence.createPlayerProfile(displayName: username, userId: user.userId)
+        if profile != nil {
+            print("✅ [REGISTER] PlayerProfile created")
+        } else {
+            print("⚠️ [REGISTER] PlayerProfile creation failed")
+        }
 
-        try await login(username: username, password: password)
+        print("🔑 [REGISTER] Auto-login after registration...")
+        try await login(email: email, password: password)
     }
 
     // MARK: - Login
-    func login(username: String, password: String) async throws {
+    func login(email: String, password: String) async throws {
+        print("\n🔑 [LOGIN] Starting login process...")
+        print("📧 [LOGIN] Email provided: \(email)")
+        print("🔒 [LOGIN] Password provided: \(password.isEmpty ? "empty" : "****** (length: \(password.count))")")
+        
         isLoading = true
         authState = .authenticating
 
         // Небольшая задержка для UI
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        // Попытка 1: Поиск пользователя локально
-        var user = persistence.fetchUser(byUsername: username)
+        // Попытка 1: Поиск пользователя локально по email
+        print("🔍 [LOGIN] Attempt 1: Searching user locally by email...")
+        var user = persistence.fetchUser(byEmail: email)
+        
+        if let localUser = user {
+            print("✅ [LOGIN] User found locally:")
+            print("   - Username: \(localUser.username)")
+            print("   - Email: \(localUser.email ?? "nil")")
+            print("   - UserId: \(localUser.userId)")
+        } else {
+            print("⚠️ [LOGIN] User NOT found locally")
+        }
         
         // Попытка 2: Если не найден локально - попробовать загрузить из CloudKit
         if user == nil {
-            print("⚠️ User '\(username)' not found locally, trying CloudKit...")
+            print("🔍 [LOGIN] Attempt 2: Trying to fetch from CloudKit...")
             do {
-                user = try await CloudKitSyncService.shared.fetchUser(byUsername: username)
-                if user != nil {
-                    print("✅ User '\(username)' restored from CloudKit")
+                user = try await CloudKitSyncService.shared.fetchUser(byEmail: email)
+                if let cloudUser = user {
+                    print("✅ [LOGIN] User restored from CloudKit:")
+                    print("   - Username: \(cloudUser.username)")
+                    print("   - Email: \(cloudUser.email ?? "nil")")
+                    print("   - UserId: \(cloudUser.userId)")
                 }
             } catch {
-                print("❌ Failed to fetch user from CloudKit: \(error)")
-                // Продолжаем - возможно CloudKit недоступен, но это не критично
+                print("❌ [LOGIN] Failed to fetch user from CloudKit: \(error)")
             }
         }
         
         // Если пользователь все еще не найден - ошибка
         guard let foundUser = user else {
+            print("❌ [LOGIN] FAILED: User not found (neither locally nor in CloudKit)")
             isLoading = false
             authState = .error("Пользователь не найден")
             throw AuthenticationError.userNotFound
         }
 
+        print("🔐 [LOGIN] Validating password...")
         let passwordHash = hashPassword(password)
+        print("   - Password hash: \(passwordHash.prefix(20))...")
+        print("   - Stored hash: \(foundUser.passwordHash.prefix(20))...")
+        
         guard foundUser.passwordHash == passwordHash else {
+            print("❌ [LOGIN] FAILED: Password does not match")
             isLoading = false
             authState = .error("Неверный пароль")
             throw AuthenticationError.invalidCredentials
         }
+        
+        print("✅ [LOGIN] Password validated successfully")
 
         persistence.updateUserLastLogin(foundUser)
+        print("✅ [LOGIN] Updated last login timestamp")
         
         // Устанавливаем супер админа для пользователя "Ник"
-        if username == "Ник" {
+        if foundUser.username == "Ник" {
             persistence.setSuperAdmin(username: "Ник", isSuperAdmin: true)
             foundUser.isSuperAdmin = true
+            print("👑 [LOGIN] Super admin flag set for user 'Ник'")
         }
         
+        print("💾 [LOGIN] Saving to Keychain...")
         _ = keychain.saveUserId(foundUser.userId.uuidString)
         _ = keychain.saveUsername(foundUser.username)
+        print("   - UserId saved: \(foundUser.userId)")
+        print("   - Username saved: \(foundUser.username)")
 
         currentUser = foundUser
         isLoading = false
         authState = .authenticated
         errorMessage = nil
+        requiresReauth = false  // Сбрасываем флаг после успешного входа
+        
+        print("✅ [LOGIN] Login successful! User: \(foundUser.username)\n")
     }
 
     // MARK: - Logout
     func logout() {
+        print("\n🚪 [LOGOUT] Starting logout...")
+        print("   - Current user: \(currentUser?.username ?? "nil")")
+        print("   - Biometric enabled: \(isBiometricEnabled)")
+        
         currentUser = nil
         authState = .unauthenticated
-        _ = keychain.clearAll()
+        requiresReauth = true  // Требуем повторную аутентификацию
+        
+        // НЕ очищаем Keychain - оставляем userId и username для Face ID
+        // Только очищаем текущую сессию и устанавливаем флаг требования повторной аутентификации
+        print("✅ [LOGOUT] Logout complete (Keychain preserved, reauth required)")
     }
 
     // Backward-compatible alias (старый код)
@@ -216,11 +340,13 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Biometric Authentication
     var canUseBiometric: Bool {
+        let context = LAContext()
         var error: NSError?
         return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
     }
 
     var biometricType: LABiometryType {
+        let context = LAContext()
         _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         return context.biometryType
     }
@@ -240,20 +366,55 @@ final class AuthViewModel: ObservableObject {
     }
 
     func authenticateWithBiometric() async throws {
-        guard canUseBiometric else { throw AuthenticationError.biometricFailed }
+        print("🔐 [BIOMETRIC] Starting biometric authentication...")
+        
+        guard canUseBiometric else {
+            print("❌ [BIOMETRIC] Biometric authentication not available")
+            throw AuthenticationError.biometricFailed
+        }
 
+        // Создаем новый LAContext для каждой попытки
+        let context = LAContext()
         let reason = "Войдите используя \(biometricName)"
+        
         do {
+            print("🔐 [BIOMETRIC] Requesting \(biometricName) authentication...")
+            print("🔐 [BIOMETRIC] Creating new LAContext for fresh authentication attempt")
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
                 localizedReason: reason
             )
+            
             if success {
+                print("✅ [BIOMETRIC] Biometric authentication successful")
+                
+                // Загружаем пользователя из Keychain
+                guard let userIdString = keychain.getUserId(),
+                      let userId = UUID(uuidString: userIdString) else {
+                    print("❌ [BIOMETRIC] No userId found in Keychain")
+                    throw AuthenticationError.userNotFound
+                }
+                
+                print("🔍 [BIOMETRIC] Loading user from database: \(userId)")
+                guard let user = persistence.fetchUser(byId: userId) else {
+                    print("❌ [BIOMETRIC] User not found in database: \(userId)")
+                    throw AuthenticationError.userNotFound
+                }
+                
+                print("✅ [BIOMETRIC] User loaded: \(user.username) (email: \(user.email ?? "nil"))")
+                
+                // Устанавливаем пользователя
+                currentUser = user
                 authState = .authenticated
+                requiresReauth = false  // Сбрасываем флаг после успешной биометрии
+                
+                print("✅ [BIOMETRIC] Authentication complete")
             } else {
+                print("❌ [BIOMETRIC] Biometric authentication failed")
                 throw AuthenticationError.biometricFailed
             }
         } catch {
+            print("❌ [BIOMETRIC] Error: \(error.localizedDescription)")
             throw AuthenticationError.biometricFailed
         }
     }
