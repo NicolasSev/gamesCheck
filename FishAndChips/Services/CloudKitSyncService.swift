@@ -212,7 +212,7 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
-    // MARK: - PlayerClaim Sync (Private Database)
+    // MARK: - PlayerClaim Sync (Public Database - changed from Private)
     
     private func syncPlayerClaims() async throws {
         let context = persistence.container.viewContext
@@ -240,9 +240,9 @@ class CloudKitSyncService: ObservableObject {
         }
         
         if !records.isEmpty {
-            print("☁️ [SYNC_CLAIMS] Saving \(records.count) claims to CloudKit Private Database...")
-            _ = try await cloudKit.saveRecords(records, to: .privateDB)
-            print("✅ [SYNC_CLAIMS] Synced \(records.count) player claims to Private Database")
+            print("☁️ [SYNC_CLAIMS] Saving \(records.count) claims to CloudKit Public Database...")
+            _ = try await cloudKit.saveRecords(records, to: .publicDB)
+            print("✅ [SYNC_CLAIMS] Synced \(records.count) player claims to Public Database")
         } else {
             print("ℹ️ [SYNC_CLAIMS] No valid claims to sync")
         }
@@ -260,7 +260,7 @@ class CloudKitSyncService: ObservableObject {
         // Fetch changes from CloudKit
         let users = try await cloudKit.fetchRecords(withType: .user, from: .publicDB)
         let profiles = try await cloudKit.fetchRecords(withType: .playerProfile, from: .privateDB)
-        let claims = try await cloudKit.fetchRecords(withType: .playerClaim, from: .privateDB)
+        let claims = try await cloudKit.fetchRecords(withType: .playerClaim, from: .publicDB)
         
         print("📥 [PULL] Fetched: \(users.count) users, \(profiles.count) profiles, \(claims.count) claims")
         
@@ -433,13 +433,13 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
-    /// Загружает PlayerClaim из Private Database
+    /// Загружает PlayerClaim из Public Database (changed from Private)
     private func fetchPlayerClaims() async throws {
-        print("🔄 [FETCH_CLAIMS] Fetching PlayerClaims from Private Database...")
+        print("🔄 [FETCH_CLAIMS] Fetching PlayerClaims from Public Database...")
         
         let records = try await cloudKit.fetchRecords(
             withType: .playerClaim,
-            from: .privateDB,
+            from: .publicDB,
             limit: 400
         )
         
@@ -451,13 +451,13 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
-    /// Очищает невалидные PlayerClaim из CloudKit (опционально)
+    /// Очищает невалидные PlayerClaim из CloudKit Public Database (changed from Private)
     func cleanupInvalidClaims() async throws {
         print("🧹 [CLEANUP_CLAIMS] Starting cleanup of invalid claims...")
         
         let records = try await cloudKit.fetchRecords(
             withType: .playerClaim,
-            from: .privateDB,
+            from: .publicDB,
             limit: 400
         )
         
@@ -486,7 +486,7 @@ class CloudKitSyncService: ObservableObject {
             print("🗑️ [CLEANUP_CLAIMS] Deleting \(invalidClaimIds.count) invalid claims from CloudKit...")
             for recordID in invalidClaimIds {
                 do {
-                    try await cloudKit.delete(recordID: recordID, from: .privateDB)
+                    try await cloudKit.delete(recordID: recordID, from: .publicDB)
                     print("✅ [CLEANUP_CLAIMS] Deleted \(recordID.recordName)")
                 } catch {
                     print("❌ [CLEANUP_CLAIMS] Failed to delete \(recordID.recordName): \(error)")
@@ -924,13 +924,13 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
-    /// Удаляет невалидный PlayerClaim из CloudKit Private Database
+    /// Удаляет невалидный PlayerClaim из CloudKit Public Database (changed from Private)
     func deleteInvalidClaim(claimId: UUID) async throws {
         let recordID = CKRecord.ID(recordName: claimId.uuidString)
         
         do {
-            try await cloudKit.delete(recordID: recordID, from: .privateDB)
-            print("🗑️ [DELETE_CLAIM] Deleted invalid claim \(claimId) from CloudKit Private Database")
+            try await cloudKit.delete(recordID: recordID, from: .publicDB)
+            print("🗑️ [DELETE_CLAIM] Deleted invalid claim \(claimId) from CloudKit Public Database")
         } catch {
             print("❌ [DELETE_CLAIM] Failed to delete claim \(claimId) from CloudKit: \(error)")
             throw error
