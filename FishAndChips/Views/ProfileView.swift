@@ -52,11 +52,19 @@ struct ProfileView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(authViewModel.currentUsername)
+                                        .font(.body)
                                         .foregroundColor(.white.opacity(0.9))
+                                    
+                                    if let user = authViewModel.currentUser, let email = user.email {
+                                        Text(email)
+                                            .font(.subheadline)
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+                                    
                                     if let id = authViewModel.currentUserId {
                                         Text(id.uuidString)
                                             .font(.caption)
-                                            .foregroundColor(.white.opacity(0.7))
+                                            .foregroundColor(.white.opacity(0.5))
                                     }
                                 }
                                 

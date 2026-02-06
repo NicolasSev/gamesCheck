@@ -10,6 +10,7 @@ struct RegistrationView: View {
     @State private var confirmPassword = ""
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var showingSuccess = false
     @State private var showPassword = false
     @State private var showConfirmPassword = false
 
@@ -117,6 +118,13 @@ struct RegistrationView: View {
             } message: {
                 Text(errorMessage)
             }
+            .alert("Успех", isPresented: $showingSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("Вы успешно зарегистрировались!")
+            }
         }
     }
 
@@ -137,13 +145,26 @@ struct RegistrationView: View {
                     password: password,
                     email: email
                 )
-                dismiss()
+                // Успешная регистрация - показываем уведомление
+                await MainActor.run {
+                    showingSuccess = true
+                }
             } catch let error as AuthenticationError {
-                errorMessage = error.errorDescription ?? "Ошибка регистрации"
-                showingError = true
+                await MainActor.run {
+                    errorMessage = error.errorDescription ?? "Ошибка регистрации"
+                    showingError = true
+                }
             } catch {
-                errorMessage = "Неизвестная ошибка"
-                showingError = true
+                // Логируем полную информацию об ошибке
+                print("❌ [REGISTRATION_VIEW] Unexpected error: \(error)")
+                print("❌ [REGISTRATION_VIEW] Error type: \(type(of: error))")
+                print("❌ [REGISTRATION_VIEW] Localized: \(error.localizedDescription)")
+                
+                // Показываем более информативное сообщение
+                await MainActor.run {
+                    errorMessage = "Ошибка регистрации: \(error.localizedDescription)"
+                    showingError = true
+                }
             }
         }
     }

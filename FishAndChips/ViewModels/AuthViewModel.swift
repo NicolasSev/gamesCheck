@@ -200,24 +200,23 @@ final class AuthViewModel: ObservableObject {
         }
         print("✅ [REGISTER] Username is available")
         
-        // Проверка в CloudKit (чтобы избежать конфликтов при восстановлении данных)
-        print("🔍 [REGISTER] Checking CloudKit for existing email...")
+        // Проверка CloudKit - обязательно дождаться ответа
+        print("☁️ [REGISTER] Checking CloudKit for existing email...")
         do {
             if let cloudUser = try await CloudKitSyncService.shared.fetchUser(byEmail: email) {
                 print("❌ [REGISTER] FAILED: Email exists in CloudKit (userId: \(cloudUser.userId), username: \(cloudUser.username))")
                 isLoading = false
-                authState = .error("Пользователь с таким email уже существует в CloudKit")
+                authState = .error("Пользователь с такой почтой уже существует")
                 throw AuthenticationError.emailAlreadyExists
             }
             print("✅ [REGISTER] Email not found in CloudKit - OK to register")
         } catch {
-            // Если это AuthenticationError - пробрасываем дальше
-            if error is AuthenticationError {
-                throw error
+            // Если это AuthenticationError - пробрасываем
+            if let authError = error as? AuthenticationError {
+                throw authError
             }
-            // Другие ошибки (например, CloudKit недоступен) - игнорируем и продолжаем регистрацию
-            print("⚠️ [REGISTER] CloudKit check failed: \(error.localizedDescription)")
-            print("⚠️ [REGISTER] Continuing with registration anyway...")
+            // Другие ошибки CloudKit - логируем но НЕ блокируем регистрацию
+            print("⚠️ [REGISTER] CloudKit check error (non-blocking): \(error.localizedDescription)")
         }
 
         print("🔐 [REGISTER] Hashing password...")
@@ -242,13 +241,28 @@ final class AuthViewModel: ObservableObject {
         let profile = persistence.createPlayerProfile(displayName: username, userId: user.userId)
         print("✅ [REGISTER] PlayerProfile created")
 
-        // Автоматическая синхронизация PlayerProfile в CloudKit
-        // NOTE: User is NOT synced - it's local authentication data only
-        print("☁️ [REGISTER] Syncing new PlayerProfile to CloudKit...")
+        // Синхронизация User и PlayerProfile в CloudKit
+        print("☁️ [REGISTER] Syncing User to CloudKit Private Database...")
+        do {
+            let userRecord = user.toCKRecord()
+            _ = try await CloudKitSyncService.shared.cloudKit.save(record: userRecord, to: .privateDB)
+            print("✅ [REGISTER] User synced to CloudKit")
+        } catch {
+            print("⚠️ [REGISTER] Failed to sync User to CloudKit: \(error.localizedDescription)")
+            // Не блокируем регистрацию если CloudKit недоступен
+        }
+        
+        print("☁️ [REGISTER] Syncing PlayerProfile to CloudKit...")
         await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
 
         print("🔑 [REGISTER] Auto-login after registration...")
         try await login(email: email, password: password)
+        
+        // Показываем уведомление об успешной регистрации
+        await MainActor.run {
+            authState = .authenticated
+        }
+        print("✅ [REGISTER] Registration completed successfully!")
     }
 
     // MARK: - Login
