@@ -243,14 +243,7 @@ final class AuthViewModel: ObservableObject {
 
         // Синхронизация User и PlayerProfile в CloudKit
         print("☁️ [REGISTER] Syncing User to CloudKit Private Database...")
-        do {
-            let userRecord = user.toCKRecord()
-            _ = try await CloudKitSyncService.shared.cloudKit.save(record: userRecord, to: .privateDB)
-            print("✅ [REGISTER] User synced to CloudKit")
-        } catch {
-            print("⚠️ [REGISTER] Failed to sync User to CloudKit: \(error.localizedDescription)")
-            // Не блокируем регистрацию если CloudKit недоступен
-        }
+        await CloudKitSyncService.shared.quickSyncUser(user)
         
         print("☁️ [REGISTER] Syncing PlayerProfile to CloudKit...")
         await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
