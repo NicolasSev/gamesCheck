@@ -207,9 +207,14 @@ class CloudKitSyncService: ObservableObject {
             throw CloudKitSyncError.cloudKitNotAvailable
         }
         
+        print("🔄 [PULL] Fetching changes from CloudKit...")
+        
         // Fetch changes from CloudKit
         let users = try await cloudKit.fetchRecords(withType: .user, from: .publicDB)
         let profiles = try await cloudKit.fetchRecords(withType: .playerProfile, from: .privateDB)
+        let claims = try await cloudKit.fetchRecords(withType: .playerClaim, from: .privateDB)
+        
+        print("📥 [PULL] Fetched: \(users.count) users, \(profiles.count) profiles, \(claims.count) claims")
         
         // Update local CoreData
         let context = persistence.container.viewContext
@@ -227,6 +232,12 @@ class CloudKitSyncService: ObservableObject {
                let existingProfile = persistence.fetchPlayerProfile(byProfileId: profileId) {
                 existingProfile.updateFromCKRecord(record)
             }
+        }
+        
+        // Process claims
+        if !claims.isEmpty {
+            print("🔄 [PULL] Merging \(claims.count) claims with local database...")
+            await mergePlayerClaimsWithLocal(claims)
         }
         
         // Save context
@@ -251,7 +262,10 @@ class CloudKitSyncService: ObservableObject {
         try await fetchPublicPlayerAliases()
         try await fetchPublicGameWithPlayers()
         
-        // 2. Push local changes to CloudKit
+        // 2. Fetch private data from CloudKit
+        try await fetchPlayerClaims()
+        
+        // 3. Push local changes to CloudKit
         try await sync()
         
         print("✅ Full sync completed")
@@ -368,6 +382,24 @@ class CloudKitSyncService: ObservableObject {
         } catch {
             print("❌ [FETCH_PLAYERS] Error fetching players: \(error)")
             throw error
+        }
+    }
+    
+    /// Загружает PlayerClaim из Private Database
+    private func fetchPlayerClaims() async throws {
+        print("🔄 [FETCH_CLAIMS] Fetching PlayerClaims from Private Database...")
+        
+        let records = try await cloudKit.fetchRecords(
+            withType: .playerClaim,
+            from: .privateDB,
+            limit: 400
+        )
+        
+        if !records.isEmpty {
+            print("📥 [FETCH_CLAIMS] Fetched \(records.count) claims from CloudKit")
+            await mergePlayerClaimsWithLocal(records)
+        } else {
+            print("ℹ️ [FETCH_CLAIMS] No claims found in CloudKit")
         }
     }
     
@@ -535,6 +567,49 @@ class CloudKitSyncService: ObservableObject {
                 print("✅ Merged GameWithPlayer records with local database")
             } catch {
                 print("❌ Failed to save merged GameWithPlayer: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Merge PlayerClaim with Local
+    
+    @MainActor
+    private func mergePlayerClaimsWithLocal(_ cloudRecords: [CKRecord]) async {
+        let context = persistence.container.viewContext
+        
+        print("🔄 [MERGE_CLAIMS] Starting merge of \(cloudRecords.count) claims...")
+        
+        for record in cloudRecords {
+            let claimIdString = record.recordID.recordName
+            guard let claimId = UUID(uuidString: claimIdString) else {
+                print("⚠️ [MERGE_CLAIMS] Invalid claim ID: \(claimIdString)")
+                continue
+            }
+            
+            // Проверяем существует ли claim локально
+            let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "claimId == %@", claimId as CVarArg)
+            
+            if let existingClaim = try? context.fetch(fetchRequest).first {
+                // Обновляем существующий
+                existingClaim.updateFromCKRecord(record)
+                print("🔄 [MERGE_CLAIMS] Updated claim \(claimId)")
+            } else {
+                // Создаём новый
+                let newClaim = PlayerClaim(context: context)
+                newClaim.claimId = claimId
+                newClaim.updateFromCKRecord(record)
+                print("➕ [MERGE_CLAIMS] Created claim \(claimId) (playerName: \(newClaim.playerName), status: \(newClaim.status))")
+            }
+        }
+        
+        // Сохраняем все изменения
+        if context.hasChanges {
+            do {
+                try context.save()
+                print("✅ [MERGE_CLAIMS] Successfully merged \(cloudRecords.count) claims with local database")
+            } catch {
+                print("❌ [MERGE_CLAIMS] Failed to save merged claims: \(error)")
             }
         }
     }
