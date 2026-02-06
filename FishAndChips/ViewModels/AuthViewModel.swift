@@ -199,6 +199,26 @@ final class AuthViewModel: ObservableObject {
             throw AuthenticationError.userAlreadyExists
         }
         print("✅ [REGISTER] Username is available")
+        
+        // Проверка в CloudKit (чтобы избежать конфликтов при восстановлении данных)
+        print("🔍 [REGISTER] Checking CloudKit for existing email...")
+        do {
+            if let cloudUser = try await CloudKitSyncService.shared.fetchUser(byEmail: email) {
+                print("❌ [REGISTER] FAILED: Email exists in CloudKit (userId: \(cloudUser.userId), username: \(cloudUser.username))")
+                isLoading = false
+                authState = .error("Пользователь с таким email уже существует в CloudKit")
+                throw AuthenticationError.emailAlreadyExists
+            }
+            print("✅ [REGISTER] Email not found in CloudKit - OK to register")
+        } catch {
+            // Если это AuthenticationError - пробрасываем дальше
+            if error is AuthenticationError {
+                throw error
+            }
+            // Другие ошибки (например, CloudKit недоступен) - игнорируем и продолжаем регистрацию
+            print("⚠️ [REGISTER] CloudKit check failed: \(error.localizedDescription)")
+            print("⚠️ [REGISTER] Continuing with registration anyway...")
+        }
 
         print("🔐 [REGISTER] Hashing password...")
         let passwordHash = hashPassword(password)
@@ -296,13 +316,6 @@ final class AuthViewModel: ObservableObject {
 
         persistence.updateUserLastLogin(foundUser)
         print("✅ [LOGIN] Updated last login timestamp")
-        
-        // Устанавливаем супер админа для пользователя "Ник"
-        if foundUser.username == "Ник" {
-            persistence.setSuperAdmin(username: "Ник", isSuperAdmin: true)
-            foundUser.isSuperAdmin = true
-            print("👑 [LOGIN] Super admin flag set for user 'Ник'")
-        }
         
         print("💾 [LOGIN] Saving to Keychain...")
         _ = keychain.saveUserId(foundUser.userId.uuidString)

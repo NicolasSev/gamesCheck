@@ -528,6 +528,28 @@ class CloudKitSyncService: ObservableObject {
         do {
             let record = try await cloudKit.fetch(recordID: recordID, from: .publicDB)
             
+            // Проверка публичности игры
+            let isPublic = record["isPublic"] as? Int64 ?? 0
+            if isPublic == 0 {
+                // Игра не публична - проверяем, является ли текущий пользователь создателем
+                let keychain = KeychainService.shared
+                if let currentUserIdString = keychain.getUserId(),
+                   let currentUserId = UUID(uuidString: currentUserIdString),
+                   let creatorRef = record["creator"] as? CKRecord.Reference {
+                    let creatorId = UUID(uuidString: creatorRef.recordID.recordName)
+                    
+                    // Если текущий пользователь не создатель - отказываем в доступе
+                    if currentUserId != creatorId {
+                        print("❌ Game \(gameId) is not public and user is not the creator")
+                        throw CloudKitSyncError.gameNotPublic
+                    }
+                } else {
+                    // Нет информации о создателе или текущем пользователе - отказываем
+                    print("❌ Game \(gameId) is not public and cannot verify creator")
+                    throw CloudKitSyncError.gameNotPublic
+                }
+            }
+            
             // Create or update local copy
             let game = await MainActor.run { () -> Game? in
                 let context = persistence.container.viewContext
@@ -639,6 +661,20 @@ class CloudKitSyncService: ObservableObject {
         }
         
         return user
+    }
+    
+    /// Удаляет пользователя из CloudKit Private Database
+    /// Используется для очистки данных при отладке или удалении аккаунта
+    func deleteUser(userId: UUID) async throws {
+        let recordID = CKRecord.ID(recordName: userId.uuidString)
+        
+        do {
+            try await cloudKit.delete(recordID: recordID, from: .privateDB)
+            print("🗑️ Deleted user \(userId) from CloudKit Private Database")
+        } catch {
+            print("❌ Failed to delete user \(userId) from CloudKit: \(error)")
+            throw error
+        }
     }
     
     /// Загружает PlayerProfile из CloudKit для пользователя
@@ -887,6 +923,7 @@ enum CloudKitSyncError: LocalizedError {
     case networkError
     case authenticationRequired
     case gameNotFound
+    case gameNotPublic
     
     var errorDescription: String? {
         switch self {
@@ -900,6 +937,8 @@ enum CloudKitSyncError: LocalizedError {
             return "Необходимо войти в iCloud"
         case .gameNotFound:
             return "Игра не найдена в CloudKit"
+        case .gameNotPublic:
+            return "Игра недоступна. Создатель ещё не сделал её публичной."
         }
     }
 }

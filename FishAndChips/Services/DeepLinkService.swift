@@ -106,7 +106,20 @@ class DeepLinkService: ObservableObject {
         } catch {
             await MainActor.run {
                 isLoadingGame = false
-                loadError = "Ошибка загрузки игры. Проверьте подключение к интернету."
+                
+                // Специальная обработка для разных типов ошибок
+                if let syncError = error as? CloudKitSyncError {
+                    switch syncError {
+                    case .gameNotPublic:
+                        loadError = "Игра недоступна. Создатель ещё не сделал её публичной. Попросите создателя сделать игру публичной и отправить ссылку снова."
+                    case .gameNotFound:
+                        loadError = "Игра не найдена. Возможно, она была удалена или ссылка устарела."
+                    default:
+                        loadError = error.localizedDescription
+                    }
+                } else {
+                    loadError = "Ошибка загрузки игры. Проверьте подключение к интернету."
+                }
             }
             print("❌ [DEEPLINK] Error fetching game \(gameId): \(error)")
             print("❌ [DEEPLINK] Error details: \(error.localizedDescription)")

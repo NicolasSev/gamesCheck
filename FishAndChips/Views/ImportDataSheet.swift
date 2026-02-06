@@ -68,6 +68,10 @@ struct ImportDataSheet: View {
     @State private var successMessage: String?
     @State private var conflictData: [ConflictData] = []
     @State private var skippedDates: Set<Date> = [] // Даты, которые нужно пропустить при импорте
+    @State private var validatedGames: [ParsedGame] = []
+    @State private var uniquePlayerNames: [String] = []
+    @State private var selectedPlayerNames: Set<String> = []
+    @State private var showPlayerSelection = false
     
     struct ConflictData: Identifiable {
         let id = UUID()
@@ -172,6 +176,15 @@ struct ImportDataSheet: View {
                     }
                 }
             }
+            .sheet(isPresented: $showPlayerSelection) {
+                PlayerSelectionSheet(
+                    playerNames: uniquePlayerNames,
+                    selectedPlayerNames: $selectedPlayerNames,
+                    onConfirm: {
+                        performImportWithSelectedPlayers()
+                    }
+                )
+            }
         }
     }
     
@@ -212,6 +225,9 @@ struct ImportDataSheet: View {
             }
         }
         
+        // Сохраняем валидированные игры
+        validatedGames = parsedGames
+        
         // Если есть конфликты, показываем диалог
         if !conflicts.isEmpty {
             conflictData = conflicts
@@ -220,8 +236,19 @@ struct ImportDataSheet: View {
             return
         }
         
-        // Если конфликтов нет, импортируем сразу
-        performImport()
+        // Извлекаем уникальные имена игроков
+        uniquePlayerNames = service.extractUniquePlayerNames(from: parsedGames)
+        
+        // Если игроков нет, показываем ошибку
+        guard !uniquePlayerNames.isEmpty else {
+            errorMessage = "Не удалось найти игроков в данных"
+            isImporting = false
+            return
+        }
+        
+        // Показываем селект выбора игрока
+        isImporting = false
+        showPlayerSelection = true
     }
     
     private func skipDate(_ date: Date) {
@@ -234,13 +261,102 @@ struct ImportDataSheet: View {
         }
     }
     
-    private func performImport() {
+    private func performImportWithSelectedPlayers() {
+        guard !selectedPlayerNames.isEmpty else {
+            errorMessage = "Необходимо выбрать хотя бы одного игрока"
+            return
+        }
+        
         isImporting = true
         errorMessage = nil
         successMessage = nil
         
         let service = DataImportService(viewContext: viewContext, userId: authViewModel.currentUserId)
-        let parsedGames = service.parseText(inputText)
+        let calendar = Calendar.current
+        
+        // Проверяем есть ли конфликты и нужно ли показать диалог разрешения
+        let existingGames = service.checkExistingGames(validatedGames)
+        var conflicts: [ConflictData] = []
+        for parsedGame in validatedGames {
+            let gameDate = calendar.startOfDay(for: parsedGame.date)
+            if let existing = existingGames[gameDate] {
+                conflicts.append(ConflictData(
+                    date: parsedGame.date,
+                    existingPlayers: existing.players,
+                    newPlayers: parsedGame.players
+                ))
+            }
+        }
+        
+        // Если есть конфликты, показываем диалог
+        if !conflicts.isEmpty {
+            conflictData = conflicts
+            skippedDates = []
+            isImporting = false
+            return
+        }
+        
+        // Импортируем все игры
+        var importedCount = 0
+        var totalPlayers = 0
+        var errors: [String] = []
+        
+        for parsedGame in validatedGames {
+            do {
+                try service.importGames([parsedGame], selectedPlayerNames: selectedPlayerNames, replaceExisting: false)
+                importedCount += 1
+                totalPlayers += parsedGame.players.count
+            } catch {
+                let errorMsg = "Ошибка импорта игры за \(dateFormatter.string(from: parsedGame.date)): \(error.localizedDescription)"
+                errors.append(errorMsg)
+                print(errorMsg)
+            }
+        }
+        
+        // Формируем сообщение
+        if !errors.isEmpty {
+            errorMessage = errors.joined(separator: "\n")
+            isImporting = false
+        } else {
+            let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
+            var message = "Успешно импортировано:\n• Игр: \(importedCount)\n• Игроков: \(totalPlayers)\n• Вы выбраны как: \(selectedNamesStr)"
+            
+            successMessage = message
+            validatedGames = []
+            uniquePlayerNames = []
+            selectedPlayerNames = []
+            
+            // Очищаем поле ввода через небольшую задержку
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                inputText = ""
+                isPresented = false
+            }
+        }
+        
+        isImporting = false
+    }
+    
+    private func performImport() {
+        // Если игроки еще не выбраны, показываем селект
+        if selectedPlayerNames.isEmpty {
+            let service = DataImportService(viewContext: viewContext, userId: authViewModel.currentUserId)
+            uniquePlayerNames = service.extractUniquePlayerNames(from: validatedGames.isEmpty ? service.parseText(inputText) : validatedGames)
+            
+            guard !uniquePlayerNames.isEmpty else {
+                errorMessage = "Не удалось найти игроков в данных"
+                return
+            }
+            
+            showPlayerSelection = true
+            return
+        }
+        
+        isImporting = true
+        errorMessage = nil
+        successMessage = nil
+        
+        let service = DataImportService(viewContext: viewContext, userId: authViewModel.currentUserId)
+        let parsedGames = validatedGames.isEmpty ? service.parseText(inputText) : validatedGames
         let calendar = Calendar.current
         
         // Импортируем игры с учетом пропущенных дат
@@ -263,7 +379,7 @@ struct ImportDataSheet: View {
             let shouldReplace = hasConflict
             
             do {
-                try service.importGames([parsedGame], replaceExisting: shouldReplace)
+                try service.importGames([parsedGame], selectedPlayerNames: selectedPlayerNames, replaceExisting: shouldReplace)
                 importedCount += 1
                 totalPlayers += parsedGame.players.count
             } catch {
@@ -283,10 +399,17 @@ struct ImportDataSheet: View {
                 message += "\n• Пропущено: \(skippedCount)"
             }
             message += "\n• Игроков: \(totalPlayers)"
+            if !selectedPlayerNames.isEmpty {
+                let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
+                message += "\n• Вы выбраны как: \(selectedNamesStr)"
+            }
             
             successMessage = message
             conflictData = []
             skippedDates = []
+            validatedGames = []
+            uniquePlayerNames = []
+            selectedPlayerNames = []
             
             // Очищаем поле ввода через небольшую задержку
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -294,6 +417,8 @@ struct ImportDataSheet: View {
                 isPresented = false
             }
         }
+        
+        isImporting = false
     }
     
     private var dateFormatter: DateFormatter {

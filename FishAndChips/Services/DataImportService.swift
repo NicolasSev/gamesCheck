@@ -56,7 +56,6 @@ class DataImportService {
     private let viewContext: NSManagedObjectContext
     private let userId: UUID?
     private let persistence: PersistenceController
-    private let currentUserName: String = "Ник" // Имя пользователя, заменяет "Я"
     
     init(viewContext: NSManagedObjectContext, userId: UUID? = nil) {
         self.viewContext = viewContext
@@ -154,12 +153,7 @@ class DataImportService {
             return nil
         }
         
-        var name = String(trimmed[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Заменяем "Я" на имя пользователя
-        if name == "Я" {
-            name = currentUserName
-        }
+        let name = String(trimmed[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
         
         var cashout: Int64 = 0
         if match.numberOfRanges > 3, let cashoutRange = Range(match.range(at: 3), in: trimmed) {
@@ -201,6 +195,22 @@ class DataImportService {
         return existingGames
     }
     
+    /// Извлекает уникальные имена игроков из массива игр
+    func extractUniquePlayerNames(from parsedGames: [ParsedGame]) -> [String] {
+        var playerNames = Set<String>()
+        
+        for game in parsedGames {
+            for player in game.players {
+                let name = player.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    playerNames.insert(name)
+                }
+            }
+        }
+        
+        return playerNames.sorted()
+    }
+    
     /// Обновляет creatorUserId для всех игр текущего пользователя, у которых он не установлен
     func updateCreatorUserIdForAllGames() throws {
         guard let userId = self.userId else {
@@ -226,7 +236,7 @@ class DataImportService {
     }
     
     /// Импортирует игры в CoreData, заменяя существующие если нужно
-    func importGames(_ parsedGames: [ParsedGame], replaceExisting: Bool = false) throws {
+    func importGames(_ parsedGames: [ParsedGame], selectedPlayerNames: Set<String>, replaceExisting: Bool = false) throws {
         guard !parsedGames.isEmpty else {
             throw ImportError.noGamesFound
         }
@@ -316,9 +326,8 @@ class DataImportService {
                 if let alias = persistence.fetchAlias(byName: parsedPlayer.name) {
                     playerProfile = alias.profile
                 } else if let userId = userId {
-                    // Если это текущий пользователь ("Я" заменяется на currentUserName)
-                    // или имя совпадает с именем пользователя, используем его профиль
-                    if parsedPlayer.name == currentUserName || parsedPlayer.name == "Я" {
+                    // Если имя игрока совпадает с любым из выбранных имен пользователя, используем его профиль
+                    if selectedPlayerNames.contains(parsedPlayer.name) {
                         playerProfile = persistence.fetchPlayerProfile(byUserId: userId)
                     }
                 }
