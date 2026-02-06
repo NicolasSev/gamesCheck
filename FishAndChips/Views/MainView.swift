@@ -76,15 +76,14 @@ struct MainView: View {
                             
                             if pendingClaimsCount > 0 {
                                 Text("\(pendingClaimsCount)")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
+                                    .font(.system(size: 11, weight: .bold))
                                     .foregroundColor(.white)
-                                    .padding(4)
+                                    .frame(minWidth: 16, minHeight: 16)
                                     .background(
                                         Circle()
                                             .fill(Color.red)
                                     )
-                                    .offset(x: 8, y: -8)
+                                    .offset(x: 6, y: -6)
                             }
                         }
                     }
