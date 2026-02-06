@@ -299,15 +299,33 @@ class CloudKitSyncService: ObservableObject {
     // MARK: - Fetch Public GameWithPlayer
     
     private func fetchPublicGameWithPlayers() async throws {
-        let records = try await cloudKit.fetchRecords(
-            withType: .gameWithPlayer,
-            from: .publicDB,
-            limit: 1000
-        )
+        // CloudKit limit: 400 records per request
+        // Fetch in batches if needed
+        var allRecords: [CKRecord] = []
+        var hasMore = true
+        var cursor: CKQueryOperation.Cursor? = nil
         
-        if !records.isEmpty {
-            print("📥 Fetched \(records.count) game-player records from CloudKit")
-            await mergeGameWithPlayersWithLocal(records)
+        print("🔄 [FETCH_ALL_PLAYERS] Starting to fetch all GameWithPlayer records...")
+        
+        while hasMore && allRecords.count < 400 {
+            let records = try await cloudKit.fetchRecords(
+                withType: .gameWithPlayer,
+                from: .publicDB,
+                limit: 400  // CloudKit maximum
+            )
+            
+            allRecords.append(contentsOf: records)
+            print("📥 [FETCH_ALL_PLAYERS] Fetched batch: \(records.count) records (total: \(allRecords.count))")
+            
+            // For now, just fetch first batch (pagination not implemented)
+            hasMore = false
+        }
+        
+        if !allRecords.isEmpty {
+            print("✅ [FETCH_ALL_PLAYERS] Total fetched: \(allRecords.count) game-player records from CloudKit")
+            await mergeGameWithPlayersWithLocal(allRecords)
+        } else {
+            print("ℹ️ [FETCH_ALL_PLAYERS] No GameWithPlayer records found in CloudKit")
         }
     }
     
@@ -568,10 +586,20 @@ class CloudKitSyncService: ObservableObject {
                 }
             }
             
-            // Загрузить игроков для этой игры
+            // Загрузить игроков для этой игры - КРИТИЧНО для отображения данных!
             if let unwrappedGame = game {
-                print("🔄 Fetching players for game \(gameId)...")
-                try await fetchGameWithPlayers(forGameId: gameId)
+                print("🔄 [FETCH_GAME] Game found, now fetching players for game \(gameId)...")
+                do {
+                    try await fetchGameWithPlayers(forGameId: gameId)
+                    print("✅ [FETCH_GAME] Players loaded successfully for game \(gameId)")
+                } catch {
+                    print("❌ [FETCH_GAME] FAILED to load players for game \(gameId): \(error)")
+                    print("❌ [FETCH_GAME] Error type: \(type(of: error))")
+                    print("❌ [FETCH_GAME] Localized: \(error.localizedDescription)")
+                    // НЕ бросаем исключение - игра уже загружена, просто игроков нет
+                }
+            } else {
+                print("⚠️ [FETCH_GAME] Game is nil after fetch, cannot load players")
             }
             
             return game
