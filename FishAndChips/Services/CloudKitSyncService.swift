@@ -307,23 +307,43 @@ class CloudKitSyncService: ObservableObject {
     
     /// Загружает игроков для конкретной игры из Public Database
     func fetchGameWithPlayers(forGameId gameId: UUID) async throws {
+        print("🔍 [FETCH_PLAYERS] Starting fetch for game: \(gameId)")
+        
         // Query с фильтром по игре
         let gameRecordID = CKRecord.ID(recordName: gameId.uuidString)
         let gameRef = CKRecord.Reference(recordID: gameRecordID, action: .none)
         let predicate = NSPredicate(format: "game == %@", gameRef)
         
-        let records = try await cloudKit.fetchRecords(
-            withType: .gameWithPlayer,
-            from: .publicDB,
-            predicate: predicate,
-            limit: 100
-        )
+        print("🔍 [FETCH_PLAYERS] Query predicate: \(predicate)")
+        print("🔍 [FETCH_PLAYERS] Game reference: \(gameRef.recordID.recordName)")
         
-        if !records.isEmpty {
-            print("📥 Fetched \(records.count) players for game \(gameId)")
-            await mergeGameWithPlayersWithLocal(records)
-        } else {
-            print("ℹ️ No players found in CloudKit for game \(gameId)")
+        do {
+            let records = try await cloudKit.fetchRecords(
+                withType: .gameWithPlayer,
+                from: .publicDB,
+                predicate: predicate,
+                limit: 100
+            )
+            
+            if !records.isEmpty {
+                print("✅ [FETCH_PLAYERS] Fetched \(records.count) players for game \(gameId)")
+                for (index, record) in records.enumerated() {
+                    let playerName = record["playerName"] as? String ?? "Unknown"
+                    let buyin = record["buyin"] as? Int16 ?? 0
+                    let cashout = record["cashout"] as? Int64 ?? 0
+                    print("   Player \(index + 1): \(playerName) (buyin: \(buyin), cashout: \(cashout))")
+                }
+                await mergeGameWithPlayersWithLocal(records)
+            } else {
+                print("⚠️ [FETCH_PLAYERS] No players found in CloudKit for game \(gameId)")
+                print("⚠️ [FETCH_PLAYERS] This could mean:")
+                print("   1. GameWithPlayer records were not synced to CloudKit")
+                print("   2. Schema was not deployed to Production")
+                print("   3. Records are in Private DB instead of Public DB")
+            }
+        } catch {
+            print("❌ [FETCH_PLAYERS] Error fetching players: \(error)")
+            throw error
         }
     }
     
@@ -790,15 +810,33 @@ class CloudKitSyncService: ObservableObject {
     
     /// Быстрая синхронизация GameWithPlayer после создания/изменения
     func quickSyncGameWithPlayers(_ gameWithPlayers: [GameWithPlayer]) async {
-        guard await cloudKit.isCloudKitAvailable() else { return }
-        guard !gameWithPlayers.isEmpty else { return }
+        print("🔄 [QUICK_SYNC] Starting quick sync for \(gameWithPlayers.count) GameWithPlayer records")
+        
+        guard await cloudKit.isCloudKitAvailable() else {
+            print("❌ [QUICK_SYNC] CloudKit not available")
+            return
+        }
+        guard !gameWithPlayers.isEmpty else {
+            print("⚠️ [QUICK_SYNC] No records to sync")
+            return
+        }
         
         do {
             let records = gameWithPlayers.map { $0.toCKRecord() }
+            print("📤 [QUICK_SYNC] Converted to \(records.count) CKRecords")
+            
+            for (index, record) in records.enumerated() {
+                if let game = gameWithPlayers[index].game {
+                    let playerName = gameWithPlayers[index].player?.name ?? "Unknown"
+                    print("   Record \(index + 1): \(playerName) for game \(game.gameId)")
+                }
+            }
+            
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ Quick synced \(records.count) GameWithPlayer records")
+            print("✅ [QUICK_SYNC] Successfully synced \(records.count) GameWithPlayer records to Public DB")
         } catch {
-            print("❌ Failed to quick sync GameWithPlayers: \(error)")
+            print("❌ [QUICK_SYNC] Failed to quick sync GameWithPlayers: \(error)")
+            print("❌ [QUICK_SYNC] Error details: \(error.localizedDescription)")
         }
     }
     

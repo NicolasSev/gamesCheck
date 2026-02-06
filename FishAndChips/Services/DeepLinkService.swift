@@ -61,44 +61,55 @@ class DeepLinkService: ObservableObject {
     }
     
     private func handleGameDeepLink(gameId: UUID) async {
+        print("🔗 [DEEPLINK] Handling game deeplink: \(gameId)")
+        
         // Проверяем, есть ли игра локально
         let persistence = PersistenceController.shared
-        if persistence.fetchGame(byId: gameId) != nil {
+        if let localGame = persistence.fetchGame(byId: gameId) {
             // Игра найдена локально
+            let playerCount = (localGame.gameWithPlayers as? Set<GameWithPlayer>)?.count ?? 0
+            print("✅ [DEEPLINK] Game \(gameId) found locally with \(playerCount) players")
+            
             await MainActor.run {
                 activeDeepLink = .game(gameId)
             }
-            print("✅ Game \(gameId) found locally")
             return
         }
         
         // Игры нет локально - загружаем из CloudKit
-        print("🔄 Game \(gameId) not found locally, fetching from CloudKit...")
+        print("🔄 [DEEPLINK] Game \(gameId) not found locally, fetching from CloudKit...")
         await MainActor.run {
             isLoadingGame = true
             loadError = nil
         }
         
         do {
-            if try await CloudKitSyncService.shared.fetchGame(byId: gameId) != nil {
+            if let fetchedGame = try await CloudKitSyncService.shared.fetchGame(byId: gameId) {
+                let playerCount = (fetchedGame.gameWithPlayers as? Set<GameWithPlayer>)?.count ?? 0
+                print("✅ [DEEPLINK] Game \(gameId) fetched from CloudKit with \(playerCount) players")
+                
                 await MainActor.run {
                     isLoadingGame = false
                     activeDeepLink = .game(gameId)
                 }
-                print("✅ Game \(gameId) fetched from CloudKit successfully")
+                
+                if playerCount == 0 {
+                    print("⚠️ [DEEPLINK] WARNING: Game has NO players! Check CloudKit sync.")
+                }
             } else {
                 await MainActor.run {
                     isLoadingGame = false
                     loadError = "Игра не найдена. Возможно, она была удалена или ссылка устарела."
                 }
-                print("❌ Game \(gameId) not found in CloudKit")
+                print("❌ [DEEPLINK] Game \(gameId) not found in CloudKit")
             }
         } catch {
             await MainActor.run {
                 isLoadingGame = false
                 loadError = "Ошибка загрузки игры. Проверьте подключение к интернету."
             }
-            print("❌ Error fetching game \(gameId): \(error)")
+            print("❌ [DEEPLINK] Error fetching game \(gameId): \(error)")
+            print("❌ [DEEPLINK] Error details: \(error.localizedDescription)")
         }
     }
     
