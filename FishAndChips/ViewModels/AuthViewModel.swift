@@ -193,15 +193,8 @@ final class AuthViewModel: ObservableObject {
         }
         print("✅ [REGISTER] Email is available")
 
-        print("🔍 [REGISTER] Checking if username already exists...")
-        if let existingUser = persistence.fetchUser(byUsername: username) {
-            print("❌ [REGISTER] FAILED: Username already exists (email: \(existingUser.email ?? "nil"))")
-            throw AuthenticationError.userAlreadyExists
-        }
-        print("✅ [REGISTER] Username is available")
-        
-        // Проверка CloudKit - обязательно дождаться ответа
-        print("☁️ [REGISTER] Checking CloudKit for existing email...")
+        // Проверка CloudKit (Public DB) - ОБЯЗАТЕЛЬНАЯ проверка уникальности email
+        print("☁️ [REGISTER] Checking email availability in CloudKit Public Database...")
         do {
             if let cloudUser = try await CloudKitSyncService.shared.fetchUser(byEmail: email) {
                 print("❌ [REGISTER] FAILED: Email exists in CloudKit (userId: \(cloudUser.userId), username: \(cloudUser.username))")
@@ -215,9 +208,22 @@ final class AuthViewModel: ObservableObject {
             if let authError = error as? AuthenticationError {
                 throw authError
             }
-            // Другие ошибки CloudKit - логируем но НЕ блокируем регистрацию
-            print("⚠️ [REGISTER] CloudKit check error (non-blocking): \(error.localizedDescription)")
+            // CloudKit ошибка - показываем детали
+            print("❌ [REGISTER] CloudKit check failed: \(error)")
+            print("❌ [REGISTER] Error type: \(type(of: error))")
+            print("❌ [REGISTER] Localized: \(error.localizedDescription)")
+            isLoading = false
+            authState = .error("Ошибка CloudKit: \(error.localizedDescription)")
+            throw AuthenticationError.unknown
         }
+        
+        // Локальная проверка username (дополнительно)
+        print("🔍 [REGISTER] Checking if username already exists locally...")
+        if let existingUser = persistence.fetchUser(byUsername: username) {
+            print("❌ [REGISTER] FAILED: Username already exists (email: \(existingUser.email ?? "nil"))")
+            throw AuthenticationError.userAlreadyExists
+        }
+        print("✅ [REGISTER] Username is available locally")
 
         print("🔐 [REGISTER] Hashing password...")
         let passwordHash = hashPassword(password)

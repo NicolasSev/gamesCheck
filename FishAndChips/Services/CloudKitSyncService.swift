@@ -98,7 +98,7 @@ class CloudKitSyncService: ObservableObject {
     // Each device has its own local User for authentication
     // Use PlayerProfile for cross-device user data instead
     
-    @available(*, deprecated, message: "User sync is disabled. User is local authentication data only.")
+    @available(*, deprecated, message: "Use quickSyncUser() instead. Bulk sync is not needed for User.")
     private func syncUsers() async throws {
         let context = persistence.container.viewContext
         
@@ -106,12 +106,13 @@ class CloudKitSyncService: ObservableObject {
         let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
         let users = try context.fetch(fetchRequest)
         
-        // Convert to CKRecords and save to Private Database
+        // Convert to CKRecords and save to Public Database
+        // NOTE: passwordHash is NOT included in sync (local only)
         let records = users.map { $0.toCKRecord() }
         
         if !records.isEmpty {
-            _ = try await cloudKit.saveRecords(records, to: .privateDB)
-            print("✅ Synced \(records.count) users to Private Database")
+            _ = try await cloudKit.saveRecords(records, to: .publicDB)
+            print("✅ Synced \(records.count) users to Public Database")
         }
     }
     
@@ -206,8 +207,8 @@ class CloudKitSyncService: ObservableObject {
             throw CloudKitSyncError.cloudKitNotAvailable
         }
         
-        // Fetch changes from CloudKit (Private Database)
-        let users = try await cloudKit.fetchRecords(withType: .user, from: .privateDB)
+        // Fetch changes from CloudKit
+        let users = try await cloudKit.fetchRecords(withType: .user, from: .publicDB)
         let profiles = try await cloudKit.fetchRecords(withType: .playerProfile, from: .privateDB)
         
         // Update local CoreData
@@ -594,16 +595,16 @@ class CloudKitSyncService: ObservableObject {
     /// Загружает пользователя из CloudKit Private Database по username
     /// Используется при входе если пользователь не найден локально (например, после переустановки)
     func fetchUser(byUsername username: String) async throws -> User? {
-        print("🔍 Trying to fetch user '\(username)' from CloudKit...")
+        print("🔍 Trying to fetch user '\(username)' from CloudKit Public Database...")
         
-        // Query для поиска пользователя по username
+        // Query для поиска пользователя по username в Public DB
         let predicate = NSPredicate(format: "username == %@", username)
         
         let result = try await cloudKit.queryRecords(
             withType: .user,
-            from: .privateDB,
+            from: .publicDB,
             predicate: predicate,
-            sortDescriptors: [NSSortDescriptor(key: "createdAt", ascending: false)],
+            sortDescriptors: nil,
             resultsLimit: 1
         )
         
@@ -630,16 +631,16 @@ class CloudKitSyncService: ObservableObject {
     /// Загружает пользователя из CloudKit Private Database по email
     /// Используется при входе если пользователь не найден локально (например, после переустановки)
     func fetchUser(byEmail email: String) async throws -> User? {
-        print("🔍 Trying to fetch user by email '\(email)' from CloudKit...")
+        print("🔍 Trying to fetch user by email '\(email)' from CloudKit Public Database...")
         
-        // Query для поиска пользователя по email
+        // Query для поиска пользователя по email в Public DB
         let predicate = NSPredicate(format: "email == %@", email)
         
         let result = try await cloudKit.queryRecords(
             withType: .user,
-            from: .privateDB,
+            from: .publicDB,
             predicate: predicate,
-            sortDescriptors: [NSSortDescriptor(key: "createdAt", ascending: false)],
+            sortDescriptors: nil,
             resultsLimit: 1
         )
         
@@ -663,14 +664,14 @@ class CloudKitSyncService: ObservableObject {
         return user
     }
     
-    /// Удаляет пользователя из CloudKit Private Database
+    /// Удаляет пользователя из CloudKit Public Database
     /// Используется для очистки данных при отладке или удалении аккаунта
     func deleteUser(userId: UUID) async throws {
         let recordID = CKRecord.ID(recordName: userId.uuidString)
         
         do {
-            try await cloudKit.delete(recordID: recordID, from: .privateDB)
-            print("🗑️ Deleted user \(userId) from CloudKit Private Database")
+            try await cloudKit.delete(recordID: recordID, from: .publicDB)
+            print("🗑️ Deleted user \(userId) from CloudKit Public Database")
         } catch {
             print("❌ Failed to delete user \(userId) from CloudKit: \(error)")
             throw error
@@ -842,10 +843,11 @@ class CloudKitSyncService: ObservableObject {
             let record = user.toCKRecord()
             print("📦 [QUICK_SYNC_USER] Record created: \(record.recordType), recordID: \(record.recordID.recordName)")
             print("📦 [QUICK_SYNC_USER] Record fields: username=\(record["username"] ?? "nil"), email=\(record["email"] ?? "nil")")
+            print("📦 [QUICK_SYNC_USER] NOTE: passwordHash is NOT included (local only)")
             
-            print("☁️ [QUICK_SYNC_USER] Saving to CloudKit Private Database...")
-            let savedRecord = try await cloudKit.save(record: record, to: .privateDB)
-            print("✅ [QUICK_SYNC_USER] SUCCESS! User synced to CloudKit")
+            print("☁️ [QUICK_SYNC_USER] Saving to CloudKit Public Database...")
+            let savedRecord = try await cloudKit.save(record: record, to: .publicDB)
+            print("✅ [QUICK_SYNC_USER] SUCCESS! User synced to CloudKit Public Database")
             print("✅ [QUICK_SYNC_USER] Saved record ID: \(savedRecord.recordID.recordName)")
             print("✅ [QUICK_SYNC_USER] Username: \(user.username)")
         } catch {

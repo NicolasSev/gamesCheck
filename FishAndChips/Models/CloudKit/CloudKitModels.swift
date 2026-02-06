@@ -18,7 +18,8 @@ extension User {
         
         record["username"] = username as CKRecordValue
         record["email"] = (email ?? "") as CKRecordValue
-        record["passwordHash"] = passwordHash as CKRecordValue
+        // NOTE: passwordHash НЕ сохраняется в CloudKit (sensitive data)
+        // passwordHash хранится только локально в Core Data для аутентификации
         record["subscriptionStatus"] = subscriptionStatus as CKRecordValue
         record["isSuperAdmin"] = (isSuperAdmin ? 1 : 0) as CKRecordValue
         record["createdAt"] = createdAt as CKRecordValue
@@ -42,9 +43,8 @@ extension User {
         if let email = record["email"] as? String, !email.isEmpty {
             self.email = email
         }
-        if let passwordHash = record["passwordHash"] as? String {
-            self.passwordHash = passwordHash
-        }
+        // NOTE: passwordHash НЕ загружается из CloudKit (его там нет)
+        // passwordHash остаётся локальным и не синхронизируется
         if let subscriptionStatus = record["subscriptionStatus"] as? String {
             self.subscriptionStatus = subscriptionStatus
         }
