@@ -64,6 +64,29 @@ class CloudKitService {
     }
     
     func saveRecords(_ records: [CKRecord], to database: DatabaseType = .privateDB) async throws -> [CKRecord] {
+        // CloudKit has a limit of 400 records per operation
+        let batchSize = 400
+        var allSavedRecords: [CKRecord] = []
+        
+        // Split records into batches
+        let batches = stride(from: 0, to: records.count, by: batchSize).map {
+            Array(records[$0..<min($0 + batchSize, records.count)])
+        }
+        
+        print("📦 Saving \(records.count) records in \(batches.count) batch(es)")
+        
+        // Process each batch
+        for (index, batch) in batches.enumerated() {
+            print("📤 Batch \(index + 1)/\(batches.count): \(batch.count) records")
+            let savedBatch = try await saveBatch(batch, to: database)
+            allSavedRecords.append(contentsOf: savedBatch)
+        }
+        
+        print("✅ Successfully saved \(allSavedRecords.count)/\(records.count) records")
+        return allSavedRecords
+    }
+    
+    private func saveBatch(_ records: [CKRecord], to database: DatabaseType) async throws -> [CKRecord] {
         let operation = CKModifyRecordsOperation(recordsToSave: records)
         operation.savePolicy = .changedKeys
         operation.qualityOfService = .userInitiated
@@ -135,6 +158,26 @@ class CloudKitService {
     }
     
     func deleteRecords(_ recordIDs: [CKRecord.ID], from database: DatabaseType = .privateDB) async throws {
+        // CloudKit has a limit of 400 records per operation
+        let batchSize = 400
+        
+        // Split recordIDs into batches
+        let batches = stride(from: 0, to: recordIDs.count, by: batchSize).map {
+            Array(recordIDs[$0..<min($0 + batchSize, recordIDs.count)])
+        }
+        
+        print("🗑️ Deleting \(recordIDs.count) records in \(batches.count) batch(es)")
+        
+        // Process each batch
+        for (index, batch) in batches.enumerated() {
+            print("🗑️ Batch \(index + 1)/\(batches.count): \(batch.count) records")
+            try await deleteBatch(batch, from: database)
+        }
+        
+        print("✅ Successfully deleted \(recordIDs.count) records")
+    }
+    
+    private func deleteBatch(_ recordIDs: [CKRecord.ID], from database: DatabaseType) async throws {
         let operation = CKModifyRecordsOperation(recordIDsToDelete: recordIDs)
         operation.qualityOfService = .userInitiated
         
