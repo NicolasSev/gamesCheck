@@ -12,6 +12,9 @@ struct MainView: View {
     @State private var showingAddGame = false
     @State private var showingImportGames = false
     @State private var deepLinkGame: Game?
+    @State private var pendingClaimsCount = 0
+    
+    private let claimService = PlayerClaimService()
 
     enum MainTab: Hashable {
         case overview
@@ -67,8 +70,23 @@ struct MainView: View {
                     Button {
                         showingProfile = true
                     } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.title2)
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "person.circle.fill")
+                                .font(.title2)
+                            
+                            if pendingClaimsCount > 0 {
+                                Text("\(pendingClaimsCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.red)
+                                    )
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
                     }
                 }
 
@@ -176,6 +194,15 @@ struct MainView: View {
                 if let userId = authViewModel.currentUserId, viewModel.selectedPlayerName == nil {
                     viewModel.loadData(forUser: userId)
                 }
+                
+                // Обновляем счетчик заявок
+                updatePendingClaimsCount()
+            }
+            .onChange(of: showingProfile) { isShowing in
+                // Обновляем счетчик заявок при закрытии профиля
+                if !isShowing {
+                    updatePendingClaimsCount()
+                }
             }
             .refreshable {
                 viewModel.refresh()
@@ -209,5 +236,13 @@ struct MainView: View {
         case .none:
             break
         }
+    }
+    
+    private func updatePendingClaimsCount() {
+        guard let userId = authViewModel.currentUserId else {
+            pendingClaimsCount = 0
+            return
+        }
+        pendingClaimsCount = claimService.getPendingClaimsForHost(hostUserId: userId).count
     }
 }
