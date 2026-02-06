@@ -423,6 +423,53 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
+    /// Очищает невалидные PlayerClaim из CloudKit (опционально)
+    func cleanupInvalidClaims() async throws {
+        print("🧹 [CLEANUP_CLAIMS] Starting cleanup of invalid claims...")
+        
+        let records = try await cloudKit.fetchRecords(
+            withType: .playerClaim,
+            from: .privateDB,
+            limit: 400
+        )
+        
+        var invalidClaimIds: [CKRecord.ID] = []
+        
+        for record in records {
+            let claimId = record.recordID.recordName
+            
+            // Проверяем валидность
+            let hasPlayerName = (record["playerName"] as? String)?.isEmpty == false
+            let hasGameRef = record["game"] as? CKRecord.Reference != nil
+            let hasClaimantRef = record["claimantUser"] as? CKRecord.Reference != nil
+            let hasHostRef = record["hostUser"] as? CKRecord.Reference != nil
+            let hasStatus = (record["status"] as? String)?.isEmpty == false
+            
+            if !hasPlayerName || !hasGameRef || !hasClaimantRef || !hasHostRef || !hasStatus {
+                print("⚠️ [CLEANUP_CLAIMS] Found invalid claim: \(claimId)")
+                print("   - hasPlayerName: \(hasPlayerName), hasGameRef: \(hasGameRef)")
+                print("   - hasClaimantRef: \(hasClaimantRef), hasHostRef: \(hasHostRef)")
+                print("   - hasStatus: \(hasStatus)")
+                invalidClaimIds.append(record.recordID)
+            }
+        }
+        
+        if !invalidClaimIds.isEmpty {
+            print("🗑️ [CLEANUP_CLAIMS] Deleting \(invalidClaimIds.count) invalid claims from CloudKit...")
+            for recordID in invalidClaimIds {
+                do {
+                    try await cloudKit.delete(recordID: recordID, from: .privateDB)
+                    print("✅ [CLEANUP_CLAIMS] Deleted \(recordID.recordName)")
+                } catch {
+                    print("❌ [CLEANUP_CLAIMS] Failed to delete \(recordID.recordName): \(error)")
+                }
+            }
+            print("✅ [CLEANUP_CLAIMS] Cleanup completed: deleted \(invalidClaimIds.count) invalid claims")
+        } else {
+            print("✅ [CLEANUP_CLAIMS] No invalid claims found")
+        }
+    }
+    
     // MARK: - Merge Games with Local
     
     @MainActor
@@ -846,6 +893,35 @@ class CloudKitSyncService: ObservableObject {
         } catch {
             print("❌ Failed to delete user \(userId) from CloudKit: \(error)")
             throw error
+        }
+    }
+    
+    /// Удаляет невалидный PlayerClaim из CloudKit Private Database
+    func deleteInvalidClaim(claimId: UUID) async throws {
+        let recordID = CKRecord.ID(recordName: claimId.uuidString)
+        
+        do {
+            try await cloudKit.delete(recordID: recordID, from: .privateDB)
+            print("🗑️ [DELETE_CLAIM] Deleted invalid claim \(claimId) from CloudKit Private Database")
+        } catch {
+            print("❌ [DELETE_CLAIM] Failed to delete claim \(claimId) from CloudKit: \(error)")
+            throw error
+        }
+    }
+    
+    /// Удаляет локальный PlayerClaim
+    @MainActor
+    func deleteLocalClaim(claimId: UUID) throws {
+        let context = persistence.container.viewContext
+        let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "claimId == %@", claimId as CVarArg)
+        
+        if let claim = try context.fetch(fetchRequest).first {
+            context.delete(claim)
+            try context.save()
+            print("🗑️ [DELETE_CLAIM] Deleted local claim \(claimId)")
+        } else {
+            print("ℹ️ [DELETE_CLAIM] Claim \(claimId) not found locally")
         }
     }
     

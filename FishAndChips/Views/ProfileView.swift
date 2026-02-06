@@ -204,6 +204,41 @@ struct ProfileView: View {
                         .liquidGlass(cornerRadius: 15)
                         .padding(.horizontal)
 
+                        // Очистка невалидных заявок
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button(action: {
+                                Task {
+                                    do {
+                                        print("🧹 Starting cleanup of invalid claims...")
+                                        try await CloudKitSyncService.shared.cleanupInvalidClaims()
+                                        print("✅ Cleanup completed")
+                                    } catch {
+                                        print("❌ Cleanup failed: \(error)")
+                                    }
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "trash.circle")
+                                    Text("Очистить невалидные заявки")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.orange)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.orange.opacity(0.2))
+                            )
+                            
+                            Text("Удаляет поврежденные заявки из CloudKit")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 15)
+                        .padding(.horizontal)
+                        
                         // Debug (доступно в TestFlight)
                         Button(action: {
                             showingDebug = true
