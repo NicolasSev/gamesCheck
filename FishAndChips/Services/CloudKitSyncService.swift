@@ -599,12 +599,54 @@ class CloudKitSyncService: ObservableObject {
         
         print("🔄 [MERGE_CLAIMS] Starting merge of \(cloudRecords.count) claims...")
         
+        var validClaims = 0
+        var skippedClaims = 0
+        
         for record in cloudRecords {
             let claimIdString = record.recordID.recordName
             guard let claimId = UUID(uuidString: claimIdString) else {
                 print("⚠️ [MERGE_CLAIMS] Invalid claim ID: \(claimIdString)")
+                skippedClaims += 1
                 continue
             }
+            
+            // ВАЛИДАЦИЯ: проверяем обязательные поля
+            guard let playerName = record["playerName"] as? String,
+                  !playerName.isEmpty else {
+                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing playerName")
+                skippedClaims += 1
+                continue
+            }
+            
+            guard let gameRef = record["game"] as? CKRecord.Reference,
+                  let gameIdString = UUID(uuidString: gameRef.recordID.recordName) else {
+                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid gameId")
+                skippedClaims += 1
+                continue
+            }
+            
+            guard let claimantRef = record["claimantUser"] as? CKRecord.Reference,
+                  let claimantIdString = UUID(uuidString: claimantRef.recordID.recordName) else {
+                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid claimantUserId")
+                skippedClaims += 1
+                continue
+            }
+            
+            guard let hostRef = record["hostUser"] as? CKRecord.Reference,
+                  let hostIdString = UUID(uuidString: hostRef.recordID.recordName) else {
+                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid hostUserId")
+                skippedClaims += 1
+                continue
+            }
+            
+            guard let status = record["status"] as? String,
+                  !status.isEmpty else {
+                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing status")
+                skippedClaims += 1
+                continue
+            }
+            
+            print("✅ [MERGE_CLAIMS] Claim \(claimId) passed validation")
             
             // Проверяем существует ли claim локально
             let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
@@ -614,23 +656,29 @@ class CloudKitSyncService: ObservableObject {
                 // Обновляем существующий
                 existingClaim.updateFromCKRecord(record)
                 print("🔄 [MERGE_CLAIMS] Updated claim \(claimId)")
+                validClaims += 1
             } else {
                 // Создаём новый
                 let newClaim = PlayerClaim(context: context)
                 newClaim.claimId = claimId
                 newClaim.updateFromCKRecord(record)
                 print("➕ [MERGE_CLAIMS] Created claim \(claimId) (playerName: \(newClaim.playerName), status: \(newClaim.status))")
+                validClaims += 1
             }
         }
+        
+        print("📊 [MERGE_CLAIMS] Validation results: \(validClaims) valid, \(skippedClaims) skipped")
         
         // Сохраняем все изменения
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ [MERGE_CLAIMS] Successfully merged \(cloudRecords.count) claims with local database")
+                print("✅ [MERGE_CLAIMS] Successfully merged \(validClaims) claims with local database")
             } catch {
                 print("❌ [MERGE_CLAIMS] Failed to save merged claims: \(error)")
             }
+        } else {
+            print("ℹ️ [MERGE_CLAIMS] No valid claims to save")
         }
     }
     
