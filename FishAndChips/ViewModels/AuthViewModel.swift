@@ -222,9 +222,9 @@ final class AuthViewModel: ObservableObject {
         let profile = persistence.createPlayerProfile(displayName: username, userId: user.userId)
         print("✅ [REGISTER] PlayerProfile created")
 
-        // Автоматическая синхронизация в CloudKit
-        print("☁️ [REGISTER] Syncing new user to CloudKit...")
-        await CloudKitSyncService.shared.quickSyncUser(user)
+        // Автоматическая синхронизация PlayerProfile в CloudKit
+        // NOTE: User is NOT synced - it's local authentication data only
+        print("☁️ [REGISTER] Syncing new PlayerProfile to CloudKit...")
         await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
 
         print("🔑 [REGISTER] Auto-login after registration...")

@@ -66,7 +66,8 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             // Private Database sync
-            try await syncUsers()
+            // NOTE: User sync removed - each device should have its own local User
+            // Users are for local authentication only, not for cross-device sync
             try await syncPlayerProfiles()
             try await syncPlayerClaims()
             
@@ -93,7 +94,11 @@ class CloudKitSyncService: ObservableObject {
     }
     
     // MARK: - User Sync (Private Database)
+    // DEPRECATED: User should NOT be synced to CloudKit
+    // Each device has its own local User for authentication
+    // Use PlayerProfile for cross-device user data instead
     
+    @available(*, deprecated, message: "User sync is disabled. User is local authentication data only.")
     private func syncUsers() async throws {
         let context = persistence.container.viewContext
         
@@ -783,6 +788,8 @@ class CloudKitSyncService: ObservableObject {
     // MARK: - Quick Sync (автоматическая синхронизация после создания)
     
     /// Быстрая синхронизация User после создания/изменения
+    /// DEPRECATED: User should NOT be synced to CloudKit - use PlayerProfile instead
+    @available(*, deprecated, message: "User sync is disabled. User is local authentication data only.")
     func quickSyncUser(_ user: User) async {
         guard await cloudKit.isCloudKitAvailable() else { return }
         
