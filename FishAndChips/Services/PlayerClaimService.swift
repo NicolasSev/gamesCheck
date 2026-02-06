@@ -182,10 +182,20 @@ class PlayerClaimService {
             throw ClaimError.claimAlreadyResolved
         }
         
-        // Найти GameWithPlayer по objectId
-        guard let gameWithPlayer = findGameWithPlayer(byObjectId: claim.gameWithPlayerObjectId) else {
+        // Найти GameWithPlayer по gameId + playerName (стабильные идентификаторы)
+        print("🔍 [APPROVE_CLAIM] Searching GameWithPlayer:")
+        print("   - gameId: \(claim.gameId)")
+        print("   - playerName: \(claim.playerName)")
+        
+        let gameWithPlayer = findGameWithPlayer(gameId: claim.gameId, playerName: claim.playerName)
+        
+        guard let gameWithPlayer = gameWithPlayer else {
+            print("❌ [APPROVE_CLAIM] GameWithPlayer not found!")
+            print("   - Tried to find: gameId=\(claim.gameId), playerName=\(claim.playerName)")
             throw ClaimError.gameWithPlayerNotFound
         }
+        
+        print("✅ [APPROVE_CLAIM] Found GameWithPlayer: buyin=\(gameWithPlayer.buyin), cashout=\(gameWithPlayer.cashout)")
         
         // Получить или создать PlayerProfile для пользователя
         var profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
@@ -300,6 +310,30 @@ class PlayerClaimService {
             return try context.existingObject(with: objectId) as? GameWithPlayer
         } catch {
             print("Error finding GameWithPlayer: \(error)")
+            return nil
+        }
+    }
+    
+    /// Находит GameWithPlayer по стабильным идентификаторам (gameId + playerName)
+    private func findGameWithPlayer(gameId: UUID, playerName: String) -> GameWithPlayer? {
+        let context = persistence.container.viewContext
+        
+        // Fetch GameWithPlayer по gameId и playerName
+        let gwpFetch: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+        gwpFetch.predicate = NSPredicate(
+            format: "game.gameId == %@ AND player.name == %@",
+            gameId as CVarArg,
+            playerName as NSString
+        )
+        
+        do {
+            let results = try context.fetch(gwpFetch)
+            if results.count > 1 {
+                print("⚠️ Found multiple GameWithPlayer for gameId=\(gameId), playerName=\(playerName). Using first.")
+            }
+            return results.first
+        } catch {
+            print("❌ Error finding GameWithPlayer: \(error)")
             return nil
         }
     }
