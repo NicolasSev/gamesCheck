@@ -10,6 +10,9 @@ struct DebugView: View {
     @State private var migrationStatus = ""
     @State private var userInfo = ""
     @State private var gamesInfo = ""
+    @State private var cloudKitStatus = ""
+    @State private var isCreatingSchema = false
+    @State private var isSyncing = false
     
     var body: some View {
         NavigationView {
@@ -30,6 +33,47 @@ struct DebugView: View {
                     Button("Refresh Games Info") {
                         loadGamesInfo()
                     }
+                }
+                
+                Section("CloudKit") {
+                    Text(cloudKitStatus)
+                        .font(.system(.caption, design: .monospaced))
+                    
+                    Button(action: {
+                        Task {
+                            await createCloudKitSchema()
+                        }
+                    }) {
+                        if isCreatingSchema {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Creating Schema...")
+                            }
+                        } else {
+                            Text("Create CloudKit Schema")
+                        }
+                    }
+                    .disabled(isCreatingSchema)
+                    .foregroundColor(.orange)
+                    
+                    Button(action: {
+                        Task {
+                            await manualSync()
+                        }
+                    }) {
+                        if isSyncing {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Syncing...")
+                            }
+                        } else {
+                            Text("Manual CloudKit Sync")
+                        }
+                    }
+                    .disabled(isSyncing)
+                    .foregroundColor(.blue)
                 }
                 
                 Section("Migration") {
@@ -127,6 +171,57 @@ struct DebugView: View {
         UserDefaults.standard.removePersistentDomain(forName: domain)
         migrationStatus = "⚠️ All UserDefaults cleared. Restart app."
         loadUserInfo()
+    }
+    
+    private func createCloudKitSchema() async {
+        isCreatingSchema = true
+        cloudKitStatus = "🔄 Creating CloudKit schema..."
+        
+        do {
+            try await CloudKitSchemaCreator().createDevelopmentSchema()
+            cloudKitStatus = """
+            ✅ CloudKit schema created successfully!
+            
+            Next steps:
+            1. Open CloudKit Dashboard
+            2. Check Development → Public Database:
+               - Game ✓
+               - GameWithPlayer ✓
+               - PlayerAlias ✓
+            3. Check Development → Private Database:
+               - User ✓
+               - PlayerProfile ✓
+               - PlayerClaim ✓
+            4. Deploy schema to Production
+            5. Run Manual CloudKit Sync
+            """
+        } catch {
+            cloudKitStatus = "❌ Failed to create schema: \(error.localizedDescription)"
+        }
+        
+        isCreatingSchema = false
+    }
+    
+    private func manualSync() async {
+        isSyncing = true
+        cloudKitStatus = "🔄 Syncing with CloudKit..."
+        
+        do {
+            try await CloudKitSyncService.shared.performFullSync()
+            cloudKitStatus = """
+            ✅ CloudKit sync completed!
+            
+            Check CloudKit Dashboard to verify:
+            - Games synced to Public DB
+            - GameWithPlayer records synced
+            - Users synced to Private DB
+            """
+            loadGamesInfo()
+        } catch {
+            cloudKitStatus = "❌ Sync failed: \(error.localizedDescription)"
+        }
+        
+        isSyncing = false
     }
 }
 

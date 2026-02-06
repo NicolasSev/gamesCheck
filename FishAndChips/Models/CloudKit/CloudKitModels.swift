@@ -291,3 +291,51 @@ extension PlayerClaim {
         }
     }
 }
+
+// MARK: - GameWithPlayer CloudKit Extension
+
+extension GameWithPlayer {
+    func toCKRecord() -> CKRecord {
+        // Генерируем уникальный ID для записи
+        let recordID = CKRecord.ID(recordName: UUID().uuidString)
+        let record = CKRecord(recordType: "GameWithPlayer", recordID: recordID)
+        
+        record["buyin"] = buyin as CKRecordValue
+        record["cashout"] = cashout as CKRecordValue
+        
+        // Reference к Game (обязательный)
+        if let game = game {
+            let gameRef = CKRecord.Reference(
+                recordID: CKRecord.ID(recordName: game.gameId.uuidString),
+                action: .deleteSelf  // Удалить при удалении игры
+            )
+            record["game"] = gameRef as CKRecordValue
+        }
+        
+        // Reference к PlayerProfile (опциональный)
+        if let playerProfile = playerProfile {
+            let profileRef = CKRecord.Reference(
+                recordID: CKRecord.ID(recordName: playerProfile.profileId.uuidString),
+                action: .none
+            )
+            record["playerProfile"] = profileRef as CKRecordValue
+        }
+        
+        // Имя игрока для отображения
+        if let player = player, let playerName = player.name {
+            record["playerName"] = playerName as CKRecordValue
+        }
+        
+        return record
+    }
+    
+    func updateFromCKRecord(_ record: CKRecord) {
+        if let buyin = record["buyin"] as? Int16 {
+            self.buyin = buyin
+        }
+        if let cashout = record["cashout"] as? Int64 {
+            self.cashout = cashout
+        }
+        // References (game, playerProfile) обрабатываются при merge
+    }
+}

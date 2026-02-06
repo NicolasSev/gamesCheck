@@ -71,6 +71,8 @@ struct AddPlayerToGameSheet: View {
     }
 
     private func addSelectedPlayersToGame() {
+        var addedGameWithPlayers: [GameWithPlayer] = []
+        
         for player in selectedPlayers {
             guard !isPlayerAlreadyInGame(player) else { continue }
 
@@ -78,10 +80,18 @@ struct AddPlayerToGameSheet: View {
             gameWithPlayer.player = player
             gameWithPlayer.game = game
             gameWithPlayer.buyin = 0
+            addedGameWithPlayers.append(gameWithPlayer)
         }
 
         do {
             try viewContext.save()
+            
+            // Автоматическая синхронизация в CloudKit
+            if !addedGameWithPlayers.isEmpty {
+                Task {
+                    await CloudKitSyncService.shared.quickSyncGameWithPlayers(addedGameWithPlayers)
+                }
+            }
         } catch {
             print("Ошибка сохранения игроков в игру: \(error.localizedDescription)")
         }

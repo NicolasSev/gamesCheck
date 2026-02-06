@@ -3,6 +3,8 @@
 > **Единый источник правды для всех агентов, работающих над проектом**
 
 **История обновлений:**
+- 2026-02-03: 🐛 Добавлен план дебага GameWithPlayer - игроки не синхронизируются в CloudKit
+- 2026-02-02 (COMMIT f4fd35e): ✅ Pre-TestFlight улучшения завершены - ребрендинг, email auth, biometric fix, logging
 - 2026-02-02: Pre-TestFlight улучшения - ребрендинг на Fish & Chips, вход по email, номер сборки в профиле
 - 2026-01-31 11:30: Добавлен детальный план исправления критического бага синхронизации CloudKit
 - 2026-01-31 11:30: Добавлен раздел "Будущие оптимизации" - On-Demand Game Loading
@@ -98,9 +100,17 @@
 - ✅ Deep linking настроен и работает
 - ✅ Уведомления фильтруются по пользователям
 - ✅ Все критические баги исправлены
-- 🔄 Pre-TestFlight улучшения (в процессе - см. раздел ниже)
+- ✅ Pre-TestFlight улучшения выполнены (commit f4fd35e)
 
-**Статус:** Внесение финальных улучшений перед следующей сборкой в TestFlight
+**Что добавлено в последней сборке (Build 2 → Build 3):**
+- ✅ Ребрендинг: "Fish & Chips" вместо "PokerTracker"
+- ✅ Вход по email вместо username
+- ✅ Исправлена биометрическая аутентификация (Face ID)
+- ✅ Номер сборки в профиле
+- ✅ Debug доступен в TestFlight
+- ✅ Подробные логи для всех auth flows
+
+**Статус:** Готово к загрузке следующей сборки в TestFlight (автоматически через Xcode Cloud)
 
 ---
 
@@ -1086,6 +1096,512 @@ struct ProfileView: View {
 
 ---
 
+## 🐛 НОВЫЙ БАГ: GameWithPlayer не синхронизируется (2026-02-03)
+
+**Дата обнаружения:** 2026-02-03
+
+**📋 КРАТКОЕ ОПИСАНИЕ ПРОБЛЕМЫ:**
+- ✅ Игра (Game) сохраняется и загружается из Public DB - работает
+- ❌ Игроки (GameWithPlayer) НЕ синхронизируются в CloudKit вообще
+- 🔍 Результат: При открытии игры по диплинку другим пользователем отображается "Нет данных" и "Игроки (0)"
+
+### Симптомы
+
+**Сценарий:**
+1. Пользователь A создает игру, добавляет игроков с buyins/cashouts
+2. Пользователь A делится ссылкой на игру (диплинк)
+3. Пользователь B (другое устройство, другой iCloud) открывает ссылку
+4. Игра открывается (экран "Детали игры")
+5. НО: "Результаты игры: Нет данных", "Игроки (0)"
+
+**Скриншот проблемы:**
+- Дата игры: 25 янв. 2026г., 00:00
+- Сумма байинов: 0 (0 Т)
+- Игроки: 0
+- Кнопка "Отправить статистику по игре" (не активна)
+
+### Анализ кода
+
+**Что РАБОТАЕТ:**
+1. ✅ [`CloudKitService.swift`](FishAndChips/Services/CloudKitService.swift) - поддерживает Public/Private DB
+2. ✅ [`CloudKitSyncService.syncGames()`](FishAndChips/Services/CloudKitSyncService.swift#L142-157) - сохраняет Game в Public DB
+3. ✅ [`CloudKitSyncService.fetchPublicGames()`](FishAndChips/Services/CloudKitSyncService.swift#L233) - загружает игры из Public DB
+4. ✅ [`DeepLinkService`](FishAndChips/Services/DeepLinkService.swift) - обрабатывает диплинки и вызывает fetchGame(byId:)
+
+**Что НЕ РАБОТАЕТ:**
+1. ❌ [`CloudKitModels.swift`](FishAndChips/Models/CloudKit/CloudKitModels.swift) - НЕТ extension для GameWithPlayer (toCKRecord, updateFromCKRecord)
+2. ❌ [`CloudKitSyncService.swift`](FishAndChips/Services/CloudKitSyncService.swift) - НЕТ метода syncGameWithPlayers()
+3. ❌ Нет метода fetchPublicGameWithPlayers()
+4. ❌ Нет метода fetchGameWithPlayers(forGameId:) для конкретной игры
+5. ❌ GameWithPlayer записи вообще НЕ сохраняются в CloudKit
+
+**Подтверждение:**
+- [`CloudKitSchemaCreator.swift`](FishAndChips/Services/CloudKitSchemaCreator.swift#L118-127) создает sample GameWithPlayer в **Public DB** - схема правильная
+- Но реальный код НЕ синхронизирует GameWithPlayer туда
+
+### Архитектура данных
+
+**GameWithPlayer - что это:**
+- Связь many-to-many между Game и Player
+- Содержит данные участника игры: buyin (Int16), cashout (Int64)
+- Опционально связан с PlayerProfile (для идентификации пользователя)
+- Создается при добавлении игроков в игру
+
+**Где создается:**
+- [`AddPlayerToGameSheet.swift`](FishAndChips/AddPlayerToGameSheet.swift#L77) - при добавлении игрока
+- [`DataImportService.swift`](FishAndChips/Services/DataImportService.swift#L327) - при импорте данных
+- Tests - в тестах
+
+**Где ДОЛЖЕН храниться:**
+- ✅ Public Database - чтобы другие пользователи видели состав игры
+- ❌ НЕ Private Database - иначе только создатель видит игроков
+
+### План исправления
+
+#### Этап 1: Проверка CloudKit Dashboard
+
+**Цель:** Убедиться что схема создана правильно и понять текущее состояние данных
+
+**Действия:**
+1. Открыть CloudKit Dashboard → Development environment
+2. Проверить Public Database → Schema → Record Types:
+   - [ ] Game - должен быть
+   - [ ] PlayerAlias - должен быть
+   - [ ] GameWithPlayer - проверить есть ли, какие поля
+3. Проверить Private Database → Schema → Record Types:
+   - [ ] User - должен быть
+   - [ ] PlayerProfile - должен быть
+   - [ ] PlayerClaim - должен быть
+   - [ ] GameWithPlayer - НЕ должно быть (если есть - это проблема)
+4. Проверить данные:
+   - Public Database → Data → найти игру от 25 янв. 2026
+   - Записать recordID игры
+   - Искать GameWithPlayer записи для этой игры (Public DB query)
+   - Если не найдены → проверить Private DB
+
+**Что снять скриншотами:**
+- [ ] Public DB: список Record Types
+- [ ] Public DB: схема GameWithPlayer (если есть)
+- [ ] Private DB: список Record Types  
+- [ ] Data: запись Game
+- [ ] Data: записи GameWithPlayer (где нашлись)
+
+#### Этап 2: Добавить CloudKit extension для GameWithPlayer
+
+**Файл:** [`FishAndChips/Models/CloudKit/CloudKitModels.swift`](FishAndChips/Models/CloudKit/CloudKitModels.swift)
+
+**Добавить после PlayerClaim extension (строка 294):**
+
+```swift
+// MARK: - GameWithPlayer CloudKit Extension
+
+extension GameWithPlayer {
+    func toCKRecord() -> CKRecord {
+        // Генерируем уникальный ID или используем существующий
+        let recordID = CKRecord.ID(recordName: UUID().uuidString)
+        let record = CKRecord(recordType: "GameWithPlayer", recordID: recordID)
+        
+        record["buyin"] = buyin as CKRecordValue
+        record["cashout"] = cashout as CKRecordValue
+        
+        // Reference к Game (обязательный)
+        if let game = game {
+            let gameRef = CKRecord.Reference(
+                recordID: CKRecord.ID(recordName: game.gameId.uuidString),
+                action: .deleteSelf  // Удалить при удалении игры
+            )
+            record["game"] = gameRef as CKRecordValue
+        }
+        
+        // Reference к PlayerProfile (опциональный)
+        if let playerProfile = playerProfile {
+            let profileRef = CKRecord.Reference(
+                recordID: CKRecord.ID(recordName: playerProfile.profileId.uuidString),
+                action: .none
+            )
+            record["playerProfile"] = profileRef as CKRecordValue
+        }
+        
+        // Имя игрока для отображения
+        if let player = player, let playerName = player.name {
+            record["playerName"] = playerName as CKRecordValue
+        }
+        
+        return record
+    }
+    
+    func updateFromCKRecord(_ record: CKRecord) {
+        if let buyin = record["buyin"] as? Int16 {
+            self.buyin = buyin
+        }
+        if let cashout = record["cashout"] as? Int64 {
+            self.cashout = cashout
+        }
+        // References (game, playerProfile) обрабатываются при merge
+    }
+}
+```
+
+#### Этап 3: Добавить синхронизацию GameWithPlayer
+
+**Файл:** [`FishAndChips/Services/CloudKitSyncService.swift`](FishAndChips/Services/CloudKitSyncService.swift)
+
+**3.1. Добавить метод syncGameWithPlayers() после syncGames() (после строки 157):**
+
+```swift
+// MARK: - GameWithPlayer Sync (Public Database)
+
+private func syncGameWithPlayers() async throws {
+    let context = persistence.container.viewContext
+    
+    let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+    // Только для не удалённых игр
+    fetchRequest.predicate = NSPredicate(format: "game.softDeleted == NO")
+    
+    let gameWithPlayers = try context.fetch(fetchRequest)
+    
+    let records = gameWithPlayers.map { $0.toCKRecord() }
+    
+    if !records.isEmpty {
+        _ = try await cloudKit.saveRecords(records, to: .publicDB)
+        print("✅ Synced \(records.count) game-player records to Public Database")
+    }
+}
+```
+
+**3.2. Обновить метод sync() (строка 68-90) - добавить вызов syncGameWithPlayers():**
+
+```swift
+do {
+    // Private Database sync
+    try await syncUsers()              // Private
+    try await syncPlayerProfiles()     // Private
+    try await syncPlayerClaims()       // Private
+    
+    // Public Database sync
+    try await syncGames()               // Public
+    try await syncGameWithPlayers()     // Public ← ДОБАВИТЬ ЭТУ СТРОКУ
+    try await syncPlayerAliases()       // Public
+    
+    // Update last sync date
+    let now = Date()
+    await MainActor.run { lastSyncDate = now }
+    UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
+    
+    print("✅ CloudKit sync completed successfully")
+}
+```
+
+#### Этап 4: Добавить загрузку GameWithPlayer
+
+**Файл:** [`FishAndChips/Services/CloudKitSyncService.swift`](FishAndChips/Services/CloudKitSyncService.swift)
+
+**4.1. Добавить метод fetchPublicGameWithPlayers() после fetchPublicPlayerAliases() (после строки 268):**
+
+```swift
+// MARK: - Fetch Public GameWithPlayer
+
+private func fetchPublicGameWithPlayers() async throws {
+    let records = try await cloudKit.fetchRecords(
+        withType: .gameWithPlayer,
+        from: .publicDB,
+        limit: 1000
+    )
+    
+    if !records.isEmpty {
+        print("📥 Fetched \(records.count) game-player records from CloudKit")
+        await mergeGameWithPlayersWithLocal(records)
+    }
+}
+```
+
+**4.2. Добавить метод mergeGameWithPlayersWithLocal():**
+
+```swift
+@MainActor
+private func mergeGameWithPlayersWithLocal(_ cloudRecords: [CKRecord]) async {
+    let context = persistence.container.viewContext
+    
+    for record in cloudRecords {
+        // Получаем gameId из reference
+        guard let gameRef = record["game"] as? CKRecord.Reference else {
+            print("⚠️ GameWithPlayer record without game reference")
+            continue
+        }
+        let gameIdString = gameRef.recordID.recordName
+        guard let gameId = UUID(uuidString: gameIdString) else {
+            print("⚠️ Invalid game ID: \(gameIdString)")
+            continue
+        }
+        
+        // Ищем игру локально
+        let gameFetch: NSFetchRequest<Game> = Game.fetchRequest()
+        gameFetch.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
+        
+        guard let game = try? context.fetch(gameFetch).first else {
+            print("⚠️ Game \(gameId) not found locally, skipping GameWithPlayer")
+            continue
+        }
+        
+        // Ищем PlayerProfile если есть reference
+        var playerProfile: PlayerProfile? = nil
+        if let profileRef = record["playerProfile"] as? CKRecord.Reference {
+            let profileIdString = profileRef.recordID.recordName
+            if let profileId = UUID(uuidString: profileIdString) {
+                playerProfile = persistence.fetchPlayerProfile(byProfileId: profileId)
+            }
+        }
+        
+        // Получаем имя игрока
+        guard let playerName = record["playerName"] as? String else {
+            print("⚠️ GameWithPlayer record without playerName")
+            continue
+        }
+        
+        // Ищем или создаём Player
+        var player: Player? = nil
+        let playerFetch: NSFetchRequest<Player> = Player.fetchRequest()
+        playerFetch.predicate = NSPredicate(format: "name == %@", playerName)
+        player = try? context.fetch(playerFetch).first
+        
+        if player == nil {
+            player = Player(context: context)
+            player?.name = playerName
+            print("➕ Created Player: \(playerName)")
+        }
+        
+        // Проверяем не существует ли уже GameWithPlayer
+        let gwpFetch: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+        gwpFetch.predicate = NSPredicate(
+            format: "game == %@ AND player == %@",
+            game,
+            player as CVarArg
+        )
+        
+        if let existingGWP = try? context.fetch(gwpFetch).first {
+            // Обновляем существующий
+            existingGWP.updateFromCKRecord(record)
+            print("🔄 Updated GameWithPlayer for \(playerName) in game \(gameId)")
+        } else {
+            // Создаём новый
+            let gwp = GameWithPlayer(context: context)
+            gwp.game = game
+            gwp.player = player
+            gwp.playerProfile = playerProfile
+            gwp.updateFromCKRecord(record)
+            print("➕ Created GameWithPlayer for \(playerName) in game \(gameId)")
+        }
+    }
+    
+    // Сохраняем все изменения
+    if context.hasChanges {
+        do {
+            try context.save()
+            print("✅ Merged GameWithPlayer records with local database")
+        } catch {
+            print("❌ Failed to save merged GameWithPlayer: \(error)")
+        }
+    }
+}
+```
+
+**4.3. Добавить метод fetchGameWithPlayers(forGameId:) для конкретной игры:**
+
+```swift
+// MARK: - Fetch GameWithPlayers for specific game
+
+func fetchGameWithPlayers(forGameId gameId: UUID) async throws {
+    // Query с фильтром по игре
+    let gameRecordID = CKRecord.ID(recordName: gameId.uuidString)
+    let gameRef = CKRecord.Reference(recordID: gameRecordID, action: .none)
+    let predicate = NSPredicate(format: "game == %@", gameRef)
+    
+    let records = try await cloudKit.fetchRecords(
+        withType: .gameWithPlayer,
+        from: .publicDB,
+        predicate: predicate,
+        limit: 100
+    )
+    
+    if !records.isEmpty {
+        print("📥 Fetched \(records.count) players for game \(gameId)")
+        await mergeGameWithPlayersWithLocal(records)
+    } else {
+        print("ℹ️ No players found in CloudKit for game \(gameId)")
+    }
+}
+```
+
+**4.4. Обновить performFullSync() (строка 214-229) - добавить fetchPublicGameWithPlayers():**
+
+```swift
+func performFullSync() async throws {
+    guard await cloudKit.isCloudKitAvailable() else {
+        throw CloudKitSyncError.cloudKitNotAvailable
+    }
+    
+    print("🚀 Starting full sync...")
+    
+    // 1. Fetch public data from CloudKit
+    try await fetchPublicGames()
+    try await fetchPublicPlayerAliases()
+    try await fetchPublicGameWithPlayers()  // ← ДОБАВИТЬ
+    
+    // 2. Push local changes to CloudKit
+    try await sync()
+    
+    print("✅ Full sync completed")
+}
+```
+
+**4.5. Обновить fetchGame(byId:) (строка 350-376) - загружать игроков при открытии игры:**
+
+```swift
+func fetchGame(byId gameId: UUID) async throws -> Game? {
+    let recordID = CKRecord.ID(recordName: gameId.uuidString)
+    
+    do {
+        let record = try await cloudKit.fetch(recordID: recordID, from: .publicDB)
+        
+        // Create or update local copy
+        let game = await MainActor.run {
+            let context = persistence.container.viewContext
+            let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
+            
+            if let existingGame = try? context.fetch(fetchRequest).first {
+                existingGame.updateFromCKRecord(record)
+                try? context.save()
+                return existingGame
+            } else {
+                let newGame = self.createGameFromCKRecord(record, in: context)
+                try? context.save()
+                return newGame
+            }
+        }
+        
+        // ← ДОБАВИТЬ: Загрузить игроков для этой игры
+        if game != nil {
+            print("🔄 Fetching players for game \(gameId)...")
+            try await fetchGameWithPlayers(forGameId: gameId)
+        }
+        
+        return game
+    } catch {
+        print("❌ Failed to fetch game \(gameId) from CloudKit: \(error)")
+        throw CloudKitSyncError.gameNotFound
+    }
+}
+```
+
+#### Этап 5: Добавить RecordType
+
+**Файл:** [`FishAndChips/Services/CloudKitService.swift`](FishAndChips/Services/CloudKitService.swift)
+
+**Обновить enum RecordType (строка 26-33):**
+
+```swift
+enum RecordType: String {
+    case user = "User"
+    case game = "Game"
+    case playerProfile = "PlayerProfile"
+    case playerAlias = "PlayerAlias"
+    case gameWithPlayer = "GameWithPlayer"  // ← ДОБАВИТЬ
+    case playerClaim = "PlayerClaim"
+}
+```
+
+#### Этап 6: Тестирование
+
+**6.1. Запустить полную синхронизацию на устройстве создателя (Пользователь A):**
+1. Запустить приложение
+2. Открыть Профиль → Debug → Sync или Pull-to-refresh в списке игр
+3. Проверить логи Xcode:
+   ```
+   ✅ Synced X games to Public Database
+   ✅ Synced Y game-player records to Public Database
+   ```
+4. Проверить CloudKit Dashboard → Public DB → Data:
+   - Должны появиться GameWithPlayer записи
+   - Проверить что они связаны с Game через reference
+
+**6.2. Проверить загрузку на другом устройстве (Пользователь B):**
+1. Открыть приложение
+2. Pull-to-refresh или переоткрыть по диплинку
+3. Проверить логи:
+   ```
+   📥 Fetched Z game-player records from CloudKit
+   ➕ Created GameWithPlayer for [playerName] in game [gameId]
+   ```
+4. Проверить UI:
+   - "Игроки (X)" - должно быть > 0
+   - "Результаты игры" - должны показываться имена и суммы
+   - Buyins и cashouts отображаются корректно
+
+**6.3. Тест сценария End-to-End:**
+- [ ] Устройство A: Создать новую игру с 2-3 игроками
+- [ ] Устройство A: Синхронизация (автоматическая или ручная)
+- [ ] CloudKit Dashboard: Проверить что Game и GameWithPlayer в Public DB
+- [ ] Устройство A: Поделиться ссылкой на игру
+- [ ] Устройство B: Открыть ссылку
+- [ ] Устройство B: Игра открывается с полным составом игроков
+- [ ] Устройство B: Результаты отображаются корректно
+
+### Чек-лист выполнения
+
+**Диагностика:**
+- [ ] Проверена схема Public Database в CloudKit Dashboard
+- [ ] Проверена схема Private Database
+- [ ] Найдены записи GameWithPlayer (в какой базе)
+- [ ] Сделаны скриншоты для документации
+
+**Изменения кода:**
+- [ ] Добавлен CloudKit extension для GameWithPlayer (toCKRecord, updateFromCKRecord)
+- [ ] Добавлен метод syncGameWithPlayers() в CloudKitSyncService
+- [ ] Добавлен метод fetchPublicGameWithPlayers()
+- [ ] Добавлен метод mergeGameWithPlayersWithLocal()
+- [ ] Добавлен метод fetchGameWithPlayers(forGameId:)
+- [ ] Обновлен enum RecordType (добавлен gameWithPlayer)
+- [ ] Обновлен метод sync() (вызов syncGameWithPlayers)
+- [ ] Обновлен performFullSync() (вызов fetchPublicGameWithPlayers)
+- [ ] Обновлен fetchGame(byId:) (загрузка игроков для конкретной игры)
+
+**Тестирование:**
+- [ ] Запущена синхронизация на устройстве создателя игры
+- [ ] Проверены данные в CloudKit Dashboard (GameWithPlayer в Public DB)
+- [ ] Протестирован диплинк на другом устройстве
+- [ ] Игроки отображаются корректно
+- [ ] Результаты игры показываются с правильными суммами
+- [ ] End-to-End сценарий работает
+
+**Документация:**
+- [ ] Обновлена история в начале MASTER_PLAN.md
+- [ ] Задокументировано решение проблемы
+- [ ] Добавлена дата завершения исправления
+
+### Важные замечания
+
+**⚠️ Про дубликаты:**
+- При первой синхронизации могут создаться дубликаты GameWithPlayer
+- Решение: использовать уникальный идентификатор (можно добавить поле objectID в Core Data)
+- Или проверять существование перед созданием (текущий подход в merge)
+
+**⚠️ Про производительность:**
+- Если в игре 10+ игроков и 100+ игр → 1000+ записей GameWithPlayer
+- Рекомендуется батчинг (загружать по 100-500 за раз)
+- Добавить индексы в CloudKit: game (reference) - Queryable
+
+**⚠️ Про миграцию существующих данных:**
+- Если GameWithPlayer уже есть в Private DB → удалить их после переноса в Public DB
+- Или оставить как есть и создать новые в Public DB (дубликаты)
+- Лучший вариант: удалить старые после успешной синхронизации
+
+**⚠️ Про схему CloudKit:**
+- Если GameWithPlayer НЕТ в CloudKit схеме → создать через CloudKitSchemaCreator
+- После создания схемы в Development → задеплоить в Production
+
+---
+
 ## 🔮 Будущие оптимизации (после TestFlight)
 
 ### Этап 5: Оптимизация масштабируемости (отложено)
@@ -1275,31 +1791,50 @@ func handleDeepLink(gameId: UUID) async {
 
 ---
 
-## 🎯 Pre-TestFlight улучшения (2026-02-02)
+## 🎯 Pre-TestFlight улучшения (2026-02-02) ✅ ВЫПОЛНЕНО
 
-**Статус:** В процессе выполнения
+**Статус:** ✅ Завершено (commit f4fd35e)
 
-**Контекст:** Игры и пользователи успешно загружены в development CloudKit database. Перед загрузкой следующей сборки в App Store Connect и TestFlight необходимо внести финальные улучшения UX и функциональности.
+**Контекст:** Игры и пользователи успешно загружены в development CloudKit database. Перед загрузкой следующей сборки в App Store Connect и TestFlight внесены финальные улучшения UX и функциональности.
 
-### Список улучшений
+### ✅ Выполненные улучшения
 
-1. **Ребрендинг на "Fish & Chips"**
-   - Сейчас: на странице логина отображается "PokerTracker"
-   - Нужно: изменить на "Fish & Chips"
+1. **✅ Ребрендинг на "Fish & Chips"**
+   - Было: на странице логина отображалось "PokerTracker"
+   - Стало: "Fish & Chips"
+   - Файл: `LoginView.swift` (строка 23)
 
-2. **Вход по email и паролю**
-   - Сейчас: вход по username + пароль
-   - Нужно: вход по email + пароль
-   - Username остается для отображения в профиле и общении между пользователями
+2. **✅ Вход по email и паролю**
+   - Было: вход по username + пароль
+   - Стало: вход по email + пароль
+   - Username используется только для отображения в профиле и общении
+   - CloudKit восстановление по email
 
-3. **Уникальность полей при регистрации**
-   - Email = логин (уникальный идентификатор для входа)
-   - Username = отображаемое имя (уникальное, для профиля и чатов)
-   - Оба поля обязательны и должны быть уникальными
+3. **✅ Уникальность полей при регистрации**
+   - Email = логин (уникальный идентификатор для входа) ✓
+   - Username = отображаемое имя (уникальное, для профиля и чатов) ✓
+   - Оба поля обязательны и проверяются на уникальность ✓
 
-4. **Номер сборки в профиле**
-   - Добавить версию и build number в верхней части профиля
+4. **✅ Номер сборки в профиле**
+   - Добавлена версия и build number в верхней части профиля
    - Формат: "Версия 1.0 (2)"
+   - Файл: `ProfileView.swift`
+
+5. **✅ Исправлена биометрическая аутентификация**
+   - Проблема: Face ID не работал после logout
+   - Решение: Новый LAContext для каждой попытки + флаг requiresReauth
+   - Keychain сохраняется после logout для Face ID
+
+6. **✅ Debug доступен в TestFlight**
+   - Убрано условие `#if DEBUG`
+   - Debug view доступен во всех сборках
+
+7. **✅ Подробные логи для отладки**
+   - [AUTH STATUS] - проверка статуса при запуске
+   - [LOGIN] - вход по email
+   - [REGISTER] - регистрация
+   - [BIOMETRIC] - Face ID/Touch ID
+   - [LOGOUT] - выход
 
 ### Технические детали реализации
 
@@ -1525,6 +2060,57 @@ RegistrationView → AuthViewModel.register(username, email, password)
 
 ---
 
+## 📊 Краткая сводка изменений (commit f4fd35e)
+
+### Измененные файлы (7 файлов, +516/-46 строк)
+
+| Файл | Изменения | Строк |
+|------|-----------|-------|
+| `AuthViewModel.swift` | Email auth, biometric fix, logging | +173/-46 |
+| `MASTER_PLAN.md` | Документация Pre-TestFlight | +254 |
+| `CloudKitSyncService.swift` | fetchUser(byEmail:) | +47 |
+| `LoginView.swift` | Email field, "Fish & Chips" | +11 |
+| `ProfileView.swift` | Build number, Debug в TestFlight | +17 |
+| `CloudKitService.swift` | Minor fixes | +6 |
+| `CloudKitModels.swift` | Minor fixes | +8 |
+
+### Ключевые изменения
+
+**Аутентификация:**
+- `login(email:password:)` вместо `login(username:password:)`
+- `fetchUser(byEmail:)` для CloudKit восстановления
+- Новый LAContext для каждой попытки биометрии
+- Флаг `requiresReauth` после logout
+- Keychain сохраняется для Face ID
+
+**UX улучшения:**
+- "Fish & Chips" вместо "PokerTracker"
+- Email клавиатура при входе
+- Номер сборки в профиле
+- Debug доступен в TestFlight
+
+**Отладка:**
+- Подробные логи: [AUTH STATUS], [LOGIN], [REGISTER], [BIOMETRIC], [LOGOUT]
+- Все ключевые точки auth flow логируются
+- Email, userId, username видны в логах
+
+### Тестирование в TestFlight
+
+**Новые области для тестирования:**
+1. ✅ Вход по email вместо username
+2. ✅ Face ID работает после logout
+3. ✅ Регистрация с обязательным email
+4. ✅ Номер сборки отображается в профиле
+5. ✅ Debug view доступен
+
+**Проверить логи в Xcode Console при:**
+- Запуске приложения
+- Входе по email
+- Выходе и повторном входе по Face ID
+- Регистрации нового пользователя
+
+---
+
 ## Следующие этапы (после TestFlight)
 
 **Этап 2: Тестирование в TestFlight**
@@ -1544,9 +2130,13 @@ RegistrationView → AuthViewModel.register(username, email, password)
 ### Блоки тестирования
 
 **Блок 1: Базовая функциональность**
-- Регистрация и авторизация
+- Регистрация (с обязательным email и username) ⭐ ОБНОВЛЕНО
+- Авторизация по email + пароль ⭐ ОБНОВЛЕНО
+- Face ID / Touch ID после logout ⭐ ОБНОВЛЕНО
 - Создание игр и добавление игроков
 - Профили игроков и заявки (claims)
+- Номер сборки в профиле ⭐ НОВОЕ
+- Debug view в TestFlight ⭐ НОВОЕ
 - Статистика и отчёты
 
 **Блок 2: CloudKit синхронизация (критически важно!)**
@@ -1608,25 +2198,36 @@ RegistrationView → AuthViewModel.register(username, email, password)
 
 ### Чек-лист завершения тестирования
 
+**Базовые проверки:**
 - [ ] Протестированы все блоки 1-8
 - [ ] Найденные критические баги исправлены
 - [ ] Минимум 7 дней активного использования
 - [ ] Протестировано на 3+ разных устройствах
+
+**Новые фичи (Build 3):**
+- [ ] Вход по email работает корректно
+- [ ] Регистрация требует email и username
+- [ ] Face ID работает после logout
+- [ ] Face ID можно вызвать повторно при неудаче
+- [ ] Номер сборки отображается в профиле
+- [ ] Debug view доступен в TestFlight
+- [ ] Логи видны в Xcode Console
+
+**Синхронизация и производительность:**
 - [ ] CloudKit синхронизация стабильна (> 95% успешных запросов)
 - [ ] Push-уведомления работают на всех устройствах
 - [ ] Нет потери данных в стресс-тестах
 - [ ] Оффлайн режим функционален
-- [ ] Собрана обратная связь от тестеров
-- [ ] Документированы известные не критические баги
 - [ ] Memory leaks отсутствуют
 - [ ] Производительность приемлемая (app launch < 3s)
 
+**Обратная связь:**
+- [ ] Собрана обратная связь от тестеров
+- [ ] Документированы известные не критические баги
+
 **Документация для тестирования:**
-- 📋 `~/.cursor/plans/тестирование_в_testflight_0d34a08e.plan.md` - детальный план
-- 📝 `docs/TESTING_README.md` - руководство для тестировщиков
-- ✅ `docs/TESTING_CHECKLIST.md` - быстрый чек-лист
-- 🎯 `docs/TEST_SCENARIOS.md` - 13 тестовых сценариев
-- 🐛 `docs/BUG_REPORT_TEMPLATE.md` - шаблон багрепорта
+- 📋 Вся информация в этом файле (MASTER_PLAN.md)
+- 📋 Дополнительные планы в `~/.cursor/plans/` (если создавались)
 
 **Этап 3: Исправление багов (создать отдельный план)**
 - Приоритизация найденных проблем

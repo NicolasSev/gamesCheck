@@ -65,12 +65,15 @@ class CloudKitSyncService: ObservableObject {
         }
         
         do {
-            // Sync in order to maintain referential integrity
+            // Private Database sync
             try await syncUsers()
             try await syncPlayerProfiles()
-            try await syncPlayerAliases()
-            try await syncGames()
             try await syncPlayerClaims()
+            
+            // Public Database sync
+            try await syncGames()
+            try await syncGameWithPlayers()
+            try await syncPlayerAliases()
             
             // Update last sync date
             let now = Date()
@@ -156,6 +159,25 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
+    // MARK: - GameWithPlayer Sync (Public Database)
+    
+    private func syncGameWithPlayers() async throws {
+        let context = persistence.container.viewContext
+        
+        let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+        // Только для не удалённых игр
+        fetchRequest.predicate = NSPredicate(format: "game.softDeleted == NO")
+        
+        let gameWithPlayers = try context.fetch(fetchRequest)
+        
+        let records = gameWithPlayers.map { $0.toCKRecord() }
+        
+        if !records.isEmpty {
+            _ = try await cloudKit.saveRecords(records, to: .publicDB)
+            print("✅ Synced \(records.count) game-player records to Public Database")
+        }
+    }
+    
     // MARK: - PlayerClaim Sync (Private Database)
     
     private func syncPlayerClaims() async throws {
@@ -221,6 +243,7 @@ class CloudKitSyncService: ObservableObject {
         // 1. Fetch public data from CloudKit
         try await fetchPublicGames()
         try await fetchPublicPlayerAliases()
+        try await fetchPublicGameWithPlayers()
         
         // 2. Push local changes to CloudKit
         try await sync()
@@ -264,6 +287,43 @@ class CloudKitSyncService: ObservableObject {
         if !records.isEmpty {
             print("📥 Fetched \(records.count) public player aliases from CloudKit")
             // TODO: Implement merge logic for aliases if needed
+        }
+    }
+    
+    // MARK: - Fetch Public GameWithPlayer
+    
+    private func fetchPublicGameWithPlayers() async throws {
+        let records = try await cloudKit.fetchRecords(
+            withType: .gameWithPlayer,
+            from: .publicDB,
+            limit: 1000
+        )
+        
+        if !records.isEmpty {
+            print("📥 Fetched \(records.count) game-player records from CloudKit")
+            await mergeGameWithPlayersWithLocal(records)
+        }
+    }
+    
+    /// Загружает игроков для конкретной игры из Public Database
+    func fetchGameWithPlayers(forGameId gameId: UUID) async throws {
+        // Query с фильтром по игре
+        let gameRecordID = CKRecord.ID(recordName: gameId.uuidString)
+        let gameRef = CKRecord.Reference(recordID: gameRecordID, action: .none)
+        let predicate = NSPredicate(format: "game == %@", gameRef)
+        
+        let records = try await cloudKit.fetchRecords(
+            withType: .gameWithPlayer,
+            from: .publicDB,
+            predicate: predicate,
+            limit: 100
+        )
+        
+        if !records.isEmpty {
+            print("📥 Fetched \(records.count) players for game \(gameId)")
+            await mergeGameWithPlayersWithLocal(records)
+        } else {
+            print("ℹ️ No players found in CloudKit for game \(gameId)")
         }
     }
     
@@ -345,6 +405,96 @@ class CloudKitSyncService: ObservableObject {
         return game
     }
     
+    // MARK: - Merge GameWithPlayer with Local
+    
+    @MainActor
+    private func mergeGameWithPlayersWithLocal(_ cloudRecords: [CKRecord]) async {
+        let context = persistence.container.viewContext
+        
+        for record in cloudRecords {
+            // Получаем gameId из reference
+            guard let gameRef = record["game"] as? CKRecord.Reference else {
+                print("⚠️ GameWithPlayer record without game reference")
+                continue
+            }
+            let gameIdString = gameRef.recordID.recordName
+            guard let gameId = UUID(uuidString: gameIdString) else {
+                print("⚠️ Invalid game ID: \(gameIdString)")
+                continue
+            }
+            
+            // Ищем игру локально
+            let gameFetch: NSFetchRequest<Game> = Game.fetchRequest()
+            gameFetch.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
+            
+            guard let game = try? context.fetch(gameFetch).first else {
+                print("⚠️ Game \(gameId) not found locally, skipping GameWithPlayer")
+                continue
+            }
+            
+            // Ищем PlayerProfile если есть reference
+            var playerProfile: PlayerProfile? = nil
+            if let profileRef = record["playerProfile"] as? CKRecord.Reference {
+                let profileIdString = profileRef.recordID.recordName
+                if let profileId = UUID(uuidString: profileIdString) {
+                    playerProfile = persistence.fetchPlayerProfile(byProfileId: profileId)
+                }
+            }
+            
+            // Получаем имя игрока
+            guard let playerName = record["playerName"] as? String else {
+                print("⚠️ GameWithPlayer record without playerName")
+                continue
+            }
+            
+            // Ищем или создаём Player
+            let playerFetch: NSFetchRequest<Player> = Player.fetchRequest()
+            playerFetch.predicate = NSPredicate(format: "name == %@", playerName)
+            let player: Player
+            
+            if let existingPlayer = try? context.fetch(playerFetch).first {
+                player = existingPlayer
+            } else {
+                let newPlayer = Player(context: context)
+                newPlayer.name = playerName
+                player = newPlayer
+                print("➕ Created Player: \(playerName)")
+            }
+            
+            // Проверяем не существует ли уже GameWithPlayer
+            let gwpFetch: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+            gwpFetch.predicate = NSPredicate(
+                format: "game == %@ AND player == %@",
+                game as CVarArg,
+                player as CVarArg
+            )
+            
+            if let existingGWP = try? context.fetch(gwpFetch).first {
+                // Обновляем существующий
+                existingGWP.updateFromCKRecord(record)
+                print("🔄 Updated GameWithPlayer for \(playerName) in game \(gameId)")
+            } else {
+                // Создаём новый
+                let gwp = GameWithPlayer(context: context)
+                gwp.game = game
+                gwp.player = player
+                gwp.playerProfile = playerProfile
+                gwp.updateFromCKRecord(record)
+                print("➕ Created GameWithPlayer for \(playerName) in game \(gameId)")
+            }
+        }
+        
+        // Сохраняем все изменения
+        if context.hasChanges {
+            do {
+                try context.save()
+                print("✅ Merged GameWithPlayer records with local database")
+            } catch {
+                print("❌ Failed to save merged GameWithPlayer: \(error)")
+            }
+        }
+    }
+    
     // MARK: - Fetch Single Game by ID
     
     func fetchGame(byId gameId: UUID) async throws -> Game? {
@@ -354,7 +504,7 @@ class CloudKitSyncService: ObservableObject {
             let record = try await cloudKit.fetch(recordID: recordID, from: .publicDB)
             
             // Create or update local copy
-            return await MainActor.run {
+            let game = await MainActor.run { () -> Game? in
                 let context = persistence.container.viewContext
                 let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
                 fetchRequest.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
@@ -369,6 +519,14 @@ class CloudKitSyncService: ObservableObject {
                     return newGame
                 }
             }
+            
+            // Загрузить игроков для этой игры
+            if let unwrappedGame = game {
+                print("🔄 Fetching players for game \(gameId)...")
+                try await fetchGameWithPlayers(forGameId: gameId)
+            }
+            
+            return game
         } catch {
             print("❌ Failed to fetch game \(gameId) from CloudKit: \(error)")
             throw CloudKitSyncError.gameNotFound
@@ -599,6 +757,61 @@ class CloudKitSyncService: ObservableObject {
         } catch {
             print("❌ Failed to save PlayerProfile: \(error)")
             return nil
+        }
+    }
+    
+    // MARK: - Quick Sync (автоматическая синхронизация после создания)
+    
+    /// Быстрая синхронизация User после создания/изменения
+    func quickSyncUser(_ user: User) async {
+        guard await cloudKit.isCloudKitAvailable() else { return }
+        
+        do {
+            let record = user.toCKRecord()
+            _ = try await cloudKit.save(record: record, to: .privateDB)
+            print("✅ Quick synced User: \(user.username)")
+        } catch {
+            print("❌ Failed to quick sync User: \(error)")
+        }
+    }
+    
+    /// Быстрая синхронизация Game после создания/изменения
+    func quickSyncGame(_ game: Game) async {
+        guard await cloudKit.isCloudKitAvailable() else { return }
+        
+        do {
+            let record = game.toCKRecord()
+            _ = try await cloudKit.save(record: record, to: .publicDB)
+            print("✅ Quick synced Game: \(game.gameId)")
+        } catch {
+            print("❌ Failed to quick sync Game: \(error)")
+        }
+    }
+    
+    /// Быстрая синхронизация GameWithPlayer после создания/изменения
+    func quickSyncGameWithPlayers(_ gameWithPlayers: [GameWithPlayer]) async {
+        guard await cloudKit.isCloudKitAvailable() else { return }
+        guard !gameWithPlayers.isEmpty else { return }
+        
+        do {
+            let records = gameWithPlayers.map { $0.toCKRecord() }
+            _ = try await cloudKit.saveRecords(records, to: .publicDB)
+            print("✅ Quick synced \(records.count) GameWithPlayer records")
+        } catch {
+            print("❌ Failed to quick sync GameWithPlayers: \(error)")
+        }
+    }
+    
+    /// Быстрая синхронизация PlayerProfile после создания/изменения
+    func quickSyncPlayerProfile(_ profile: PlayerProfile) async {
+        guard await cloudKit.isCloudKitAvailable() else { return }
+        
+        do {
+            let record = profile.toCKRecord()
+            _ = try await cloudKit.save(record: record, to: .privateDB)
+            print("✅ Quick synced PlayerProfile: \(profile.displayName)")
+        } catch {
+            print("❌ Failed to quick sync PlayerProfile: \(error)")
         }
     }
     

@@ -59,6 +59,11 @@ struct AddGameSheet: View {
         newGame.softDeleted = false
         do {
             try viewContext.save()
+            
+            // Автоматическая синхронизация в CloudKit
+            Task {
+                await CloudKitSyncService.shared.quickSyncGame(newGame)
+            }
         } catch {
             print("Ошибка сохранения игры: \(error.localizedDescription)")
         }
