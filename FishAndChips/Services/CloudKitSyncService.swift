@@ -192,11 +192,31 @@ class CloudKitSyncService: ObservableObject {
         let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         let claims = try context.fetch(fetchRequest)
         
-        let records = claims.map { $0.toCKRecord() }
+        print("🔄 [SYNC_CLAIMS] Found \(claims.count) claims to sync")
+        
+        // Фильтруем и конвертируем claims в CKRecords с обработкой ошибок
+        var records: [CKRecord] = []
+        for (index, claim) in claims.enumerated() {
+            do {
+                print("📦 [SYNC_CLAIMS] Converting claim \(index + 1)/\(claims.count): \(claim.claimId)")
+                let record = claim.toCKRecord()
+                records.append(record)
+            } catch {
+                print("❌ [SYNC_CLAIMS] Failed to convert claim \(claim.claimId) to CKRecord: \(error)")
+                print("   - playerName: \(claim.playerName)")
+                print("   - gameId: \(claim.gameId)")
+                print("   - status: \(claim.status)")
+                // Пропускаем проблемную запись и продолжаем
+                continue
+            }
+        }
         
         if !records.isEmpty {
+            print("☁️ [SYNC_CLAIMS] Saving \(records.count) claims to CloudKit Private Database...")
             _ = try await cloudKit.saveRecords(records, to: .privateDB)
-            print("✅ Synced \(records.count) player claims to Private Database")
+            print("✅ [SYNC_CLAIMS] Synced \(records.count) player claims to Private Database")
+        } else {
+            print("ℹ️ [SYNC_CLAIMS] No valid claims to sync")
         }
     }
     

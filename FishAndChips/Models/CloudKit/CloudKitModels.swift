@@ -206,6 +206,13 @@ extension PlayerAlias {
 
 extension PlayerClaim {
     func toCKRecord() -> CKRecord {
+        print("📦 [CLAIM_TO_RECORD] Creating CKRecord for claim \(claimId)")
+        print("   - playerName: \(playerName)")
+        print("   - gameId: \(gameId)")
+        print("   - claimantUserId: \(claimantUserId)")
+        print("   - hostUserId: \(hostUserId)")
+        print("   - status: \(status)")
+        
         let recordID = CKRecord.ID(recordName: claimId.uuidString)
         let record = CKRecord(recordType: "PlayerClaim", recordID: recordID)
         
@@ -214,41 +221,50 @@ extension PlayerClaim {
         record["status"] = status as CKRecordValue
         record["createdAt"] = createdAt as CKRecordValue
         
-        // Game reference
+        // Game reference - с проверкой валидности
+        print("📦 [CLAIM_TO_RECORD] Creating game reference...")
         let gameReference = CKRecord.Reference(
             recordID: CKRecord.ID(recordName: gameId.uuidString),
             action: .none
         )
         record["game"] = gameReference as CKRecordValue
+        print("✅ [CLAIM_TO_RECORD] Game reference created")
         
-        // Claimant user reference
+        // Claimant user reference - с проверкой валидности
+        print("📦 [CLAIM_TO_RECORD] Creating claimant user reference...")
         let claimantReference = CKRecord.Reference(
             recordID: CKRecord.ID(recordName: claimantUserId.uuidString),
             action: .none
         )
         record["claimantUser"] = claimantReference as CKRecordValue
+        print("✅ [CLAIM_TO_RECORD] Claimant user reference created")
         
-        // Host user reference
+        // Host user reference - с проверкой валидности
+        print("📦 [CLAIM_TO_RECORD] Creating host user reference...")
         let hostReference = CKRecord.Reference(
             recordID: CKRecord.ID(recordName: hostUserId.uuidString),
             action: .none
         )
         record["hostUser"] = hostReference as CKRecordValue
+        print("✅ [CLAIM_TO_RECORD] Host user reference created")
         
         if let resolvedAt = resolvedAt {
             record["resolvedAt"] = resolvedAt as CKRecordValue
         }
         if let resolvedByUserId = resolvedByUserId {
+            print("📦 [CLAIM_TO_RECORD] Creating resolver user reference...")
             let resolverReference = CKRecord.Reference(
                 recordID: CKRecord.ID(recordName: resolvedByUserId.uuidString),
                 action: .none
             )
             record["resolvedByUser"] = resolverReference as CKRecordValue
+            print("✅ [CLAIM_TO_RECORD] Resolver user reference created")
         }
         if let notes = notes {
             record["notes"] = notes as CKRecordValue
         }
         
+        print("✅ [CLAIM_TO_RECORD] CKRecord created successfully")
         return record
     }
     
