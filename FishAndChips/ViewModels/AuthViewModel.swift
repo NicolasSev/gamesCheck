@@ -217,13 +217,10 @@ final class AuthViewModel: ObservableObject {
             throw AuthenticationError.unknown
         }
         
-        // Локальная проверка username (дополнительно)
-        print("🔍 [REGISTER] Checking if username already exists locally...")
-        if let existingUser = persistence.fetchUser(byUsername: username) {
-            print("❌ [REGISTER] FAILED: Username already exists (email: \(existingUser.email ?? "nil"))")
-            throw AuthenticationError.userAlreadyExists
-        }
-        print("✅ [REGISTER] Username is available locally")
+        // NOTE: Локальная проверка username убрана
+        // Email - единственный источник правды, хранится в CloudKit Public DB
+        // Локальная БД может содержать устаревшие данные (после удаления приложения, при восстановлении и т.д.)
+        // При создании нового User с уже существующим username - старый локальный User будет перезаписан
 
         print("🔐 [REGISTER] Hashing password...")
         let passwordHash = hashPassword(password)
