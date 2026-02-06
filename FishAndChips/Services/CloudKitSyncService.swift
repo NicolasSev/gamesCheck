@@ -66,12 +66,10 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             // Private Database sync
-            // NOTE: User sync removed - each device should have its own local User
-            // Users are for local authentication only, not for cross-device sync
             try await syncPlayerProfiles()
-            try await syncPlayerClaims()
             
             // Public Database sync
+            try await syncPlayerClaims()
             try await syncGames()
             try await syncGameWithPlayers()
             try await syncPlayerAliases()
