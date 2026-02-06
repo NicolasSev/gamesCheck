@@ -198,20 +198,73 @@ class PlayerClaimService {
         print("✅ [APPROVE_CLAIM] Found GameWithPlayer: buyin=\(gameWithPlayer.buyin), cashout=\(gameWithPlayer.cashout)")
         
         // Получить или создать PlayerProfile для пользователя
+        print("🔍 [APPROVE_CLAIM] Looking for PlayerProfile for user \(claim.claimantUserId)...")
         var profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
+        
         if profile == nil {
-            guard let user = persistence.fetchUser(byId: claim.claimantUserId) else {
+            print("⚠️ [APPROVE_CLAIM] PlayerProfile not found locally, checking CloudKit...")
+            
+            // Пытаемся загрузить User из CloudKit если его нет локально
+            var user = persistence.fetchUser(byId: claim.claimantUserId)
+            
+            if user == nil {
+                print("⚠️ [APPROVE_CLAIM] User not found locally, fetching from CloudKit...")
+                do {
+                    // Загружаем User из CloudKit Public DB
+                    let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
+                    fetchRequest.predicate = NSPredicate(format: "userId == %@", claim.claimantUserId as CVarArg)
+                    
+                    // Пробуем найти в CloudKit
+                    let predicate = NSPredicate(format: "TRUEPREDICATE")
+                    let records = try await CloudKitService.shared.queryRecords(
+                        withType: .user,
+                        from: .publicDB,
+                        predicate: predicate,
+                        sortDescriptors: nil,
+                        resultsLimit: 1000
+                    )
+                    
+                    // Ищем пользователя с нужным userId
+                    if let userRecord = records.records.first(where: { $0.recordID.recordName == claim.claimantUserId.uuidString }) {
+                        print("✅ [APPROVE_CLAIM] Found user in CloudKit, creating local copy...")
+                        
+                        // Создаем локальную копию User
+                        let newUser = User(context: context)
+                        newUser.userId = claim.claimantUserId
+                        newUser.updateFromCKRecord(userRecord)
+                        
+                        // Создаем временный passwordHash (не используется для других пользователей)
+                        newUser.passwordHash = "remote_user_no_auth"
+                        
+                        user = newUser
+                        print("✅ [APPROVE_CLAIM] Created local User: \(newUser.username)")
+                    } else {
+                        print("❌ [APPROVE_CLAIM] User \(claim.claimantUserId) not found in CloudKit")
+                        throw ClaimError.userNotFound
+                    }
+                } catch {
+                    print("❌ [APPROVE_CLAIM] Failed to fetch user from CloudKit: \(error)")
+                    throw ClaimError.userNotFound
+                }
+            }
+            
+            guard let user = user else {
                 throw ClaimError.userNotFound
             }
+            
+            print("📝 [APPROVE_CLAIM] Creating PlayerProfile for user \(user.username)...")
             profile = persistence.createPlayerProfile(
                 displayName: user.username,
                 userId: claim.claimantUserId
             )
+            print("✅ [APPROVE_CLAIM] Created PlayerProfile")
         }
         
         guard let profile = profile else {
             throw ClaimError.profileCreationFailed
         }
+        
+        print("✅ [APPROVE_CLAIM] PlayerProfile ready: \(profile.displayName)")
         
         // Создать alias если нужно
         if persistence.fetchAlias(byName: claim.playerName) == nil {
