@@ -242,11 +242,35 @@ final class AuthViewModel: ObservableObject {
         print("✅ [REGISTER] PlayerProfile created")
 
         // Синхронизация User и PlayerProfile в CloudKit
-        print("☁️ [REGISTER] Syncing User to CloudKit Private Database...")
-        await CloudKitSyncService.shared.quickSyncUser(user)
+        print("☁️ [REGISTER] ========================================")
+        print("☁️ [REGISTER] Starting CloudKit sync...")
+        print("☁️ [REGISTER] User details:")
+        print("   - userId: \(user.userId)")
+        print("   - username: \(user.username)")
+        print("   - email: \(user.email ?? "nil")")
         
-        print("☁️ [REGISTER] Syncing PlayerProfile to CloudKit...")
+        // Проверяем CloudKit доступность
+        let ckAvailable = await CloudKitService.shared.isCloudKitAvailable()
+        print("☁️ [REGISTER] CloudKit availability check: \(ckAvailable ? "✅ AVAILABLE" : "❌ NOT AVAILABLE")")
+        
+        if ckAvailable {
+            do {
+                let accountStatus = try await CloudKitService.shared.checkAccountStatus()
+                print("☁️ [REGISTER] CloudKit account status: \(accountStatus.rawValue)")
+            } catch {
+                print("⚠️ [REGISTER] Could not check account status: \(error)")
+            }
+        }
+        print("☁️ [REGISTER] ========================================")
+        
+        print("☁️ [REGISTER] Step 1: Syncing User to CloudKit Private Database...")
+        await CloudKitSyncService.shared.quickSyncUser(user)
+        print("☁️ [REGISTER] Step 1 completed")
+        
+        print("☁️ [REGISTER] Step 2: Syncing PlayerProfile to CloudKit...")
         await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+        print("☁️ [REGISTER] Step 2 completed")
+        print("☁️ [REGISTER] ========================================")
 
         print("🔑 [REGISTER] Auto-login after registration...")
         try await login(email: email, password: password)

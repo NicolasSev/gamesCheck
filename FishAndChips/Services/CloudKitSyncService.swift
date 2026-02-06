@@ -827,14 +827,32 @@ class CloudKitSyncService: ObservableObject {
     /// DEPRECATED: User should NOT be synced to CloudKit - use PlayerProfile instead
     @available(*, deprecated, message: "User sync is disabled. User is local authentication data only.")
     func quickSyncUser(_ user: User) async {
-        guard await cloudKit.isCloudKitAvailable() else { return }
+        print("🔄 [QUICK_SYNC_USER] Starting sync for user: \(user.username)")
+        
+        let isAvailable = await cloudKit.isCloudKitAvailable()
+        print("☁️ [QUICK_SYNC_USER] CloudKit available: \(isAvailable)")
+        
+        guard isAvailable else {
+            print("❌ [QUICK_SYNC_USER] CloudKit NOT available - skipping sync")
+            return
+        }
         
         do {
+            print("📦 [QUICK_SYNC_USER] Creating CKRecord for user \(user.userId)")
             let record = user.toCKRecord()
-            _ = try await cloudKit.save(record: record, to: .privateDB)
-            print("✅ Quick synced User: \(user.username)")
+            print("📦 [QUICK_SYNC_USER] Record created: \(record.recordType), recordID: \(record.recordID.recordName)")
+            print("📦 [QUICK_SYNC_USER] Record fields: username=\(record["username"] ?? "nil"), email=\(record["email"] ?? "nil")")
+            
+            print("☁️ [QUICK_SYNC_USER] Saving to CloudKit Private Database...")
+            let savedRecord = try await cloudKit.save(record: record, to: .privateDB)
+            print("✅ [QUICK_SYNC_USER] SUCCESS! User synced to CloudKit")
+            print("✅ [QUICK_SYNC_USER] Saved record ID: \(savedRecord.recordID.recordName)")
+            print("✅ [QUICK_SYNC_USER] Username: \(user.username)")
         } catch {
-            print("❌ Failed to quick sync User: \(error)")
+            print("❌ [QUICK_SYNC_USER] FAILED to sync User")
+            print("❌ [QUICK_SYNC_USER] Error type: \(type(of: error))")
+            print("❌ [QUICK_SYNC_USER] Error description: \(error)")
+            print("❌ [QUICK_SYNC_USER] Localized: \(error.localizedDescription)")
         }
     }
     
