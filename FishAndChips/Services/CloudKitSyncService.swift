@@ -124,7 +124,8 @@ class CloudKitSyncService: ObservableObject {
         let fetchRequest: NSFetchRequest<PlayerProfile> = PlayerProfile.fetchRequest()
         let profiles = try context.fetch(fetchRequest)
         
-        let records = profiles.map { $0.toCKRecord() }
+        // Создаем копию массива чтобы избежать mutation during enumeration
+        let records = Array(profiles).map { $0.toCKRecord() }
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .privateDB)
@@ -140,7 +141,8 @@ class CloudKitSyncService: ObservableObject {
         let fetchRequest: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
         let aliases = try context.fetch(fetchRequest)
         
-        let records = aliases.map { $0.toCKRecord() }
+        // Создаем копию массива чтобы избежать mutation during enumeration
+        let records = Array(aliases).map { $0.toCKRecord() }
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
@@ -157,7 +159,8 @@ class CloudKitSyncService: ObservableObject {
         fetchRequest.predicate = NSPredicate(format: "softDeleted == NO")
         let games = try context.fetch(fetchRequest)
         
-        let records = games.map { $0.toCKRecord() }
+        // Создаем копию массива чтобы избежать mutation during enumeration
+        let records = Array(games).map { $0.toCKRecord() }
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
@@ -176,11 +179,36 @@ class CloudKitSyncService: ObservableObject {
         
         let gameWithPlayers = try context.fetch(fetchRequest)
         
-        let records = gameWithPlayers.map { $0.toCKRecord() }
+        print("🔄 [SYNC_GWP] Found \(gameWithPlayers.count) GameWithPlayer records to sync")
+        
+        // Конвертируем в records безопасно, без изменения коллекции во время итерации
+        var records: [CKRecord] = []
+        records.reserveCapacity(gameWithPlayers.count)
+        
+        // Создаем копию массива чтобы избежать mutation during enumeration
+        let gwpArray = Array(gameWithPlayers)
+        
+        for (index, gwp) in gwpArray.enumerated() {
+            do {
+                let record = gwp.toCKRecord()
+                records.append(record)
+                
+                if (index + 1) % 100 == 0 {
+                    print("📦 [SYNC_GWP] Converted \(index + 1)/\(gwpArray.count) records")
+                }
+            } catch {
+                print("⚠️ [SYNC_GWP] Failed to convert GameWithPlayer to CKRecord: \(error)")
+                // Пропускаем проблемную запись
+                continue
+            }
+        }
         
         if !records.isEmpty {
+            print("☁️ [SYNC_GWP] Saving \(records.count) records to CloudKit...")
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ Synced \(records.count) game-player records to Public Database")
+            print("✅ [SYNC_GWP] Synced \(records.count) game-player records to Public Database")
+        } else {
+            print("ℹ️ [SYNC_GWP] No valid records to sync")
         }
     }
     
