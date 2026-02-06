@@ -165,7 +165,7 @@ class PlayerClaimService {
         claimId: UUID,
         resolverUserId: UUID,
         notes: String? = nil
-    ) throws {
+    ) async throws {
         let context = persistence.container.viewContext
         
         guard let claim = getClaim(byId: claimId) else {
@@ -285,6 +285,32 @@ class PlayerClaimService {
         claim.notes = notes
         
         try context.save()
+        
+        print("☁️ [APPROVE_CLAIM] Syncing changes to CloudKit...")
+        
+        // Синхронизируем изменения в CloudKit
+        do {
+            // 1. Синхронизируем PlayerClaim (обновленный статус)
+            try await CloudKitSyncService.shared.syncPlayerClaims()
+            print("✅ [APPROVE_CLAIM] PlayerClaim synced")
+            
+            // 2. Синхронизируем GameWithPlayer (связь с playerProfile)
+            await CloudKitSyncService.shared.quickSyncGameWithPlayers([gameWithPlayer])
+            print("✅ [APPROVE_CLAIM] GameWithPlayer synced")
+            
+            // 3. Синхронизируем PlayerProfile (обновленная статистика)
+            await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+            print("✅ [APPROVE_CLAIM] PlayerProfile synced")
+            
+            // 4. Синхронизируем PlayerAliases
+            try await CloudKitSyncService.shared.syncPlayerAliases()
+            print("✅ [APPROVE_CLAIM] PlayerAliases synced")
+            
+            print("✅ [APPROVE_CLAIM] All changes synced to CloudKit")
+        } catch {
+            print("⚠️ [APPROVE_CLAIM] Failed to sync to CloudKit: \(error)")
+            // Не бросаем ошибку, т.к. локально все сохранено
+        }
         
         // Send notification to claimant
         Task { @MainActor in

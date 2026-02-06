@@ -320,17 +320,19 @@ struct ClaimDetailView: View {
             return
         }
         
-        do {
-            try claimService.approveClaim(
-                claimId: claim.claimId,
-                resolverUserId: userId,
-                notes: notes.isEmpty ? nil : notes
-            )
-            onResolved()
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+        Task {
+            do {
+                try await claimService.approveClaim(
+                    claimId: claim.claimId,
+                    resolverUserId: userId,
+                    notes: notes.isEmpty ? nil : notes
+                )
+                onResolved()
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
         }
     }
     

@@ -133,7 +133,7 @@ class CloudKitSyncService: ObservableObject {
     
     // MARK: - PlayerAlias Sync (Public Database)
     
-    private func syncPlayerAliases() async throws {
+    func syncPlayerAliases() async throws {
         let context = persistence.container.viewContext
         
         let fetchRequest: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
@@ -212,7 +212,7 @@ class CloudKitSyncService: ObservableObject {
     
     // MARK: - PlayerClaim Sync (Public Database - changed from Private)
     
-    private func syncPlayerClaims() async throws {
+    func syncPlayerClaims() async throws {
         let context = persistence.container.viewContext
         
         let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
@@ -259,8 +259,11 @@ class CloudKitSyncService: ObservableObject {
         let users = try await cloudKit.fetchRecords(withType: .user, from: .publicDB)
         let profiles = try await cloudKit.fetchRecords(withType: .playerProfile, from: .privateDB)
         let claims = try await cloudKit.fetchRecords(withType: .playerClaim, from: .publicDB)
+        let games = try await cloudKit.fetchRecords(withType: .game, from: .publicDB)
+        let gameWithPlayers = try await cloudKit.fetchRecords(withType: .gameWithPlayer, from: .publicDB)
+        let aliases = try await cloudKit.fetchRecords(withType: .playerAlias, from: .publicDB)
         
-        print("📥 [PULL] Fetched: \(users.count) users, \(profiles.count) profiles, \(claims.count) claims")
+        print("📥 [PULL] Fetched: \(users.count) users, \(profiles.count) profiles, \(claims.count) claims, \(games.count) games, \(gameWithPlayers.count) gameWithPlayers, \(aliases.count) aliases")
         
         // Update local CoreData
         let context = persistence.container.viewContext
@@ -284,6 +287,48 @@ class CloudKitSyncService: ObservableObject {
         if !claims.isEmpty {
             print("🔄 [PULL] Merging \(claims.count) claims with local database...")
             await mergePlayerClaimsWithLocal(claims)
+        }
+        
+        // Process games
+        for record in games {
+            if let gameId = UUID(uuidString: record.recordID.recordName) {
+                if let existingGame = persistence.fetchGame(byId: gameId) {
+                    existingGame.updateFromCKRecord(record)
+                } else {
+                    let newGame = Game(context: context)
+                    newGame.gameId = gameId
+                    newGame.updateFromCKRecord(record)
+                }
+            }
+        }
+        
+        // Process gameWithPlayers - используем merge логику
+        if !gameWithPlayers.isEmpty {
+            print("🔄 [PULL] Merging \(gameWithPlayers.count) GameWithPlayer records...")
+            await mergeGameWithPlayersWithLocal(gameWithPlayers)
+        }
+        
+        // Process aliases
+        for record in aliases {
+            if let aliasId = UUID(uuidString: record.recordID.recordName) {
+                if let existingAlias = persistence.fetchAlias(byId: aliasId) {
+                    // Обновляем существующий
+                    existingAlias.updateFromCKRecord(record)
+                } else {
+                    // Создаем новый
+                    let newAlias = PlayerAlias(context: context)
+                    newAlias.aliasId = aliasId
+                    newAlias.updateFromCKRecord(record)
+                    
+                    // Связываем с PlayerProfile если найден локально
+                    if let profile = persistence.fetchPlayerProfile(byProfileId: newAlias.profileId) {
+                        newAlias.profile = profile
+                        print("➕ Created PlayerAlias: \(newAlias.aliasName) for profile \(profile.displayName)")
+                    } else {
+                        print("⚠️ PlayerProfile \(newAlias.profileId) not found for alias \(newAlias.aliasName)")
+                    }
+                }
+            }
         }
         
         // Save context

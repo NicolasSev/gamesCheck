@@ -361,6 +361,20 @@ extension PersistenceController {
         }
     }
 
+    func fetchAlias(byId aliasId: UUID) -> PlayerAlias? {
+        let context = container.viewContext
+        let request: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
+        request.predicate = NSPredicate(format: "aliasId == %@", aliasId as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            return try context.fetch(request).first
+        } catch {
+            print("Error fetching alias by ID: \(error)")
+            return nil
+        }
+    }
+
     func fetchAliases(forProfile profile: PlayerProfile) -> [PlayerAlias] {
         let context = container.viewContext
         let request: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
@@ -558,6 +572,20 @@ extension PersistenceController {
             return try context.fetch(request).first
         } catch {
             print("Error fetching game by id: \(error)")
+            return nil
+        }
+    }
+
+    func fetchGameWithPlayer(byId gwpId: UUID) -> GameWithPlayer? {
+        let context = container.viewContext
+        let request: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+        request.predicate = NSPredicate(format: "gameWithPlayerId == %@", gwpId as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            return try context.fetch(request).first
+        } catch {
+            print("Error fetching GameWithPlayer by id: \(error)")
             return nil
         }
     }
