@@ -448,11 +448,14 @@ class CloudKitSyncService: ObservableObject {
                     newAlias.aliasId = aliasId
                     newAlias.updateFromCKRecord(record)
                     
+                    // Ищем PlayerProfile для этого алиаса
                     if let profile = persistence.fetchPlayerProfile(byProfileId: newAlias.profileId) {
                         newAlias.profile = profile
                         print("➕ [PULL] Created PlayerAlias: \(newAlias.aliasName) for profile \(profile.displayName)")
                     } else {
-                        print("⚠️ [PULL] PlayerProfile \(newAlias.profileId) not found for alias \(newAlias.aliasName)")
+                        // Профиль не найден - удаляем созданный алиас
+                        context.delete(newAlias)
+                        print("⚠️ [PULL] Skipping PlayerAlias \(newAlias.aliasName) - PlayerProfile \(newAlias.profileId) not found locally (will sync when profile arrives)")
                     }
                 }
             }
@@ -518,12 +521,15 @@ class CloudKitSyncService: ObservableObject {
         print("🚀 Starting full sync (PULL ONLY - CloudKit is Source of Truth)...")
         
         // ТОЛЬКО PULL: Скачиваем данные из CloudKit
-        // 1. Fetch public data from CloudKit
+        // 1. Fetch PlayerProfiles FIRST (needed for aliases and GWP)
+        try await fetchPlayerProfiles()
+        
+        // 2. Fetch public data from CloudKit
         try await fetchPublicGames()
         try await fetchPublicPlayerAliases()
         try await fetchPublicGameWithPlayers()
         
-        // 2. Fetch private data from CloudKit
+        // 3. Fetch private data from CloudKit
         try await fetchPlayerClaims()
         
         // ПРИМЕЧАНИЕ: PUSH (sync()) НЕ вызывается!
@@ -533,6 +539,28 @@ class CloudKitSyncService: ObservableObject {
         // - Одобрение заявки → синхронизация в PlayerClaimService
         
         print("✅ Full sync completed (CloudKit data pulled)")
+    }
+    
+    // MARK: - Fetch Public Games
+    
+    func fetchPlayerProfiles() async throws {
+        print("☁️ [FETCH_PROFILES] Fetching PlayerProfiles from CloudKit Private DB...")
+        
+        let predicate = NSPredicate(value: true)
+        let records = try await cloudKit.fetchRecords(
+            withType: .playerProfile,
+            from: .privateDB,
+            predicate: predicate,
+            limit: 400
+        )
+        
+        if records.isEmpty {
+            print("ℹ️ [FETCH_PROFILES] No profiles found in CloudKit")
+            // Не удаляем локальные профили, т.к. это может быть текущий пользователь
+        } else {
+            print("📥 [FETCH_PROFILES] Fetched \(records.count) profiles from CloudKit")
+            await mergePlayerProfilesWithLocal(records)
+        }
     }
     
     // MARK: - Fetch Public Games
@@ -579,6 +607,88 @@ class CloudKitSyncService: ObservableObject {
         }
     }
     
+    // MARK: - Merge PlayerProfiles with Local
+    
+    @MainActor
+    private func mergePlayerProfilesWithLocal(_ cloudRecords: [CKRecord]) async {
+        let context = persistence.container.viewContext
+        
+        print("🔄 [MERGE_PROFILES] Starting merge: \(cloudRecords.count) profiles from CloudKit")
+        
+        var cloudProfileIds = Set<UUID>()
+        
+        for record in cloudRecords {
+            guard let profileId = UUID(uuidString: record.recordID.recordName) else {
+                print("⚠️ [MERGE_PROFILES] Invalid profile ID: \(record.recordID.recordName)")
+                continue
+            }
+            
+            cloudProfileIds.insert(profileId)
+            
+            if let existingProfile = persistence.fetchPlayerProfile(byProfileId: profileId) {
+                // CloudKit = Source of Truth: всегда обновляем
+                existingProfile.updateFromCKRecord(record)
+                print("🔄 [MERGE_PROFILES] Updated profile: \(existingProfile.displayName)")
+            } else {
+                // Создаём новый профиль из CloudKit
+                let newProfile = PlayerProfile(context: context)
+                newProfile.profileId = profileId
+                newProfile.updateFromCKRecord(record)
+                
+                // Пытаемся найти связанного пользователя
+                if let userId = newProfile.userId,
+                   let user = persistence.fetchUser(byId: userId) {
+                    newProfile.user = user
+                    print("➕ [MERGE_PROFILES] Created profile: \(newProfile.displayName) linked to user \(user.username)")
+                } else {
+                    print("➕ [MERGE_PROFILES] Created profile: \(newProfile.displayName) (no user link)")
+                }
+            }
+        }
+        
+        // CloudKit = Source of Truth: удаляем локальные профили, которых нет в CloudKit
+        // ВАЖНО: НЕ удаляем профиль текущего пользователя
+        do {
+            let fetchRequest: NSFetchRequest<PlayerProfile> = PlayerProfile.fetchRequest()
+            let allLocalProfiles = try context.fetch(fetchRequest)
+            
+            // Получаем userId текущего пользователя
+            let currentUserId = UserDefaults.standard.string(forKey: "currentUserId")
+                .flatMap { UUID(uuidString: $0) }
+            
+            var deletedCount = 0
+            for localProfile in allLocalProfiles {
+                // НЕ удаляем профиль текущего пользователя
+                if let currentUserId = currentUserId, localProfile.userId == currentUserId {
+                    print("🔒 [MERGE_PROFILES] Skipping current user's profile: \(localProfile.displayName)")
+                    continue
+                }
+                
+                // Удаляем если нет в CloudKit
+                if !cloudProfileIds.contains(localProfile.profileId) {
+                    print("🗑️ [MERGE_PROFILES] Deleting local profile not in CloudKit: \(localProfile.displayName)")
+                    context.delete(localProfile)
+                    deletedCount += 1
+                }
+            }
+            
+            if deletedCount > 0 {
+                print("🗑️ [MERGE_PROFILES] Deleted \(deletedCount) local profiles not found in CloudKit")
+            }
+        } catch {
+            print("❌ [MERGE_PROFILES] Error fetching local profiles for cleanup: \(error)")
+        }
+        
+        if context.hasChanges {
+            do {
+                try context.save()
+                print("✅ [MERGE_PROFILES] Successfully merged profiles with local database")
+            } catch {
+                print("❌ [MERGE_PROFILES] Failed to save merged profiles: \(error)")
+            }
+        }
+    }
+    
     // MARK: - Merge Aliases with Local
     
     @MainActor
@@ -606,11 +716,14 @@ class CloudKitSyncService: ObservableObject {
                 newAlias.aliasId = aliasId
                 newAlias.updateFromCKRecord(record)
                 
+                // Ищем PlayerProfile для этого алиаса
                 if let profile = persistence.fetchPlayerProfile(byProfileId: newAlias.profileId) {
                     newAlias.profile = profile
                     print("➕ [MERGE_ALIASES] Created alias: \(newAlias.aliasName) for profile \(profile.displayName)")
                 } else {
-                    print("⚠️ [MERGE_ALIASES] PlayerProfile \(newAlias.profileId) not found for alias \(newAlias.aliasName)")
+                    // Профиль не найден локально - нужно удалить созданный алиас
+                    context.delete(newAlias)
+                    print("⚠️ [MERGE_ALIASES] Skipping alias \(newAlias.aliasName) - PlayerProfile \(newAlias.profileId) not found locally (will sync when profile arrives)")
                 }
             }
         }
@@ -989,8 +1102,21 @@ class CloudKitSyncService: ObservableObject {
             if let existingGWP = try? context.fetch(gwpFetch).first {
                 // CloudKit = Source of Truth: всегда обновляем
                 existingGWP.updateFromCKRecord(record)
-                existingGWP.playerProfile = playerProfile // Обновляем связь
-                print("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId)")
+                
+                // ВАЖНО: Обновляем playerProfile только если:
+                // 1. Новый профиль не nil (появилась привязка)
+                // 2. ИЛИ локальный профиль nil (ещё не было привязки)
+                if playerProfile != nil {
+                    // Появилась новая привязка - всегда обновляем
+                    existingGWP.playerProfile = playerProfile
+                    print("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - linked to profile \(playerProfile!.displayName)")
+                } else if existingGWP.playerProfile == nil {
+                    // Оба nil - ничего не меняем
+                    print("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - no profile (unclaimed)")
+                } else {
+                    // CloudKit говорит nil, но локально есть профиль - оставляем локальный!
+                    print("⚠️ [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - keeping local profile (CloudKit has nil)")
+                }
             } else {
                 // Создаём новый
                 let gwp = GameWithPlayer(context: context)

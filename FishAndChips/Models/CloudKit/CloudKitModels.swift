@@ -143,8 +143,9 @@ extension PlayerProfile {
         if let displayName = record["displayName"] as? String {
             self.displayName = displayName
         }
-        if let isAnonymous = record["isAnonymous"] as? Bool {
-            self.isAnonymous = isAnonymous
+        // isAnonymous хранится в CloudKit как Int64 (0 или 1)
+        if let isAnonymousInt = record["isAnonymous"] as? Int64 {
+            self.isAnonymous = (isAnonymousInt == 1)
         }
         if let createdAt = record["createdAt"] as? Date {
             self.createdAt = createdAt
