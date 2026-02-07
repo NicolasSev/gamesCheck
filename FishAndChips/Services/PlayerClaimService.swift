@@ -73,6 +73,19 @@ class PlayerClaimService {
         
         try context.save()
         
+        // Синхронизируем заявку с CloudKit сразу после создания
+        Task {
+            do {
+                print("☁️ [SUBMIT_CLAIM] Pushing claim to CloudKit...")
+                try await CloudKitSyncService.shared.syncPlayerClaims()
+                print("✅ [SUBMIT_CLAIM] Claim synced to CloudKit")
+            } catch {
+                print("❌ [SUBMIT_CLAIM] Failed to sync claim to CloudKit: \(error)")
+                // Помечаем как pending для последующей синхронизации
+                PendingSyncTracker.shared.addPendingPlayerClaim(claim.claimId)
+            }
+        }
+        
         // Send notification to host
         Task { @MainActor in
             do {
