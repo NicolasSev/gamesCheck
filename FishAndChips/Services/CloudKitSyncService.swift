@@ -549,14 +549,15 @@ class CloudKitSyncService: ObservableObject {
         )
         
         if records.isEmpty {
-            print("ℹ️ No public games found in CloudKit")
-            return
+            print("ℹ️ [FETCH_GAMES] No public games found in CloudKit")
+            print("☁️ [FETCH_GAMES] CloudKit = Source of Truth: will delete all local games (except pending)")
+            // ВАЖНО: Вызываем merge с пустым массивом для удаления локальных игр
+            await mergeGamesWithLocal([])
+        } else {
+            print("📥 [FETCH_GAMES] Fetched \(records.count) public games from CloudKit")
+            // Merge with local data
+            await mergeGamesWithLocal(records)
         }
-        
-        print("📥 Fetched \(records.count) public games from CloudKit")
-        
-        // Merge with local data
-        await mergeGamesWithLocal(records)
     }
     
     // MARK: - Fetch Public Player Aliases
@@ -697,6 +698,9 @@ class CloudKitSyncService: ObservableObject {
             await mergeGameWithPlayersWithLocal(allRecords)
         } else {
             print("ℹ️ [FETCH_ALL_PLAYERS] No GameWithPlayer records found in CloudKit")
+            print("☁️ [FETCH_ALL_PLAYERS] CloudKit = Source of Truth: will delete all local GameWithPlayer")
+            // ВАЖНО: Вызываем merge с пустым массивом для удаления локальных GWP
+            await mergeGameWithPlayersWithLocal([])
         }
     }
     
@@ -757,6 +761,9 @@ class CloudKitSyncService: ObservableObject {
             await mergePlayerClaimsWithLocal(records)
         } else {
             print("ℹ️ [FETCH_CLAIMS] No claims found in CloudKit")
+            print("☁️ [FETCH_CLAIMS] CloudKit = Source of Truth: will delete all local claims (except pending)")
+            // ВАЖНО: Вызываем merge с пустым массивом для удаления локальных claims
+            await mergePlayerClaimsWithLocal([])
         }
     }
     
