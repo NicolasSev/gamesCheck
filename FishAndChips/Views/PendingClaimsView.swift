@@ -164,9 +164,12 @@ struct ClaimDetailView: View {
     
     @State private var notes: String = ""
     @State private var showingApproveConfirmation = false
+    @State private var showingApproveAllConfirmation = false
     @State private var showingRejectConfirmation = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var isApprovingAll = false
+    @State private var approveAllSuccessMessage: String?
     
     private let claimService = PlayerClaimService()
     private let keychain = KeychainService.shared
@@ -225,29 +228,65 @@ struct ClaimDetailView: View {
                     .liquidGlass(cornerRadius: 12)
                     
                     // Кнопки действий
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            showingRejectConfirmation = true
-                        }) {
-                            Text("Отклонить")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.red.opacity(0.7))
-                                .cornerRadius(12)
+                    VStack(spacing: 12) {
+                        // Основные кнопки
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                showingRejectConfirmation = true
+                            }) {
+                                Text("Отклонить")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.red.opacity(0.7))
+                                    .cornerRadius(12)
+                            }
+                            
+                            Button(action: {
+                                showingApproveConfirmation = true
+                            }) {
+                                Text("Одобрить")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.green.opacity(0.7))
+                                    .cornerRadius(12)
+                            }
                         }
                         
+                        // Кнопка "Одобрить все"
                         Button(action: {
-                            showingApproveConfirmation = true
+                            showingApproveAllConfirmation = true
                         }) {
-                            Text("Одобрить")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.green.opacity(0.7))
-                                .cornerRadius(12)
+                            HStack {
+                                if isApprovingAll {
+                                    ProgressView()
+                                        .progressViewStyle(.circular)
+                                        .tint(.white)
+                                        .scaleEffect(0.8)
+                                    Text("Обработка...")
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Одобрить все игры с '\(claim.playerName)'")
+                                }
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue.opacity(0.7))
+                            .cornerRadius(12)
+                        }
+                        .disabled(isApprovingAll)
+                        
+                        // Сообщение об успехе
+                        if let successMessage = approveAllSuccessMessage {
+                            Text(successMessage)
+                                .font(.caption)
+                                .foregroundColor(.green)
+                                .padding(.top, 4)
                         }
                     }
                     .padding()
@@ -271,6 +310,14 @@ struct ClaimDetailView: View {
                 }
             } message: {
                 Text("Пользователь получит доступ к статистике по этому игроку в этой игре.")
+            }
+            .alert("Одобрить все игры?", isPresented: $showingApproveAllConfirmation) {
+                Button("Отмена", role: .cancel) { }
+                Button("Одобрить все") {
+                    approveAllClaims()
+                }
+            } message: {
+                Text("Пользователь будет привязан ко ВСЕМ играм, где есть игрок '\(claim.playerName)'. Это одобрит одну заявку, но привяжет профиль ко всем подходящим GameWithPlayer.")
             }
             .alert("Отклонить заявку?", isPresented: $showingRejectConfirmation) {
                 Button("Отмена", role: .cancel) { }
@@ -331,6 +378,47 @@ struct ClaimDetailView: View {
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+    
+    private func approveAllClaims() {
+        guard let userId = currentUserId else {
+            errorMessage = "Не удалось определить пользователя"
+            showingError = true
+            return
+        }
+        
+        isApprovingAll = true
+        approveAllSuccessMessage = nil
+        
+        Task {
+            do {
+                // Используем новый метод с флагом linkAllGames = true
+                let linkedCount = try await claimService.approveClaimAndLinkAllGWP(
+                    claimId: claim.claimId,
+                    resolverUserId: userId,
+                    linkAllGames: true,
+                    notes: notes.isEmpty ? nil : notes
+                )
+                
+                isApprovingAll = false
+                
+                if linkedCount > 0 {
+                    approveAllSuccessMessage = "✅ Привязано игр: \(linkedCount)"
+                    
+                    // Закрыть через 2 секунды
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    onResolved()
+                    dismiss()
+                } else {
+                    errorMessage = "Не найдено игр для привязки"
+                    showingError = true
+                }
+            } catch {
+                isApprovingAll = false
+                errorMessage = "Ошибка при массовом одобрении: \(error.localizedDescription)"
                 showingError = true
             }
         }
