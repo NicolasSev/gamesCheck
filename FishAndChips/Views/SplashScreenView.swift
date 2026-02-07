@@ -2,6 +2,12 @@ import SwiftUI
 
 struct SplashScreenView: View {
     @State private var isAnimating = false
+    @State private var currentSuitIndex = 0
+    @State private var scale: CGFloat = 1.0
+    @State private var opacity: Double = 1.0
+    
+    // Масти по кругу: club, heart, diamond, spade
+    let suits = ["suit.club.fill", "suit.heart.fill", "suit.diamond.fill", "suit.spade.fill"]
     
     var body: some View {
         ZStack {
@@ -39,16 +45,11 @@ struct SplashScreenView: View {
                 
                 // Logo/Title
                 VStack(spacing: 10) {
-                    Image(systemName: "suit.club.fill")
+                    Image(systemName: suits[currentSuitIndex])
                         .font(.system(size: 80))
                         .foregroundColor(.white)
-                        .scaleEffect(isAnimating ? 1.0 : 0.8)
-                        .opacity(isAnimating ? 1.0 : 0.6)
-                        .animation(
-                            Animation.easeInOut(duration: 1.5)
-                                .repeatForever(autoreverses: true),
-                            value: isAnimating
-                        )
+                        .scaleEffect(scale)
+                        .opacity(opacity)
                     
                     Text("Fish & Chips")
                         .font(.system(size: 40, weight: .bold, design: .rounded))
@@ -83,6 +84,66 @@ struct SplashScreenView: View {
         }
         .onAppear {
             isAnimating = true
+            startSuitAnimation()
+        }
+    }
+    
+    // MARK: - Animation Logic
+    
+    private func startSuitAnimation() {
+        // Цикл анимации: 2.0 секунды на полный цикл (как удар сердца)
+        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            animateSuitCycle()
+        }
+        
+        // Запускаем первую анимацию сразу
+        animateSuitCycle()
+    }
+    
+    private func animateSuitCycle() {
+        // УДАР СЕРДЦА - Фаза 1: Пульсация (увеличение → уменьшение)
+        // 1.0 → 1.3 → 0.7 с одновременным fade out к концу
+        
+        // Шаг 1: Увеличение (как вдох) - 0.5 сек
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.6, blendDuration: 0)) {
+            scale = 1.3
+        }
+        
+        // Шаг 2: Уменьшение + fade out (как выдох) - 0.6 сек
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Одновременно уменьшаем и начинаем fade out
+            withAnimation(.easeInOut(duration: 0.4)) {
+                scale = 0.7
+            }
+            
+            // Fade out в последние 0.3 секунды уменьшения
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    opacity = 0.0
+                }
+            }
+        }
+        
+        // СМЕНА МАСТИ - Фаза 2: В момент полного исчезновения
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            // Переключаем на следующую масть
+            currentSuitIndex = (currentSuitIndex + 1) % suits.count
+            
+            // Готовим для появления
+            scale = 0.7
+        }
+        
+        // НОВЫЙ УДАР - Фаза 3: Появление + пульсация нового символа
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.15) {
+            // Fade in быстро (0.25 сек)
+            withAnimation(.easeIn(duration: 0.25)) {
+                opacity = 1.0
+            }
+            
+            // Одновременно начинаем увеличение до нормального размера
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.65, blendDuration: 0)) {
+                scale = 1.0
+            }
         }
     }
 }
