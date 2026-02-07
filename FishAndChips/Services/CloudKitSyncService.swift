@@ -390,16 +390,21 @@ class CloudKitSyncService: ObservableObject {
         }
         
         // CloudKit = Source of Truth: удаляем локальные игры, которых нет в CloudKit
+        // НО: НЕ удаляем данные, которые еще не успели синхронизироваться (pending)
         do {
             let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
             let allLocalGames = try context.fetch(fetchRequest)
+            let pendingGames = PendingSyncTracker.shared.getPendingGames()
             
             var deletedCount = 0
             for localGame in allLocalGames {
-                if !cloudGameIds.contains(localGame.gameId) {
+                // Проверяем: нет в CloudKit И нет в pending списке
+                if !cloudGameIds.contains(localGame.gameId) && !pendingGames.contains(localGame.gameId) {
                     print("🗑️ [PULL] Deleting local game not in CloudKit: \(localGame.gameId)")
                     context.delete(localGame)
                     deletedCount += 1
+                } else if !cloudGameIds.contains(localGame.gameId) && pendingGames.contains(localGame.gameId) {
+                    print("📌 [PULL] Keeping pending game (not yet synced): \(localGame.gameId)")
                 }
             }
             
@@ -510,8 +515,9 @@ class CloudKitSyncService: ObservableObject {
             throw CloudKitSyncError.cloudKitNotAvailable
         }
         
-        print("🚀 Starting full sync...")
+        print("🚀 Starting full sync (PULL ONLY - CloudKit is Source of Truth)...")
         
+        // ТОЛЬКО PULL: Скачиваем данные из CloudKit
         // 1. Fetch public data from CloudKit
         try await fetchPublicGames()
         try await fetchPublicPlayerAliases()
@@ -520,10 +526,13 @@ class CloudKitSyncService: ObservableObject {
         // 2. Fetch private data from CloudKit
         try await fetchPlayerClaims()
         
-        // 3. Push local changes to CloudKit
-        try await sync()
+        // ПРИМЕЧАНИЕ: PUSH (sync()) НЕ вызывается!
+        // Данные загружаются в CloudKit ТОЛЬКО в момент их создания:
+        // - Импорт игры → quickSyncGame()
+        // - Создание заявки → syncPlayerClaims()
+        // - Одобрение заявки → синхронизация в PlayerClaimService
         
-        print("✅ Full sync completed")
+        print("✅ Full sync completed (CloudKit data pulled)")
     }
     
     // MARK: - Fetch Public Games
@@ -1627,4 +1636,72 @@ extension CloudKitSyncService {
             return "Не синхронизировано"
         }
     }
+    
+    // MARK: - Push Pending Data
+    
+    /// Отправляет данные, которые не удалось синхронизировать ранее
+    func pushPendingData() async throws {
+        let tracker = PendingSyncTracker.shared
+        let context = persistence.container.viewContext
+        
+        print("🔄 [PUSH_PENDING] Starting to push pending data...")
+        
+        // 1. Push pending games
+        let pendingGameIds = tracker.getPendingGames()
+        if !pendingGameIds.isEmpty {
+            print("📤 [PUSH_PENDING] Found \(pendingGameIds.count) pending games")
+            let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "gameId IN %@", Array(pendingGameIds))
+            
+            if let games = try? context.fetch(fetchRequest), !games.isEmpty {
+                let records = games.map { $0.toCKRecord() }
+                _ = try await cloudKit.saveRecords(records, to: .publicDB)
+                print("✅ [PUSH_PENDING] Pushed \(games.count) games")
+                
+                // Remove from pending
+                for game in games {
+                    tracker.removePendingGame(game.gameId)
+                }
+            }
+        }
+        
+        // 2. Push pending GameWithPlayer
+        let pendingGWPIds = tracker.getPendingGameWithPlayers()
+        if !pendingGWPIds.isEmpty {
+            print("📤 [PUSH_PENDING] Found \(pendingGWPIds.count) pending GameWithPlayer")
+            // GameWithPlayer doesn't have gameWithPlayerId, so we sync all
+            try await syncGameWithPlayers()
+            tracker.getPendingGameWithPlayers().forEach { tracker.removePendingGameWithPlayer($0) }
+        }
+        
+        // 3. Push pending PlayerAliases
+        let pendingAliasIds = tracker.getPendingPlayerAliases()
+        if !pendingAliasIds.isEmpty {
+            print("📤 [PUSH_PENDING] Found \(pendingAliasIds.count) pending PlayerAliases")
+            let fetchRequest: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "aliasId IN %@", Array(pendingAliasIds))
+            
+            if let aliases = try? context.fetch(fetchRequest), !aliases.isEmpty {
+                let records = aliases.map { $0.toCKRecord() }
+                _ = try await cloudKit.saveRecords(records, to: .publicDB)
+                print("✅ [PUSH_PENDING] Pushed \(aliases.count) aliases")
+                
+                // Remove from pending
+                for alias in aliases {
+                    tracker.removePendingPlayerAlias(alias.aliasId)
+                }
+            }
+        }
+        
+        // 4. Push pending PlayerClaims
+        let pendingClaimIds = tracker.getPendingPlayerClaims()
+        if !pendingClaimIds.isEmpty {
+            print("📤 [PUSH_PENDING] Found \(pendingClaimIds.count) pending PlayerClaims")
+            try await syncPlayerClaims()
+            tracker.getPendingPlayerClaims().forEach { tracker.removePendingPlayerClaim($0) }
+        }
+        
+        print("✅ [PUSH_PENDING] All pending data pushed successfully")
+    }
 }
+

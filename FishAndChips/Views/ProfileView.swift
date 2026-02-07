@@ -199,6 +199,59 @@ struct ProfileView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(syncService.isSyncing ? Color.gray.opacity(0.3) : Color.blue.opacity(0.3))
                             )
+                            
+                            // Pending Data UI
+                            if PendingSyncTracker.shared.hasPendingData() {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Незалитые данные:")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                    Text(PendingSyncTracker.shared.getPendingSummary())
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 4)
+                                
+                                Button(action: {
+                                    Task {
+                                        do {
+                                            try await syncService.pushPendingData()
+                                        } catch {
+                                            print("❌ Failed to push pending data: \(error)")
+                                        }
+                                    }
+                                }) {
+                                    HStack {
+                                        if syncService.isSyncing {
+                                            ProgressView()
+                                                .progressViewStyle(.circular)
+                                                .tint(.white)
+                                                .scaleEffect(0.8)
+                                            Text("Отправка...")
+                                        } else {
+                                            Image(systemName: "icloud.and.arrow.up")
+                                            Text("Запушить незалитые данные")
+                                        }
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                }
+                                .disabled(syncService.isSyncing)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(syncService.isSyncing ? Color.gray.opacity(0.3) : Color.orange.opacity(0.3))
+                                )
+                            } else {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("✓ Нет незалитых данных")
+                                        .font(.caption)
+                                        .foregroundColor(.green.opacity(0.8))
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 4)
+                            }
                         }
                         .padding()
                         .liquidGlass(cornerRadius: 15)

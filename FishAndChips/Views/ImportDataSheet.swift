@@ -321,6 +321,18 @@ struct ImportDataSheet: View {
             let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
             var message = "Успешно импортировано:\n• Игр: \(importedCount)\n• Игроков: \(totalPlayers)\n• Вы выбраны как: \(selectedNamesStr)"
             
+            // Синхронизируем импортированные игры с CloudKit
+            Task {
+                do {
+                    print("☁️ [IMPORT] Pushing imported games to CloudKit...")
+                    try await CloudKitSyncService.shared.sync()
+                    print("✅ [IMPORT] Successfully synced to CloudKit")
+                } catch {
+                    print("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
+                    // Не блокируем UI при ошибке синхронизации
+                }
+            }
+            
             successMessage = message
             validatedGames = []
             uniquePlayerNames = []
@@ -402,6 +414,18 @@ struct ImportDataSheet: View {
             if !selectedPlayerNames.isEmpty {
                 let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
                 message += "\n• Вы выбраны как: \(selectedNamesStr)"
+            }
+            
+            // Синхронизируем импортированные игры с CloudKit
+            Task {
+                do {
+                    print("☁️ [IMPORT] Pushing imported games to CloudKit...")
+                    try await CloudKitSyncService.shared.sync()
+                    print("✅ [IMPORT] Successfully synced to CloudKit")
+                } catch {
+                    print("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
+                    // Не блокируем UI при ошибке синхронизации
+                }
             }
             
             successMessage = message
