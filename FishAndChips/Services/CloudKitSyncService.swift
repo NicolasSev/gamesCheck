@@ -268,67 +268,181 @@ class CloudKitSyncService: ObservableObject {
         // Update local CoreData
         let context = persistence.container.viewContext
         
+        // CloudKit = Source of Truth: собираем ID из CloudKit
+        var cloudUserIds = Set<UUID>()
+        var cloudProfileIds = Set<UUID>()
+        var cloudClaimIds = Set<UUID>()
+        var cloudGameIds = Set<UUID>()
+        var cloudAliasIds = Set<UUID>()
+        
         // Process users
         for record in users {
-            if let existingUser = persistence.fetchUser(byId: UUID(uuidString: record.recordID.recordName)!) {
-                existingUser.updateFromCKRecord(record)
+            if let userId = UUID(uuidString: record.recordID.recordName) {
+                cloudUserIds.insert(userId)
+                
+                if let existingUser = persistence.fetchUser(byId: userId) {
+                    existingUser.updateFromCKRecord(record)
+                } else {
+                    // Создаем нового пользователя из CloudKit
+                    let newUser = User(context: context)
+                    newUser.userId = userId
+                    newUser.updateFromCKRecord(record)
+                    newUser.passwordHash = "remote_user_no_auth" // Placeholder
+                    print("➕ [PULL] Created user from CloudKit: \(newUser.username)")
+                }
             }
         }
         
         // Process profiles
         for record in profiles {
-            if let profileId = UUID(uuidString: record.recordID.recordName),
-               let existingProfile = persistence.fetchPlayerProfile(byProfileId: profileId) {
-                existingProfile.updateFromCKRecord(record)
+            if let profileId = UUID(uuidString: record.recordID.recordName) {
+                cloudProfileIds.insert(profileId)
+                
+                if let existingProfile = persistence.fetchPlayerProfile(byProfileId: profileId) {
+                    existingProfile.updateFromCKRecord(record)
+                } else {
+                    // Создаем новый профиль из CloudKit
+                    let newProfile = PlayerProfile(context: context)
+                    newProfile.profileId = profileId
+                    newProfile.updateFromCKRecord(record)
+                    print("➕ [PULL] Created PlayerProfile from CloudKit: \(newProfile.displayName)")
+                }
             }
         }
         
-        // Process claims
+        // Process claims (с merge логикой)
         if !claims.isEmpty {
             print("🔄 [PULL] Merging \(claims.count) claims with local database...")
             await mergePlayerClaimsWithLocal(claims)
         }
         
-        // Process games
+        // Собираем cloudClaimIds для удаления
+        for record in claims {
+            if let claimId = UUID(uuidString: record.recordID.recordName) {
+                cloudClaimIds.insert(claimId)
+            }
+        }
+        
+        // Process games (с удалением)
         for record in games {
             if let gameId = UUID(uuidString: record.recordID.recordName) {
+                cloudGameIds.insert(gameId)
+                
                 if let existingGame = persistence.fetchGame(byId: gameId) {
                     existingGame.updateFromCKRecord(record)
                 } else {
                     let newGame = Game(context: context)
                     newGame.gameId = gameId
                     newGame.updateFromCKRecord(record)
+                    print("➕ [PULL] Created game from CloudKit: \(gameId)")
                 }
             }
         }
         
-        // Process gameWithPlayers - используем merge логику
+        // CloudKit = Source of Truth: удаляем локальные игры, которых нет в CloudKit
+        do {
+            let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
+            let allLocalGames = try context.fetch(fetchRequest)
+            
+            var deletedCount = 0
+            for localGame in allLocalGames {
+                if !cloudGameIds.contains(localGame.gameId) {
+                    print("🗑️ [PULL] Deleting local game not in CloudKit: \(localGame.gameId)")
+                    context.delete(localGame)
+                    deletedCount += 1
+                }
+            }
+            
+            if deletedCount > 0 {
+                print("🗑️ [PULL] Deleted \(deletedCount) local games not found in CloudKit")
+            }
+        } catch {
+            print("❌ [PULL] Error fetching local games for cleanup: \(error)")
+        }
+        
+        // Process gameWithPlayers - используем merge логику (с удалением внутри)
         if !gameWithPlayers.isEmpty {
             print("🔄 [PULL] Merging \(gameWithPlayers.count) GameWithPlayer records...")
             await mergeGameWithPlayersWithLocal(gameWithPlayers)
+        } else {
+            // Если в CloudKit нет GWP, удаляем все локальные
+            print("🗑️ [PULL] CloudKit has 0 GameWithPlayer - deleting all local GWP")
+            do {
+                let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+                let allLocalGWP = try context.fetch(fetchRequest)
+                for gwp in allLocalGWP {
+                    context.delete(gwp)
+                }
+                if !allLocalGWP.isEmpty {
+                    print("🗑️ [PULL] Deleted \(allLocalGWP.count) local GameWithPlayer")
+                }
+            } catch {
+                print("❌ [PULL] Error deleting local GWP: \(error)")
+            }
         }
         
         // Process aliases
         for record in aliases {
             if let aliasId = UUID(uuidString: record.recordID.recordName) {
+                cloudAliasIds.insert(aliasId)
+                
                 if let existingAlias = persistence.fetchAlias(byId: aliasId) {
-                    // Обновляем существующий
                     existingAlias.updateFromCKRecord(record)
                 } else {
-                    // Создаем новый
                     let newAlias = PlayerAlias(context: context)
                     newAlias.aliasId = aliasId
                     newAlias.updateFromCKRecord(record)
                     
-                    // Связываем с PlayerProfile если найден локально
                     if let profile = persistence.fetchPlayerProfile(byProfileId: newAlias.profileId) {
                         newAlias.profile = profile
-                        print("➕ Created PlayerAlias: \(newAlias.aliasName) for profile \(profile.displayName)")
+                        print("➕ [PULL] Created PlayerAlias: \(newAlias.aliasName) for profile \(profile.displayName)")
                     } else {
-                        print("⚠️ PlayerProfile \(newAlias.profileId) not found for alias \(newAlias.aliasName)")
+                        print("⚠️ [PULL] PlayerProfile \(newAlias.profileId) not found for alias \(newAlias.aliasName)")
                     }
                 }
             }
+        }
+        
+        // CloudKit = Source of Truth: удаляем локальные алиасы, которых нет в CloudKit
+        do {
+            let fetchRequest: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
+            let allLocalAliases = try context.fetch(fetchRequest)
+            
+            var deletedCount = 0
+            for localAlias in allLocalAliases {
+                if !cloudAliasIds.contains(localAlias.aliasId) {
+                    print("🗑️ [PULL] Deleting local alias not in CloudKit: \(localAlias.aliasName)")
+                    context.delete(localAlias)
+                    deletedCount += 1
+                }
+            }
+            
+            if deletedCount > 0 {
+                print("🗑️ [PULL] Deleted \(deletedCount) local aliases not found in CloudKit")
+            }
+        } catch {
+            print("❌ [PULL] Error fetching local aliases for cleanup: \(error)")
+        }
+        
+        // CloudKit = Source of Truth: удаляем локальные claims, которых нет в CloudKit
+        do {
+            let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+            let allLocalClaims = try context.fetch(fetchRequest)
+            
+            var deletedCount = 0
+            for localClaim in allLocalClaims {
+                if !cloudClaimIds.contains(localClaim.claimId) {
+                    print("🗑️ [PULL] Deleting local claim not in CloudKit: \(localClaim.claimId)")
+                    context.delete(localClaim)
+                    deletedCount += 1
+                }
+            }
+            
+            if deletedCount > 0 {
+                print("🗑️ [PULL] Deleted \(deletedCount) local claims not found in CloudKit")
+            }
+        } catch {
+            print("❌ [PULL] Error fetching local claims for cleanup: \(error)")
         }
         
         // Save context
@@ -336,7 +450,7 @@ class CloudKitSyncService: ObservableObject {
             try context.save()
         }
         
-        print("✅ Pulled changes from CloudKit")
+        print("✅ [PULL] CloudKit sync completed - local database matches CloudKit (Source of Truth)")
     }
     
     // MARK: - Full Sync (Push local + Pull public)
@@ -547,6 +661,11 @@ class CloudKitSyncService: ObservableObject {
     private func mergeGamesWithLocal(_ cloudRecords: [CKRecord]) async {
         let context = persistence.container.viewContext
         
+        print("🔄 [MERGE_GAMES] Starting merge: \(cloudRecords.count) games from CloudKit")
+        
+        // Собираем все gameId из CloudKit
+        var cloudGameIds = Set<UUID>()
+        
         for record in cloudRecords {
             // Filter out soft-deleted games
             if let softDeleted = record["softDeleted"] as? Int64, softDeleted != 0 {
@@ -559,45 +678,56 @@ class CloudKitSyncService: ObservableObject {
                 continue
             }
             
+            cloudGameIds.insert(gameId)
+            
             // Search for local game
             let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
             
             do {
                 if let localGame = try context.fetch(fetchRequest).first {
-                    // Game exists locally - check if CloudKit version is newer
-                    if let cloudModDate = record.modificationDate,
-                       let localTimestamp = localGame.timestamp {
-                        if cloudModDate > localTimestamp {
-                            // CloudKit is newer - update local
-                            localGame.updateFromCKRecord(record)
-                            print("🔄 Updated local game: \(gameId)")
-                        } else {
-                            print("⏭️ Local game is up to date: \(gameId)")
-                        }
-                    } else {
-                        // If no dates, update anyway
-                        localGame.updateFromCKRecord(record)
-                        print("🔄 Updated local game (no date comparison): \(gameId)")
-                    }
+                    // Game exists locally - CloudKit is source of truth, always update
+                    localGame.updateFromCKRecord(record)
+                    print("🔄 [MERGE_GAMES] Updated local game: \(gameId)")
                 } else {
                     // Game doesn't exist locally - create it
                     if self.createGameFromCKRecord(record, in: context) != nil {
-                        print("➕ Created local game: \(gameId)")
+                        print("➕ [MERGE_GAMES] Created local game: \(gameId)")
                     }
                 }
             } catch {
-                print("❌ Error processing game \(gameId): \(error)")
+                print("❌ [MERGE_GAMES] Error processing game \(gameId): \(error)")
             }
+        }
+        
+        // CloudKit = Source of Truth: удаляем локальные игры, которых нет в CloudKit
+        do {
+            let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
+            let allLocalGames = try context.fetch(fetchRequest)
+            
+            var deletedCount = 0
+            for localGame in allLocalGames {
+                if !cloudGameIds.contains(localGame.gameId) {
+                    print("🗑️ [MERGE_GAMES] Deleting local game not in CloudKit: \(localGame.gameId)")
+                    context.delete(localGame)
+                    deletedCount += 1
+                }
+            }
+            
+            if deletedCount > 0 {
+                print("🗑️ [MERGE_GAMES] Deleted \(deletedCount) local games not found in CloudKit")
+            }
+        } catch {
+            print("❌ [MERGE_GAMES] Error fetching local games for cleanup: \(error)")
         }
         
         // Save all changes
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ Merged \(cloudRecords.count) games with local database")
+                print("✅ [MERGE_GAMES] Merged \(cloudRecords.count) games with local database")
             } catch {
-                print("❌ Failed to save merged games: \(error)")
+                print("❌ [MERGE_GAMES] Failed to save merged games: \(error)")
             }
         }
     }
@@ -625,15 +755,20 @@ class CloudKitSyncService: ObservableObject {
     private func mergeGameWithPlayersWithLocal(_ cloudRecords: [CKRecord]) async {
         let context = persistence.container.viewContext
         
+        print("🔄 [MERGE_GWP] Starting merge: \(cloudRecords.count) GameWithPlayer from CloudKit")
+        
+        // Собираем все пары (gameId, playerName) из CloudKit
+        var cloudGWPKeys = Set<String>() // "gameId|playerName"
+        
         for record in cloudRecords {
             // Получаем gameId из reference
             guard let gameRef = record["game"] as? CKRecord.Reference else {
-                print("⚠️ GameWithPlayer record without game reference")
+                print("⚠️ [MERGE_GWP] GameWithPlayer record without game reference")
                 continue
             }
             let gameIdString = gameRef.recordID.recordName
             guard let gameId = UUID(uuidString: gameIdString) else {
-                print("⚠️ Invalid game ID: \(gameIdString)")
+                print("⚠️ [MERGE_GWP] Invalid game ID: \(gameIdString)")
                 continue
             }
             
@@ -642,7 +777,7 @@ class CloudKitSyncService: ObservableObject {
             gameFetch.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
             
             guard let game = try? context.fetch(gameFetch).first else {
-                print("⚠️ Game \(gameId) not found locally, skipping GameWithPlayer")
+                print("⚠️ [MERGE_GWP] Game \(gameId) not found locally, skipping GameWithPlayer")
                 continue
             }
             
@@ -657,9 +792,13 @@ class CloudKitSyncService: ObservableObject {
             
             // Получаем имя игрока
             guard let playerName = record["playerName"] as? String else {
-                print("⚠️ GameWithPlayer record without playerName")
+                print("⚠️ [MERGE_GWP] GameWithPlayer record without playerName")
                 continue
             }
+            
+            // Добавляем ключ в Set
+            let key = "\(gameId.uuidString)|\(playerName)"
+            cloudGWPKeys.insert(key)
             
             // Ищем или создаём Player
             let playerFetch: NSFetchRequest<Player> = Player.fetchRequest()
@@ -672,7 +811,7 @@ class CloudKitSyncService: ObservableObject {
                 let newPlayer = Player(context: context)
                 newPlayer.name = playerName
                 player = newPlayer
-                print("➕ Created Player: \(playerName)")
+                print("➕ [MERGE_GWP] Created Player: \(playerName)")
             }
             
             // Проверяем не существует ли уже GameWithPlayer
@@ -684,9 +823,10 @@ class CloudKitSyncService: ObservableObject {
             )
             
             if let existingGWP = try? context.fetch(gwpFetch).first {
-                // Обновляем существующий
+                // CloudKit = Source of Truth: всегда обновляем
                 existingGWP.updateFromCKRecord(record)
-                print("🔄 Updated GameWithPlayer for \(playerName) in game \(gameId)")
+                existingGWP.playerProfile = playerProfile // Обновляем связь
+                print("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId)")
             } else {
                 // Создаём новый
                 let gwp = GameWithPlayer(context: context)
@@ -694,15 +834,44 @@ class CloudKitSyncService: ObservableObject {
                 gwp.player = player
                 gwp.playerProfile = playerProfile
                 gwp.updateFromCKRecord(record)
-                print("➕ Created GameWithPlayer for \(playerName) in game \(gameId)")
+                print("➕ [MERGE_GWP] Created GameWithPlayer for \(playerName) in game \(gameId)")
             }
+        }
+        
+        // CloudKit = Source of Truth: удаляем локальные GWP, которых нет в CloudKit
+        do {
+            let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+            let allLocalGWP = try context.fetch(fetchRequest)
+            
+            var deletedCount = 0
+            for localGWP in allLocalGWP {
+                if let game = localGWP.game, let player = localGWP.player, let playerName = player.name {
+                    let key = "\(game.gameId.uuidString)|\(playerName)"
+                    if !cloudGWPKeys.contains(key) {
+                        print("🗑️ [MERGE_GWP] Deleting local GWP not in CloudKit: \(playerName) in game \(game.gameId)")
+                        context.delete(localGWP)
+                        deletedCount += 1
+                    }
+                }
+            }
+            
+            if deletedCount > 0 {
+                print("🗑️ [MERGE_GWP] Deleted \(deletedCount) local GameWithPlayer not found in CloudKit")
+            }
+        } catch {
+            print("❌ [MERGE_GWP] Error fetching local GWP for cleanup: \(error)")
         }
         
         // Сохраняем все изменения
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ Merged GameWithPlayer records with local database")
+                print("✅ [MERGE_GWP] Merged GameWithPlayer records with local database")
+            } catch {
+                print("❌ [MERGE_GWP] Failed to save merged GameWithPlayer: \(error)")
+            }
+        }
+    }
             } catch {
                 print("❌ Failed to save merged GameWithPlayer: \(error)")
             }
