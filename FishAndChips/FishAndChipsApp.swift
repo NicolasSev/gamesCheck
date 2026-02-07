@@ -117,19 +117,8 @@ struct AppBodyView: View {
                         }
                     }
             } else {
-                // Экран загрузки
-                VStack(spacing: 20) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                    Text("Загрузка данных...")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Text("Синхронизация с CloudKit")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
+                // Splash Screen с фоновым изображением
+                SplashScreenView()
             }
         }
         .task {
