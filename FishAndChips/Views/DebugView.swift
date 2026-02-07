@@ -13,6 +13,10 @@ struct DebugView: View {
     @State private var cloudKitStatus = ""
     @State private var isCreatingSchema = false
     @State private var isSyncing = false
+    @State private var isRefreshingUser = false
+    @State private var isRefreshingGames = false
+    @State private var userRefreshSuccess = false
+    @State private var gamesRefreshSuccess = false
     
     var body: some View {
         NavigationView {
@@ -21,18 +25,56 @@ struct DebugView: View {
                     Text(userInfo)
                         .font(.system(.caption, design: .monospaced))
                     
-                    Button("Refresh User Info") {
-                        loadUserInfo()
+                    Button(action: {
+                        Task {
+                            await refreshUserInfo()
+                        }
+                    }) {
+                        HStack {
+                            if isRefreshingUser {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Refreshing...")
+                            } else if userRefreshSuccess {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("Refreshed!")
+                            } else {
+                                Text("Refresh User Info")
+                            }
+                        }
                     }
+                    .disabled(isRefreshingUser)
+                    .buttonStyle(.borderedProminent)
+                    .tint(userRefreshSuccess ? .green : .blue)
                 }
                 
                 Section("Games Info") {
                     Text(gamesInfo)
                         .font(.system(.caption, design: .monospaced))
                     
-                    Button("Refresh Games Info") {
-                        loadGamesInfo()
+                    Button(action: {
+                        Task {
+                            await refreshGamesInfo()
+                        }
+                    }) {
+                        HStack {
+                            if isRefreshingGames {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Refreshing...")
+                            } else if gamesRefreshSuccess {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("Refreshed!")
+                            } else {
+                                Text("Refresh Games Info")
+                            }
+                        }
                     }
+                    .disabled(isRefreshingGames)
+                    .buttonStyle(.borderedProminent)
+                    .tint(gamesRefreshSuccess ? .green : .blue)
                 }
                 
                 Section("CloudKit") {
@@ -121,6 +163,23 @@ struct DebugView: View {
         }
     }
     
+    private func refreshUserInfo() async {
+        isRefreshingUser = true
+        userRefreshSuccess = false
+        
+        // Имитация загрузки (для визуального эффекта)
+        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 сек
+        
+        loadUserInfo()
+        
+        isRefreshingUser = false
+        userRefreshSuccess = true
+        
+        // Сброс success состояния через 2 секунды
+        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек
+        userRefreshSuccess = false
+    }
+    
     private func loadGamesInfo() {
         let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
@@ -140,6 +199,23 @@ struct DebugView: View {
         } catch {
             gamesInfo = "Error: \(error.localizedDescription)"
         }
+    }
+    
+    private func refreshGamesInfo() async {
+        isRefreshingGames = true
+        gamesRefreshSuccess = false
+        
+        // Имитация загрузки (для визуального эффекта)
+        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 сек
+        
+        loadGamesInfo()
+        
+        isRefreshingGames = false
+        gamesRefreshSuccess = true
+        
+        // Сброс success состояния через 2 секунды
+        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек
+        gamesRefreshSuccess = false
     }
     
     private func resetMigrationFlag() {
