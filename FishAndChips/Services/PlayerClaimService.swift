@@ -105,15 +105,26 @@ class PlayerClaimService {
     
     // MARK: - Get Claims
     
-    /// Получить все заявки пользователя
+    /// Получить все заявки пользователя (сначала pending, потом остальные по дате)
     func getMyClaims(userId: UUID) -> [PlayerClaim] {
         let context = persistence.container.viewContext
         let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         request.predicate = NSPredicate(format: "claimantUserId == %@", userId as CVarArg)
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false)]
+        // Сначала pending (status = "pending"), потом остальные
+        // Внутри каждой группы - по убыванию даты (новые сверху)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "status", ascending: true), // pending идет первым (алфавитный порядок)
+            NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false)
+        ]
         
         do {
-            return try context.fetch(request)
+            let allClaims = try context.fetch(request)
+            // Дополнительная сортировка: pending сверху, потом approved/rejected по дате
+            let pending = allClaims.filter { $0.status == "pending" }
+            let resolved = allClaims.filter { $0.status != "pending" }
+                .sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
+            
+            return pending + resolved
         } catch {
             print("Error fetching my claims: \(error)")
             return []
@@ -131,6 +142,27 @@ class PlayerClaimService {
             return try context.fetch(request)
         } catch {
             print("Error fetching pending claims: \(error)")
+            return []
+        }
+    }
+    
+    /// Получить все заявки для хоста (сначала pending, потом остальные по дате)
+    func getAllClaimsForHost(hostUserId: UUID) -> [PlayerClaim] {
+        let context = persistence.container.viewContext
+        let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+        request.predicate = NSPredicate(format: "hostUserId == %@", hostUserId as CVarArg)
+        
+        do {
+            let allClaims = try context.fetch(request)
+            // Сортировка: pending сверху, потом approved/rejected по дате разрешения
+            let pending = allClaims.filter { $0.status == "pending" }
+                .sorted { $0.createdAt > $1.createdAt }
+            let resolved = allClaims.filter { $0.status != "pending" }
+                .sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
+            
+            return pending + resolved
+        } catch {
+            print("Error fetching all claims for host: \(error)")
             return []
         }
     }

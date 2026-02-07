@@ -10,7 +10,7 @@ import CoreData
 
 struct PendingClaimsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @State private var pendingClaims: [PlayerClaim] = []
+    @State private var allClaims: [PlayerClaim] = []
     @State private var selectedClaim: PlayerClaim?
     @State private var showingClaimDetail = false
     @State private var errorMessage: String?
@@ -28,28 +28,61 @@ struct PendingClaimsView: View {
         return userId
     }
     
+    private var pendingClaims: [PlayerClaim] {
+        allClaims.filter { $0.status == "pending" }
+    }
+    
+    private var resolvedClaims: [PlayerClaim] {
+        allClaims.filter { $0.status != "pending" }
+    }
+    
     var body: some View {
         NavigationView {
             Group {
-                if pendingClaims.isEmpty {
+                if allClaims.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "checkmark.circle")
                             .font(.system(size: 60))
                             .foregroundColor(.white.opacity(0.7))
-                        Text("Нет ожидающих заявок")
+                        Text("Нет заявок")
                             .font(.headline)
                             .foregroundColor(.white)
-                        Text("Все заявки обработаны")
+                        Text("У вас нет заявок на игроков")
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.7))
                     }
                 } else {
                     ScrollView {
-                        VStack(spacing: 12) {
-                            ForEach(pendingClaims, id: \.claimId) { claim in
-                                PendingClaimRow(claim: claim) {
-                                    selectedClaim = claim
-                                    showingClaimDetail = true
+                        VStack(spacing: 16) {
+                            // Ожидающие заявки
+                            if !pendingClaims.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Ожидают (\(pendingClaims.count))")
+                                        .font(.headline)
+                                        .foregroundColor(.orange)
+                                        .padding(.horizontal)
+                                    
+                                    ForEach(pendingClaims, id: \.claimId) { claim in
+                                        PendingClaimRow(claim: claim) {
+                                            selectedClaim = claim
+                                            showingClaimDetail = true
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Обработанные заявки
+                            if !resolvedClaims.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Обработанные (\(resolvedClaims.count))")
+                                        .font(.headline)
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .padding(.horizontal)
+                                        .padding(.top, pendingClaims.isEmpty ? 0 : 8)
+                                    
+                                    ForEach(resolvedClaims, id: \.claimId) { claim in
+                                        ResolvedClaimRow(claim: claim)
+                                    }
                                 }
                             }
                         }
@@ -60,11 +93,11 @@ struct PendingClaimsView: View {
             .navigationTitle("Заявки на игроков")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                loadPendingClaims()
+                loadAllClaims()
             }
             .sheet(item: $selectedClaim) { claim in
                 ClaimDetailView(claim: claim) {
-                    loadPendingClaims()
+                    loadAllClaims()
                 }
             }
             .alert("Ошибка", isPresented: $showingError) {
@@ -100,9 +133,9 @@ struct PendingClaimsView: View {
         }
     }
     
-    private func loadPendingClaims() {
+    private func loadAllClaims() {
         guard let userId = currentUserId else { return }
-        pendingClaims = claimService.getPendingClaimsForHost(hostUserId: userId)
+        allClaims = claimService.getAllClaimsForHost(hostUserId: userId)
     }
 }
 
@@ -467,6 +500,82 @@ struct InfoRow: View {
                 .font(.subheadline)
                 .foregroundColor(.white)
         }
+    }
+}
+
+struct ResolvedClaimRow: View {
+    let claim: PlayerClaim
+    
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: claim.resolvedAt ?? claim.createdAt)
+    }
+    
+    private var statusColor: Color {
+        switch claim.status {
+        case "approved": return .green
+        case "rejected": return .red
+        default: return .gray
+        }
+    }
+    
+    private var statusIcon: String {
+        switch claim.status {
+        case "approved": return "checkmark.circle.fill"
+        case "rejected": return "xmark.circle.fill"
+        default: return "questionmark.circle"
+        }
+    }
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(claim.playerName)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: statusIcon)
+                            .font(.caption)
+                            .foregroundColor(statusColor)
+                        Text(claim.statusDisplayName)
+                            .font(.caption)
+                            .foregroundColor(statusColor)
+                    }
+                }
+                
+                if let claimantUsername = claim.claimantUser?.username {
+                    Text("Пользователь: \(claimantUsername)")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                
+                if let game = claim.game {
+                    Text("Игра: \(game.gameType ?? "Unknown")")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                
+                Text(formattedDate)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.6))
+                
+                if let notes = claim.notes, !notes.isEmpty {
+                    Text("Комментарий: \(notes)")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.top, 2)
+                }
+            }
+        }
+        .padding()
+        .liquidGlass(cornerRadius: 12)
+        .opacity(0.8)
     }
 }
 
