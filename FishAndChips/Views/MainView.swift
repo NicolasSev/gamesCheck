@@ -73,6 +73,7 @@ struct MainView: View {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "person.circle.fill")
                                 .font(.title2)
+                                .zIndex(0)
                             
                             if pendingClaimsCount > 0 {
                                 Text("\(pendingClaimsCount)")
@@ -83,7 +84,8 @@ struct MainView: View {
                                         Circle()
                                             .fill(Color.red)
                                     )
-                                    .offset(x: 6, y: -6)
+                                    .offset(x: 2, y: -2)
+                                    .zIndex(1)
                             }
                         }
                     }

@@ -109,6 +109,7 @@ graph TD
         GWP_CK[GameWithPlayer Record]
         Alias_CK[PlayerAlias Record]
         Claim_CK[PlayerClaim Record]
+        Profile_CK[PlayerProfile Record]
         
         User_CK -->|creatorUserId| Game_CK
         Game_CK -->|game reference| GWP_CK
@@ -117,14 +118,10 @@ graph TD
         Claim_CK -->|gameId| Game_CK
         Claim_CK -->|claimantUserId| User_CK
         Claim_CK -->|hostUserId| User_CK
-    end
-    
-    subgraph "CloudKit Private DB"
-        Profile_CK[PlayerProfile Record]
         Profile_CK -->|userId reference| User_CK
     end
     
-    style Profile_CK fill:#f9f,stroke:#333,stroke-width:2px
+    style Profile_CK fill:#9f9,stroke:#333,stroke-width:2px
 ```
 
 ### Какие данные в какой базе
@@ -132,7 +129,7 @@ graph TD
 | Entity | CloudKit Database | Почему |
 |--------|------------------|--------|
 | **User** | Public DB | Нужна проверка уникальности email при регистрации |
-| **PlayerProfile** | Private DB | Приватная статистика пользователя |
+| **PlayerProfile** | Public DB | Нужна cross-user видимость для системы заявок и привязки GWP |
 | **PlayerAlias** | Public DB | Нужна видимость для cross-user claims |
 | **Game** | Public DB | Публичные игры, доступные по deep link |
 | **GameWithPlayer** | Public DB | Нужна видимость игроков в играх |
@@ -366,11 +363,15 @@ Game.players ←→ Player.game (legacy, для обратной совмест�
 
 ## 📝 Примечания
 
-### Почему PlayerProfile в Private DB?
+### Почему PlayerProfile в Public DB?
 
-- Статистика пользователя приватна
-- Не нужна видимость другим пользователям напрямую
-- GameWithPlayer ссылается на профиль, но сам в Public DB
+- Нужна cross-user видимость для системы заявок
+- Когда хост подтверждает заявку, создаётся профиль для клаиманта
+- GameWithPlayer ссылается на профиль через CKRecord.Reference
+- Клаимант должен увидеть свой профиль и статистику после синхронизации
+- Статистика считается по GameWithPlayer, привязанным к профилю
+
+**ВАЖНО:** Раньше был в Private DB, но это блокировало cross-user функциональность!
 
 ### Почему PlayerAlias в Public DB?
 
@@ -390,6 +391,10 @@ Game.players ←→ Player.game (legacy, для обратной совмест�
 
 ---
 
-**Версия:** 1.0  
-**Дата:** 2026-02-07  
+**Версия:** 1.1  
+**Дата:** 2026-02-07 23:00  
+**Изменения:**
+- v1.1 (2026-02-07 23:00): PlayerProfile мигрирован из Private DB в Public DB для cross-user видимости
+- v1.0 (2026-02-07 19:15): Первая версия диаграммы
+
 **Автор:** AI Agent (Claude Sonnet 4.5)
