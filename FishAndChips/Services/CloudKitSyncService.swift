@@ -785,64 +785,17 @@ class CloudKitSyncService: ObservableObject {
     // MARK: - Fetch Public GameWithPlayer
     
     private func fetchPublicGameWithPlayers() async throws {
-        // КРИТИЧНО: Fetch ВСЕ GameWithPlayer records с pagination
-        // CloudKit limit: 400 records per request, но у нас может быть больше!
+        // PAGINATION: Fetch ВСЕ GameWithPlayer records с автоматической пагинацией
+        print("🔄 [FETCH_ALL_PLAYERS] Starting paginated fetch for ALL GameWithPlayer records...")
         
-        var allRecords: [CKRecord] = []
-        var batchNumber = 1
-        let batchSize = 400
-        
-        print("🔄 [FETCH_ALL_PLAYERS] Starting to fetch ALL GameWithPlayer records with pagination...")
-        
-        // Стратегия: делаем несколько запросов пока не получим меньше batchSize записей
-        // Это означает что больше записей нет
-        var shouldContinue = true
-        
-        while shouldContinue {
-            print("📥 [FETCH_ALL_PLAYERS] Fetching batch #\(batchNumber) (limit: \(batchSize))...")
-            
-            let records = try await cloudKit.fetchRecords(
-                withType: .gameWithPlayer,
-                from: .publicDB,
-                limit: batchSize
-            )
-            
-            allRecords.append(contentsOf: records)
-            print("📥 [FETCH_ALL_PLAYERS] Batch #\(batchNumber): \(records.count) records (total so far: \(allRecords.count))")
-            
-            // Если получили меньше чем limit, значит это последняя партия
-            if records.count < batchSize {
-                shouldContinue = false
-                print("✅ [FETCH_ALL_PLAYERS] Last batch received (less than \(batchSize) records)")
-            } else {
-                // Есть ещё записи, но нужна pagination через CKQueryOperation
-                // ВРЕМЕННОЕ РЕШЕНИЕ: останавливаемся на первых 400
-                // TODO: Реализовать полноценную pagination с CKQueryOperation.Cursor
-                shouldContinue = false
-                print("⚠️ [FETCH_ALL_PLAYERS] WARNING: Got \(batchSize) records - there might be MORE!")
-                print("⚠️ [FETCH_ALL_PLAYERS] Pagination через cursor не реализована - беру только первые \(batchSize)")
-            }
-            
-            batchNumber += 1
-            
-            // Защита от бесконечного цикла
-            if batchNumber > 10 {
-                print("⚠️ [FETCH_ALL_PLAYERS] Safety limit reached (10 batches = 4000 records)")
-                shouldContinue = false
-            }
-        }
+        let allRecords = try await cloudKit.fetchAllRecords(
+            withType: .gameWithPlayer,
+            from: .publicDB,
+            batchSize: 400
+        )
         
         if !allRecords.isEmpty {
-            print("✅ [FETCH_ALL_PLAYERS] Total fetched: \(allRecords.count) game-player records from CloudKit")
-            
-            // КРИТИЧНО: Если получили ровно 400 - показываем WARNING
-            if allRecords.count == 400 {
-                print("🚨 [FETCH_ALL_PLAYERS] CRITICAL WARNING: Fetched exactly 400 records!")
-                print("🚨 [FETCH_ALL_PLAYERS] This means CloudKit limit was hit - MORE records exist!")
-                print("🚨 [FETCH_ALL_PLAYERS] Some local GWP will be incorrectly deleted!")
-                print("🚨 [FETCH_ALL_PLAYERS] SOLUTION: Implement pagination with CKQueryOperation.Cursor")
-            }
-            
+            print("✅ [FETCH_ALL_PLAYERS] Total fetched: \(allRecords.count) game-player records from CloudKit (with pagination)")
             await mergeGameWithPlayersWithLocal(allRecords)
         } else {
             print("ℹ️ [FETCH_ALL_PLAYERS] No GameWithPlayer records found in CloudKit")
@@ -1164,34 +1117,27 @@ class CloudKitSyncService: ObservableObject {
         }
         
         // CloudKit = Source of Truth: удаляем локальные GWP, которых нет в CloudKit
-        // НО! Если CloudKit вернул ровно 400 записей - это лимит, НЕ УДАЛЯЕМ!
-        if cloudRecords.count == 400 {
-            print("🚨 [MERGE_GWP] SKIPPING DELETION: CloudKit returned exactly 400 records (limit hit)")
-            print("🚨 [MERGE_GWP] Cannot safely determine which local GWP to delete")
-            print("🚨 [MERGE_GWP] Local GWP will be preserved until full fetch is implemented")
-        } else {
-            do {
-                let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
-                let allLocalGWP = try context.fetch(fetchRequest)
-                
-                var deletedCount = 0
-                for localGWP in allLocalGWP {
-                    if let game = localGWP.game, let player = localGWP.player, let playerName = player.name {
-                        let key = "\(game.gameId.uuidString)|\(playerName)"
-                        if !cloudGWPKeys.contains(key) {
-                            print("🗑️ [MERGE_GWP] Deleting local GWP not in CloudKit: \(playerName) in game \(game.gameId)")
-                            context.delete(localGWP)
-                            deletedCount += 1
-                        }
+        do {
+            let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
+            let allLocalGWP = try context.fetch(fetchRequest)
+            
+            var deletedCount = 0
+            for localGWP in allLocalGWP {
+                if let game = localGWP.game, let player = localGWP.player, let playerName = player.name {
+                    let key = "\(game.gameId.uuidString)|\(playerName)"
+                    if !cloudGWPKeys.contains(key) {
+                        print("🗑️ [MERGE_GWP] Deleting local GWP not in CloudKit: \(playerName) in game \(game.gameId)")
+                        context.delete(localGWP)
+                        deletedCount += 1
                     }
                 }
-                
-                if deletedCount > 0 {
-                    print("🗑️ [MERGE_GWP] Deleted \(deletedCount) local GameWithPlayer not found in CloudKit")
-                }
-            } catch {
-                print("❌ [MERGE_GWP] Error fetching local GWP for cleanup: \(error)")
             }
+            
+            if deletedCount > 0 {
+                print("🗑️ [MERGE_GWP] Deleted \(deletedCount) local GameWithPlayer not found in CloudKit")
+            }
+        } catch {
+            print("❌ [MERGE_GWP] Error fetching local GWP for cleanup: \(error)")
         }
         
         // Сохраняем все изменения

@@ -225,6 +225,66 @@ class CloudKitService {
         return (records, cursor)
     }
     
+    /// Fetch ALL records с автоматической пагинацией (для больших выборок)
+    func fetchAllRecords(
+        withType type: RecordType,
+        from database: DatabaseType = .privateDB,
+        predicate: NSPredicate = NSPredicate(value: true),
+        sortDescriptors: [NSSortDescriptor]? = nil,
+        batchSize: Int = 400
+    ) async throws -> [CKRecord] {
+        var allRecords: [CKRecord] = []
+        var currentCursor: CKQueryOperation.Cursor? = nil
+        var batchNumber = 1
+        
+        print("📥 [FETCH_ALL] Starting paginated fetch for \(type.rawValue)...")
+        
+        repeat {
+            let db = database == .publicDB ? publicDatabase : privateDatabase
+            
+            let (matchResults, cursor): ([(CKRecord.ID, Result<CKRecord, Error>)], CKQueryOperation.Cursor?)
+            
+            if let currentCursor = currentCursor {
+                // Продолжаем с cursor
+                (matchResults, cursor) = try await db.records(continuingMatchFrom: currentCursor, desiredKeys: nil, resultsLimit: batchSize)
+                print("📥 [FETCH_ALL] Batch #\(batchNumber) (cursor continuation)...")
+            } else {
+                // Первый запрос
+                let query = CKQuery(recordType: type.rawValue, predicate: predicate)
+                query.sortDescriptors = sortDescriptors
+                (matchResults, cursor) = try await db.records(matching: query, desiredKeys: nil, resultsLimit: batchSize)
+                print("📥 [FETCH_ALL] Batch #\(batchNumber) (initial query)...")
+            }
+            
+            // Собираем успешные записи
+            var batchRecords: [CKRecord] = []
+            for (_, result) in matchResults {
+                switch result {
+                case .success(let record):
+                    batchRecords.append(record)
+                case .failure(let error):
+                    print("⚠️ [FETCH_ALL] Failed to fetch record: \(error)")
+                }
+            }
+            
+            allRecords.append(contentsOf: batchRecords)
+            print("✅ [FETCH_ALL] Batch #\(batchNumber): \(batchRecords.count) records (total: \(allRecords.count))")
+            
+            currentCursor = cursor
+            batchNumber += 1
+            
+            // Защита от бесконечного цикла
+            if batchNumber > 50 {
+                print("⚠️ [FETCH_ALL] Safety limit reached (50 batches = 20,000 records)")
+                break
+            }
+            
+        } while currentCursor != nil
+        
+        print("✅ [FETCH_ALL] Completed! Total fetched: \(allRecords.count) \(type.rawValue) records")
+        return allRecords
+    }
+    
     // MARK: - Subscriptions
     
     func saveSubscription(subscription: CKSubscription) async throws -> CKSubscription {

@@ -13,6 +13,11 @@ struct ProfileView: View {
     @State private var showingError = false
     @State private var errorMessage = ""
     
+    // Sync button visual states
+    @State private var isSyncRotating = false
+    @State private var syncButtonColor: Color = .blue
+    @State private var syncErrorText: String? = nil
+    
     private let claimService = PlayerClaimService()
     @StateObject private var syncService = CloudKitSyncService.shared
     
@@ -175,15 +180,14 @@ struct ProfileView: View {
                             
                             Button(action: {
                                 Task {
-                                    try? await syncService.performFullSync()
+                                    await performSyncWithVisualFeedback()
                                 }
                             }) {
                                 HStack {
                                     if syncService.isSyncing {
-                                        ProgressView()
-                                            .progressViewStyle(.circular)
-                                            .tint(.white)
-                                            .scaleEffect(0.8)
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .rotationEffect(.degrees(isSyncRotating ? 360 : 0))
+                                            .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: isSyncRotating)
                                         Text("Синхронизация...")
                                     } else {
                                         Image(systemName: "arrow.triangle.2.circlepath")
@@ -197,8 +201,17 @@ struct ProfileView: View {
                             .disabled(syncService.isSyncing)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(syncService.isSyncing ? Color.gray.opacity(0.3) : Color.blue.opacity(0.3))
+                                    .fill(syncButtonColor.opacity(0.3))
                             )
+                            
+                            // Показываем ошибку если есть
+                            if let errorText = syncErrorText {
+                                Text(errorText)
+                                    .font(.caption2)
+                                    .foregroundColor(.red.opacity(0.9))
+                                    .padding(.top, 4)
+                                    .transition(.opacity)
+                            }
                             
                             // Pending Data UI
                             if PendingSyncTracker.shared.hasPendingData() {
@@ -391,6 +404,50 @@ struct ProfileView: View {
             }
             .onAppear {
                 // Обновить счетчики при открытии
+            }
+        }
+    }
+    
+    private func performSyncWithVisualFeedback() async {
+        // Сброс состояний
+        syncErrorText = nil
+        
+        // Начало синхронизации - желтая кнопка + вращение иконки
+        withAnimation {
+            syncButtonColor = .yellow
+            isSyncRotating = true
+        }
+        
+        do {
+            try await syncService.performFullSync()
+            
+            // Успех - зеленая кнопка на 2 секунды
+            withAnimation {
+                syncButtonColor = .green
+                isSyncRotating = false
+            }
+            
+            // Возврат к синему через 2 секунды
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек
+            withAnimation {
+                syncButtonColor = .blue
+            }
+            
+        } catch {
+            // Ошибка - красная кнопка на 2 секунды + текст ошибки
+            withAnimation {
+                syncButtonColor = .red
+                isSyncRotating = false
+                syncErrorText = error.localizedDescription
+            }
+            
+            print("❌ [SYNC] Error: \(error.localizedDescription)")
+            
+            // Возврат к синему через 2 секунды
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек
+            withAnimation {
+                syncButtonColor = .blue
+                syncErrorText = nil
             }
         }
     }
