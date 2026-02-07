@@ -853,16 +853,21 @@ class CloudKitSyncService: ObservableObject {
         }
         
         // CloudKit = Source of Truth: удаляем локальные игры, которых нет в CloudKit
+        // НО: НЕ удаляем pending данные (еще не синхронизированные)
         do {
             let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
             let allLocalGames = try context.fetch(fetchRequest)
+            let pendingGames = PendingSyncTracker.shared.getPendingGames()
             
             var deletedCount = 0
             for localGame in allLocalGames {
-                if !cloudGameIds.contains(localGame.gameId) {
+                // Проверяем: нет в CloudKit И нет в pending списке
+                if !cloudGameIds.contains(localGame.gameId) && !pendingGames.contains(localGame.gameId) {
                     print("🗑️ [MERGE_GAMES] Deleting local game not in CloudKit: \(localGame.gameId)")
                     context.delete(localGame)
                     deletedCount += 1
+                } else if !cloudGameIds.contains(localGame.gameId) && pendingGames.contains(localGame.gameId) {
+                    print("📌 [MERGE_GAMES] Keeping pending game (not yet synced): \(localGame.gameId)")
                 }
             }
             
