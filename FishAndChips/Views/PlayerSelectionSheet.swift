@@ -33,8 +33,14 @@ struct PlayerSelectionSheet: View {
                 
                 Divider()
                 
-                // Список игроков
+                // Список игроков (хост = кем вы были в этих играх)
                 List {
+                    if playerNames.isEmpty {
+                        Text("Список игроков пуст. Проверьте формат: каждая строка с игроком — «Имя Число» или «Имя Число(Кэшаут)» после даты DD.MM.YYYY.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding()
+                    }
                     ForEach(playerNames, id: \.self) { playerName in
                         Button(action: {
                             if selectedPlayerNames.contains(playerName) {

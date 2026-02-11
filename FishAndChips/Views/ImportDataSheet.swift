@@ -225,19 +225,18 @@ struct ImportDataSheet: View {
             }
         }
         
-        // Сохраняем валидированные игры
+        // Сохраняем валидированные игры и сразу извлекаем имена игроков
+        // (чтобы список был готов и при показе sheet сразу, и после разрешения конфликтов)
         validatedGames = parsedGames
+        uniquePlayerNames = service.extractUniquePlayerNames(from: parsedGames)
         
-        // Если есть конфликты, показываем диалог
+        // Если есть конфликты, показываем диалог (uniquePlayerNames уже заполнен для последующего выбора хоста)
         if !conflicts.isEmpty {
             conflictData = conflicts
             skippedDates = []
             isImporting = false
             return
         }
-        
-        // Извлекаем уникальные имена игроков
-        uniquePlayerNames = service.extractUniquePlayerNames(from: parsedGames)
         
         // Если игроков нет, показываем ошибку
         guard !uniquePlayerNames.isEmpty else {
@@ -246,7 +245,7 @@ struct ImportDataSheet: View {
             return
         }
         
-        // Показываем селект выбора игрока
+        // Показываем селект выбора игрока (хост = кто вы в этих играх)
         isImporting = false
         showPlayerSelection = true
     }
@@ -349,13 +348,14 @@ struct ImportDataSheet: View {
     }
     
     private func performImport() {
-        // Если игроки еще не выбраны, показываем селект
+        // Если игроки еще не выбраны, показываем селект (имена из валидированных данных)
         if selectedPlayerNames.isEmpty {
             let service = DataImportService(viewContext: viewContext, userId: authViewModel.currentUserId)
-            uniquePlayerNames = service.extractUniquePlayerNames(from: validatedGames.isEmpty ? service.parseText(inputText) : validatedGames)
+            let gamesToUse = validatedGames.isEmpty ? service.parseText(inputText) : validatedGames
+            uniquePlayerNames = service.extractUniquePlayerNames(from: gamesToUse)
             
             guard !uniquePlayerNames.isEmpty else {
-                errorMessage = "Не удалось найти игроков в данных"
+                errorMessage = "Не удалось найти игроков в данных. Проверьте формат: каждая строка с игроком — «Имя Число» или «Имя Число(Кэшаут)»."
                 return
             }
             
