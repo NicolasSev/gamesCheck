@@ -5,6 +5,10 @@ struct OverviewTabView: View {
     let statistics: UserStatistics?
     let games: [Game]
     var authViewModel: AuthViewModel? = nil
+    /// Режим "Профиль игрока": отображаемое имя (одно или "Несколько (N)")
+    var selectedPlayerNameForStats: String? = nil
+    /// Режим "Профиль игрока": несколько имён — объединённая статистика по годам/месяцам
+    var selectedPlayerNamesForStats: [String]? = nil
     let onRefresh: (() -> Void)?
     var onPlayerSelected: ((UUID?, String?) -> Void)? = nil
     @Environment(\.managedObjectContext) private var viewContext
@@ -13,235 +17,175 @@ struct OverviewTabView: View {
     @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     @State private var expandedYears: Set<Int> = [] // Отслеживаем раскрытые годы
     @State private var expandedMonths: Set<String> = [] // Отслеживаем раскрытые месяцы
-    @State private var selectedPlayerId: UUID? = nil // Выбранный игрок для супер админа
-    @State private var selectedPlayerName: String? = nil // Выбранный игрок по имени (если не привязан к пользователю)
-    @State private var allPlayerNames: [(name: String, userId: UUID?, isLinked: Bool)] = []
     
+    /// Суперадмин: из CloudKit или по email только в локальных билдах (DEBUG)
     private var isSuperAdmin: Bool {
-        authViewModel?.currentUser?.isSuperAdmin ?? false
+        #if DEBUG
+        if authViewModel?.currentUser?.email?.lowercased() == "sevasresident@gmail.com" {
+            return true
+        }
+        #endif
+        return authViewModel?.currentUser?.isSuperAdmin ?? false
     }
     
-    // Получаем userId для вычисления профита (выбранный игрок для супер админа или текущий пользователь)
+    // Получаем userId для вычисления профита (текущий пользователь)
     private var targetUserId: UUID? {
-        if isSuperAdmin, let selectedId = selectedPlayerId {
-            return selectedId
-        }
-        // Для обычных пользователей берем userId из authViewModel
         return authViewModel?.currentUserId
     }
 
     var body: some View {
         ScrollView {
-                VStack(spacing: 20) {
-                    // Селектор игроков для супер админа
-                    if isSuperAdmin {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Выбрать игрока")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            
-                            Picker("Игрок", selection: Binding(
-                                get: {
-                                    if let playerId = selectedPlayerId {
-                                        return "user_\(playerId.uuidString)"
-                                    } else if let playerName = selectedPlayerName {
-                                        return "name_\(playerName)"
-                                    }
-                                    return "all"
-                                },
-                                set: { (newValue: String) in
-                                    if newValue == "all" {
-                                        selectedPlayerId = nil
-                                        selectedPlayerName = nil
-                                        onPlayerSelected?(nil, nil)
-                                    } else if newValue.hasPrefix("user_") {
-                                        let uuidString = String(newValue.dropFirst(5))
-                                        if let uuid = UUID(uuidString: uuidString) {
-                                            selectedPlayerId = uuid
-                                            selectedPlayerName = nil
-                                            onPlayerSelected?(uuid, nil)
-                                        }
-                                    } else if newValue.hasPrefix("name_") {
-                                        let name = String(newValue.dropFirst(5))
-                                        selectedPlayerId = nil
-                                        selectedPlayerName = name
-                                        onPlayerSelected?(nil, name) // Передаем имя игрока
-                                    }
-                                }
-                            )) {
-                                Text("Все игроки").tag("all")
-                                ForEach(allPlayerNames, id: \.name) { playerInfo in
-                                    HStack {
-                                        Text(playerInfo.name)
-                                        if playerInfo.isLinked {
-                                            Image(systemName: "person.circle.fill")
-                                                .foregroundColor(.green)
-                                                .font(.caption)
-                                        }
-                                    }
-                                    .tag(playerInfo.userId != nil ? "user_\(playerInfo.userId!.uuidString)" : "name_\(playerInfo.name)")
-                                }
-                            }
-                            .pickerStyle(.menu)
+            VStack(spacing: 20) {
+                if let stats = statistics {
+                    BalanceCardView(balance: stats.currentBalance, isPositive: stats.isPositive, animationId: animationId)
+
+                    LazyVGrid(columns: [GridItem(), GridItem()], spacing: 15) {
+                        // Первая строка: Всего игр / MVP раз
+                        StatCardView(
+                            title: "Всего игр",
+                            value: "\(stats.totalSessions)",
+                            icon: "gamecontroller.fill",
+                            color: .blue,
+                            numericValue: Double(stats.totalSessions),
+                            isPercentage: false,
+                            isCurrency: false,
+                            animationId: animationId
+                        )
+
+                        StatCardView(
+                            title: "MVP раз",
+                            value: "\(stats.mvpCount)",
+                            icon: "trophy.fill",
+                            color: .orange,
+                            numericValue: Double(stats.mvpCount),
+                            isPercentage: false,
+                            isCurrency: false,
+                            animationId: animationId
+                        )
+
+                        // Вторая строка: Win Rate / MVP Rate
+                        StatCardView(
+                            title: "Win Rate",
+                            value: "\(Int(stats.winRate * 100))%",
+                            icon: "chart.line.uptrend.xyaxis",
+                            color: .green,
+                            numericValue: stats.winRate * 100,
+                            isPercentage: true,
+                            isCurrency: false,
+                            animationId: animationId
+                        )
+
+                        StatCardView(
+                            title: "MVP Rate",
+                            value: {
+                                let mvpRate = stats.totalSessions > 0 ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100 : 0.0
+                                return "\(Int(mvpRate))%"
+                            }(),
+                            icon: "trophy.circle.fill",
+                            color: .orange,
+                            numericValue: stats.totalSessions > 0 ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100 : 0.0,
+                            isPercentage: true,
+                            isCurrency: false,
+                            animationId: animationId
+                        )
+
+                        // Третья строка: Лучшая сессия / Средний профит
+                        StatCardView(
+                            title: "Лучшая сессия",
+                            value: formatCurrency(stats.bestSession),
+                            icon: "star.fill",
+                            color: .yellow,
+                            numericValue: Double(truncating: NSDecimalNumber(decimal: stats.bestSession)),
+                            isPercentage: false,
+                            isCurrency: true,
+                            animationId: animationId
+                        )
+
+                        StatCardView(
+                            title: "Средний профит",
+                            value: formatCurrency(stats.averageProfit),
+                            icon: "tengesign.circle.fill",
+                            color: .purple,
+                            numericValue: Double(truncating: NSDecimalNumber(decimal: stats.averageProfit)),
+                            isPercentage: false,
+                            isCurrency: true,
+                            animationId: animationId
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Последние игры")
+                            .font(.headline)
                             .foregroundColor(.white)
-                            .padding()
-                            .liquidGlass(cornerRadius: 12)
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    
-                    if let stats = statistics {
-                        BalanceCardView(balance: stats.currentBalance, isPositive: stats.isPositive, animationId: animationId)
 
-                        LazyVGrid(columns: [GridItem(), GridItem()], spacing: 15) {
-                                // Первая строка: Всего игр / MVP раз
-                                StatCardView(
-                                    title: "Всего игр",
-                                    value: "\(stats.totalSessions)",
-                                    icon: "gamecontroller.fill",
-                                    color: .blue,
-                                    numericValue: Double(stats.totalSessions),
-                                    isPercentage: false,
-                                    isCurrency: false,
-                                    animationId: animationId
-                                )
-
-                                StatCardView(
-                                    title: "MVP раз",
-                                    value: "\(stats.mvpCount)",
-                                    icon: "trophy.fill",
-                                    color: .orange,
-                                    numericValue: Double(stats.mvpCount),
-                                    isPercentage: false,
-                                    isCurrency: false,
-                                    animationId: animationId
-                                )
-
-                                // Вторая строка: Win Rate / MVP Rate
-                                StatCardView(
-                                    title: "Win Rate",
-                                    value: "\(Int(stats.winRate * 100))%",
-                                    icon: "chart.line.uptrend.xyaxis",
-                                    color: .green,
-                                    numericValue: stats.winRate * 100,
-                                    isPercentage: true,
-                                    isCurrency: false,
-                                    animationId: animationId
-                                )
-
-                                StatCardView(
-                                    title: "MVP Rate",
-                                    value: {
-                                        let mvpRate = stats.totalSessions > 0 ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100 : 0.0
-                                        return "\(Int(mvpRate))%"
-                                    }(),
-                                    icon: "trophy.circle.fill",
-                                    color: .orange,
-                                    numericValue: stats.totalSessions > 0 ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100 : 0.0,
-                                    isPercentage: true,
-                                    isCurrency: false,
-                                    animationId: animationId
-                                )
-
-                                // Третья строка: Лучшая сессия / Средний профит
-                                StatCardView(
-                                    title: "Лучшая сессия",
-                                    value: formatCurrency(stats.bestSession),
-                                    icon: "star.fill",
-                                    color: .yellow,
-                                    numericValue: Double(truncating: NSDecimalNumber(decimal: stats.bestSession)),
-                                    isPercentage: false,
-                                    isCurrency: true,
-                                    animationId: animationId
-                                )
-
-                                StatCardView(
-                                    title: "Средний профит",
-                                    value: formatCurrency(stats.averageProfit),
-                                    icon: "tengesign.circle.fill",
-                                    color: .purple,
-                                    numericValue: Double(truncating: NSDecimalNumber(decimal: stats.averageProfit)),
-                                    isPercentage: false,
-                                    isCurrency: true,
-                                    animationId: animationId
-                                )
+                        ForEach(stats.recentGames.prefix(5), id: \.gameId) { gameSummary in
+                            NavigationLink {
+                                if let game = persistence.fetchGame(byId: gameSummary.gameId) {
+                                    if gameSummary.gameType == "Бильярд" {
+                                        BilliardGameDetailView(game: game)
+                                    } else {
+                                        GameDetailView(game: game)
+                                    }
+                                }
+                            } label: {
+                                if let game = persistence.fetchGame(byId: gameSummary.gameId) {
+                                    GameRowView(game: game, userProfit: gameSummary.profit)
+                                }
                             }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical)
 
+                    // Блок "По месяцам"
+                    if !gamesByYear.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Последние игры")
+                            Text("По месяцам")
                                 .font(.headline)
                                 .foregroundColor(.white)
 
-                            ForEach(stats.recentGames.prefix(5), id: \.gameId) { gameSummary in
-                                NavigationLink {
-                                    if let game = persistence.fetchGame(byId: gameSummary.gameId) {
-                                        if gameSummary.gameType == "Бильярд" {
-                                            BilliardGameDetailView(game: game)
-                                        } else {
-                                            GameDetailView(game: game)
-                                        }
-                                    }
-                                } label: {
-                                    if let game = persistence.fetchGame(byId: gameSummary.gameId) {
-                                        GameRowView(game: game, userProfit: gameSummary.profit)
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle()) // Убираем стандартный стиль NavigationLink
-                            }
-                        }
-                        .padding(.vertical)
-                        
-                        // Блок "По месяцам"
-                        if !gamesByYear.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("По месяцам")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                
-                                ForEach(gamesByYear, id: \.year) { yearData in
-                                    YearAccordionView(
-                                        yearData: yearData,
-                                        isYearExpanded: expandedYears.contains(yearData.year),
-                                        expandedMonths: $expandedMonths,
-                                        onYearToggle: {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                if expandedYears.contains(yearData.year) {
-                                                    expandedYears.remove(yearData.year)
-                                                } else {
-                                                    expandedYears.insert(yearData.year)
-                                                }
+                            ForEach(gamesByYear, id: \.year) { yearData in
+                                YearAccordionView(
+                                    yearData: yearData,
+                                    isYearExpanded: expandedYears.contains(yearData.year),
+                                    expandedMonths: $expandedMonths,
+                                    onYearToggle: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            if expandedYears.contains(yearData.year) {
+                                                expandedYears.remove(yearData.year)
+                                            } else {
+                                                expandedYears.insert(yearData.year)
                                             }
-                                        },
-                                        persistence: persistence,
-                                        formatCurrency: formatCurrency,
-                                        targetUserId: targetUserId,
-                                        targetPlayerName: isSuperAdmin && selectedPlayerId == nil ? selectedPlayerName : nil
-                                    )
-                                }
+                                        }
+                                    },
+                                    persistence: persistence,
+                                    formatCurrency: formatCurrency,
+                                    targetUserId: targetUserId,
+                                    targetPlayerName: selectedPlayerNameForStats
+                                )
                             }
-                            .padding(.vertical)
                         }
-                    } else {
-                        ProgressView("Загрузка...")
-                            .tint(.white)
-                            .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical)
                     }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical)
-            }
-            .scrollContentBackground(.hidden)
-            .refreshable {
-                // Перезапускаем анимацию при обновлении
-                animationId = UUID()
-                onRefresh?()
-            }
-            .onAppear {
-                if isSuperAdmin {
-                    allPlayerNames = persistence.fetchAllUniquePlayerNamesWithInfo()
+                } else {
+                    ProgressView("Загрузка...")
+                        .tint(.white)
+                        .padding()
                 }
             }
-            .background(
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.vertical)
+        }
+        .frame(maxWidth: .infinity)
+        .scrollContentBackground(.hidden)
+        .refreshable {
+            animationId = UUID()
+            onRefresh?()
+        }
+        .background(
             Group {
                 if let image = backgroundImage {
                     Image(uiImage: image)
@@ -281,54 +225,56 @@ struct OverviewTabView: View {
         let calendar = Calendar.current
         var yearGroups: [Int: [String: MonthGameData]] = [:]
         
-        // Если выбран игрок по имени (без userId), ищем его в играх по имени
-        let targetPlayerName: String? = isSuperAdmin && selectedPlayerId == nil ? selectedPlayerName : nil
-        
-        // Получаем профиль
+        // Профиль (для обычного Обзора) или имя/имена игроков (для "Профиль игрока")
         let profile: PlayerProfile? = {
             if let userId = targetUserId {
                 return persistence.fetchPlayerProfile(byUserId: userId)
             }
             return nil
         }()
-        
-        // Для обычных пользователей должен быть профиль
-        // Для супер-админа может быть либо профиль, либо имя игрока
-        if !isSuperAdmin && profile == nil {
-            return [] // Обычный пользователь без профиля
+
+        let targetPlayerName: String? = selectedPlayerNameForStats
+        let targetPlayerNamesSet: Set<String>? = {
+            guard let names = selectedPlayerNamesForStats, !names.isEmpty else { return nil }
+            return Set(names.map { $0.lowercased() })
+        }()
+
+        if profile == nil && targetPlayerName == nil && targetPlayerNamesSet == nil {
+            return []
         }
-        
-        if isSuperAdmin && profile == nil && targetPlayerName == nil {
-            return [] // Супер-админ не выбрал игрока
-        }
-        
+
         for game in games {
             guard let timestamp = game.timestamp else { continue }
-            
+
             let year = calendar.component(.year, from: timestamp)
             let monthKey = monthKeyFromDate(timestamp)
             let monthName = monthNameFromDate(timestamp)
-            
-            // Вычисляем профит пользователя в этой игре
+
             let participations = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
-            
-            // Ищем участие: сначала по профилю, затем по имени (без учета регистра)
-            let myParticipation: GameWithPlayer? = {
-                if let profile = profile {
-                    return participations.first(where: { $0.playerProfile == profile })
-                } else if let targetName = targetPlayerName {
-                    return participations.first { gwp in
-                        guard let player = gwp.player, let playerName = player.name else { return false }
-                        return playerName.lowercased() == targetName.lowercased()
-                    }
+
+            // Сумма buyin/cashout/profit: по профилю (одно участие), по одному имени или по нескольким именам
+            var buyin = Decimal(0)
+            var cashout = Decimal(0)
+            if let profile = profile {
+                if let one = participations.first(where: { $0.playerProfile == profile }) {
+                    buyin = Decimal(Int(one.buyin))
+                    cashout = Decimal(Int(one.cashout))
                 }
-                return nil
-            }()
-            
-            // Если пользователь не участвовал, profit = 0 (не учитываем в общей статистике месяца)
-            let buyin = Decimal(Int(myParticipation?.buyin ?? 0))
-            let cashout = Decimal(Int(myParticipation?.cashout ?? 0))
-            let profit = myParticipation != nil ? (cashout - (buyin * 2000)) : 0
+            } else if let namesSet = targetPlayerNamesSet {
+                for gwp in participations {
+                    guard let player = gwp.player, let n = player.name, namesSet.contains(n.lowercased()) else { continue }
+                    buyin += Decimal(Int(gwp.buyin))
+                    cashout += Decimal(Int(gwp.cashout))
+                }
+            } else if let name = targetPlayerName, let one = participations.first(where: { gwp in
+                guard let player = gwp.player, let n = player.name else { return false }
+                return n.lowercased() == name.lowercased()
+            }) {
+                buyin = Decimal(Int(one.buyin))
+                cashout = Decimal(Int(one.cashout))
+            }
+
+            let profit = (buyin != 0 || cashout != 0) ? (cashout - (buyin * 2000)) : 0
             
             if yearGroups[year] == nil {
                 yearGroups[year] = [:]
