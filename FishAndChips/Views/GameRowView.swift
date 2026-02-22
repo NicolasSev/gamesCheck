@@ -9,8 +9,9 @@ struct GameRowView: View {
         guard !participations.isEmpty else { return nil }
         
         let playersWithProfit = participations.compactMap { gwp -> (name: String, profit: Decimal)? in
-            guard let player = gwp.player,
-                  let name = player.name else { return nil }
+            // Предпочитаем displayName профиля (Ник) вместо сырого player.name (Я/я) для корректного отображения у других пользователей
+            let name = gwp.playerProfile?.displayName ?? gwp.player?.name ?? ""
+            guard !name.isEmpty else { return nil }
             
             // Конвертируем байин в тенге: 1 байин = 2000 тенге
             let buyin = Decimal(Int(gwp.buyin))

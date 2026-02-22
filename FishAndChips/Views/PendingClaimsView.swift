@@ -463,18 +463,24 @@ struct ClaimDetailView: View {
             showingError = true
             return
         }
-        
-        do {
-            try claimService.rejectClaim(
-                claimId: claim.claimId,
-                resolverUserId: userId,
-                notes: notes.isEmpty ? nil : notes
-            )
-            onResolved()
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+
+        Task {
+            do {
+                try await claimService.rejectClaim(
+                    claimId: claim.claimId,
+                    resolverUserId: userId,
+                    notes: notes.isEmpty ? nil : notes
+                )
+                await MainActor.run {
+                    onResolved()
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
         }
     }
     

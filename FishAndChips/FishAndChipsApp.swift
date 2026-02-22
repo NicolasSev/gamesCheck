@@ -93,6 +93,11 @@ struct AppBodyView: View {
                             }
                         }
                         
+                        // CloudKit Game subscription для push о новых/изменённых играх
+                        Task {
+                            await notificationService.setupGameSubscription()
+                        }
+
                         // Test CloudKit connection
                         Task {
                             do {
@@ -122,14 +127,23 @@ struct AppBodyView: View {
             }
         }
         .task {
-            // Запускаем первичную синхронизацию
+            // Phase 3: Smart Sync — витринная двухфазная загрузка
             do {
-                print("🚀 Starting initial CloudKit sync...")
-                try await syncService.performFullSync()
+                // Phase 1: Минимальная загрузка для быстрого показа UI
+                // Phase 2 (в фоне): Проверка витрин, при расхождении — полная синхронизация
+                print("🚀 Starting smart sync...")
+                try await syncService.smartSync()
                 isInitialSyncComplete = true
-                print("✅ Initial sync completed")
+                print("✅ Smart sync Phase 1 completed - UI ready")
+
+                // Phase 2: Миграция materialized views - один раз (после синхронизации)
+                let hasMigrated = UserDefaults.standard.bool(forKey: "hasMigratedMaterializedViewsV1")
+                if !hasMigrated {
+                    try? await DataMigrationService().generateMaterializedViews()
+                    UserDefaults.standard.set(true, forKey: "hasMigratedMaterializedViewsV1")
+                }
             } catch {
-                print("❌ Initial sync error: \(error)")
+                print("❌ Sync error: \(error)")
                 // Не блокируем запуск приложения при ошибке синхронизации
                 isInitialSyncComplete = true
             }
@@ -159,10 +173,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Set notification delegate
         Task { @MainActor in
             UNUserNotificationCenter.current().delegate = NotificationService.shared
         }
+        // Phase 2: Включить Background Fetch (каждые 15 мин)
+        application.setMinimumBackgroundFetchInterval(15 * 60)
         return true
     }
     
@@ -188,14 +203,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) async -> UIBackgroundFetchResult {
         print("📬 Received remote notification: \(userInfo)")
         
-        // Handle silent push notifications here
-        // This is where CloudKit subscription notifications arrive
-        
-        // Trigger sync if needed
+        // Handle silent push notifications - CloudKit subscription (Game, Claims и т.д.)
         if userInfo["ck"] != nil {
-            // CloudKit notification
             do {
-                try await CloudKitSyncService.shared.sync()
+                try await CloudKitSyncService.shared.performIncrementalSync()
+                await MainActor.run {
+                    Task {
+                        try? await NotificationService.shared.notifyGameUpdated(gameName: "Есть обновления")
+                    }
+                }
                 return .newData
             } catch {
                 print("❌ Sync failed: \(error)")
@@ -204,5 +220,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
         
         return .noData
+    }
+
+    /// Phase 2: Background Fetch - периодическая синхронизация в фоне
+    func application(
+        _ application: UIApplication,
+        performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        print("🔄 Background fetch triggered")
+        Task {
+            do {
+                try await CloudKitSyncService.shared.performIncrementalSync()
+                completionHandler(.newData)
+            } catch {
+                print("❌ Background fetch error: \(error)")
+                completionHandler(.failed)
+            }
+        }
     }
 }

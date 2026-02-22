@@ -17,6 +17,7 @@ extension PlayerProfile {
     @NSManaged public var userId: UUID?
     @NSManaged public var displayName: String
     @NSManaged public var isAnonymous: Bool
+    @NSManaged public var isPublic: Bool
     @NSManaged public var createdAt: Date
     @NSManaged public var totalGamesPlayed: Int32
     @NSManaged public var totalBuyins: NSDecimalNumber

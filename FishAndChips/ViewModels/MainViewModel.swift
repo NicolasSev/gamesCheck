@@ -11,8 +11,12 @@ final class MainViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var topAnalytics: TopAnalytics?
     @Published var chartData: [(date: Date, buyin: Decimal, gameId: UUID)] = []
+    @Published var hasMoreGames = true
 
     private let gameService: GameService
+    private let pageSize = 50
+    private var currentPage = 0
+    private var allGamesForPagination: [Game] = []
 
     private(set) var userId: UUID?
     private(set) var selectedPlayerName: String?
@@ -25,17 +29,21 @@ final class MainViewModel: ObservableObject {
         self.userId = userId
         self.selectedPlayerName = nil
         isLoading = true
+        currentPage = 0
+        hasMoreGames = true
 
         Task {
             let stats = gameService.getUserStatistics(userId)
             let typeStats = gameService.getGameTypeStatistics(userId)
-            let games = gameService.getGames(filter: selectedFilter, forUser: userId)
+            let allGames = gameService.getGames(filter: selectedFilter, forUser: userId)
+            allGamesForPagination = allGames
             let topAnalytics = gameService.getTopAnalytics()
 
             self.statistics = stats
             self.gameTypeStats = typeStats
             self.recentGames = stats.recentGames
-            self.filteredGames = games
+            self.filteredGames = Array(allGames.prefix(pageSize))
+            self.hasMoreGames = allGames.count > pageSize
             self.topAnalytics = topAnalytics
             self.chartData = gameService.getChartData(forUser: userId)
             self.isLoading = false
@@ -46,12 +54,12 @@ final class MainViewModel: ObservableObject {
         self.userId = nil
         self.selectedPlayerName = playerName
         isLoading = true
+        currentPage = 0
+        hasMoreGames = true
 
         Task {
             let stats = gameService.getUserStatistics(byPlayerName: playerName)
-            // Для игроков по имени тип статистики не поддерживается (нужен userId)
             let typeStats: [GameTypeStatistics] = []
-            // Получаем все игры, где участвовал этот игрок
             let allGames = gameService.getAllGames()
             let games = allGames.filter { game in
                 let participations = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
@@ -60,12 +68,15 @@ final class MainViewModel: ObservableObject {
                     return name.lowercased() == playerName.lowercased()
                 }
             }
+            let sortedGames = games.sorted { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }
+            allGamesForPagination = sortedGames
             let topAnalytics = gameService.getTopAnalytics()
 
             self.statistics = stats
             self.gameTypeStats = typeStats
             self.recentGames = stats.recentGames
-            self.filteredGames = games.sorted { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }
+            self.filteredGames = Array(sortedGames.prefix(pageSize))
+            self.hasMoreGames = sortedGames.count > pageSize
             self.topAnalytics = topAnalytics
             self.chartData = gameService.getChartData(byPlayerName: playerName)
             self.isLoading = false
@@ -74,18 +85,24 @@ final class MainViewModel: ObservableObject {
 
     func applyFilter(_ filter: GameFilter) {
         selectedFilter = filter
-        // Если выбран игрок по имени, фильтруем игры по имени
+        currentPage = 0
         if let playerName = selectedPlayerName {
             let allGames = gameService.getAllGames()
-            filteredGames = allGames.filter { game in
+            let sorted = allGames.filter { game in
                 let participations = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
                 return participations.contains { gwp in
                     guard let player = gwp.player, let name = player.name else { return false }
                     return name.lowercased() == playerName.lowercased()
                 }
             }.sorted { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }
+            allGamesForPagination = sorted
+            filteredGames = Array(sorted.prefix(pageSize))
+            hasMoreGames = sorted.count > pageSize
         } else if let userId = userId {
-            filteredGames = gameService.getGames(filter: filter, forUser: userId)
+            let all = gameService.getGames(filter: filter, forUser: userId)
+            allGamesForPagination = all
+            filteredGames = Array(all.prefix(pageSize))
+            hasMoreGames = all.count > pageSize
         }
     }
 
@@ -95,6 +112,21 @@ final class MainViewModel: ObservableObject {
         } else if let userId = userId {
             loadData(forUser: userId)
         }
+    }
+
+    /// Phase 2: Загрузить следующую страницу игр
+    func loadMoreGames() {
+        guard hasMoreGames, !isLoading else { return }
+        let nextPage = currentPage + 1
+        let start = nextPage * pageSize
+        let end = min(start + pageSize, allGamesForPagination.count)
+        guard start < allGamesForPagination.count else {
+            hasMoreGames = false
+            return
+        }
+        filteredGames.append(contentsOf: allGamesForPagination[start..<end])
+        currentPage = nextPage
+        hasMoreGames = end < allGamesForPagination.count
     }
 }
 

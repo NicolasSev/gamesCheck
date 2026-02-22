@@ -43,6 +43,11 @@ class CloudKitSchemaCreator {
         try await createSampleGameWithPlayerRecord()
         try await createSamplePlayerAliasRecord()
         
+        // Phase 2: Materialized views (Public DB)
+        try await createSampleUserStatisticsSummaryRecord()
+        try await createSampleGameSummaryRecord()
+        try await createSampleUserGameIndexRecord()
+        
         print("")
         print("✅ Development schema created successfully!")
         print("")
@@ -134,6 +139,51 @@ class CloudKitSchemaCreator {
         
         try await publicDB.save(record)
         print("  ✓ PlayerAlias (Public)")
+    }
+
+    // MARK: - Phase 2: Materialized Views (Public DB)
+
+    private func createSampleUserStatisticsSummaryRecord() async throws {
+        let record = CKRecord(recordType: "UserStatisticsSummary")
+        record["userId"] = UUID().uuidString as CKRecordValue
+        record["totalGamesPlayed"] = 0 as CKRecordValue
+        record["totalBuyins"] = 0.0 as CKRecordValue
+        record["totalCashouts"] = 0.0 as CKRecordValue
+        record["balance"] = 0.0 as CKRecordValue
+        record["winRate"] = 0.0 as CKRecordValue
+        record["avgProfit"] = 0.0 as CKRecordValue
+        record["lastUpdated"] = Date() as CKRecordValue
+
+        try await publicDB.save(record)
+        print("  ✓ UserStatisticsSummary (Public)")
+    }
+
+    private func createSampleGameSummaryRecord() async throws {
+        let record = CKRecord(recordType: "GameSummary")
+        record["gameId"] = UUID().uuidString as CKRecordValue
+        record["gameType"] = "poker" as CKRecordValue
+        record["timestamp"] = Date() as CKRecordValue
+        record["totalPlayers"] = 0 as CKRecordValue
+        record["totalBuyins"] = 0.0 as CKRecordValue
+        record["isPublic"] = 0 as CKRecordValue
+        record["lastModified"] = Date() as CKRecordValue
+
+        try await publicDB.save(record)
+        print("  ✓ GameSummary (Public)")
+    }
+
+    private func createSampleUserGameIndexRecord() async throws {
+        let record = CKRecord(recordType: "UserGameIndex")
+        record["indexId"] = UUID().uuidString as CKRecordValue
+        record["userId"] = UUID().uuidString as CKRecordValue
+        record["gameId"] = UUID().uuidString as CKRecordValue
+        record["timestamp"] = Date() as CKRecordValue
+        record["buyin"] = 0.0 as CKRecordValue
+        record["cashout"] = 0.0 as CKRecordValue
+        record["isHost"] = 0 as CKRecordValue
+
+        try await publicDB.save(record)
+        print("  ✓ UserGameIndex (Public)")
     }
 }
 

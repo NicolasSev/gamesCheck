@@ -27,6 +27,7 @@ class NotificationService: NSObject, ObservableObject {
         case playerClaim = "PLAYER_CLAIM"
         case claimResponse = "CLAIM_RESPONSE"
         case gameInvite = "GAME_INVITE"
+        case gameUpdate = "GAME_UPDATE"
     }
     
     // MARK: - Notification Actions
@@ -140,9 +141,16 @@ class NotificationService: NSObject, ObservableObject {
             intentIdentifiers: [],
             options: []
         )
+
+        let gameUpdateCategory = UNNotificationCategory(
+            identifier: NotificationCategory.gameUpdate.rawValue,
+            actions: [viewGameAction],
+            intentIdentifiers: [],
+            options: []
+        )
         
         // Register categories
-        notificationCenter.setNotificationCategories([claimCategory, responseCategory, gameCategory])
+        notificationCenter.setNotificationCategories([claimCategory, responseCategory, gameCategory, gameUpdateCategory])
     }
     
     // MARK: - Send Local Notification (for testing)
@@ -304,6 +312,85 @@ class NotificationService: NSObject, ObservableObject {
         notificationCenter.removeDeliveredNotifications(withIdentifiers: [identifier])
         notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
     }
+
+    // MARK: - CloudKit Game Subscription (Phase 3)
+
+    private let gameSubscriptionID = "game-updates"
+
+    /// Подписка на изменения игр в CloudKit Public DB. При создании/изменении игры пользователи получают push.
+    func setupGameSubscription() async {
+        guard await CloudKitService.shared.isCloudKitAvailable() else { return }
+        do {
+            let predicate = NSPredicate(value: true)
+            let subscription = CKQuerySubscription(
+                recordType: "Game",
+                predicate: predicate,
+                subscriptionID: gameSubscriptionID,
+                options: [.firesOnRecordCreation, .firesOnRecordUpdate]
+            )
+            subscription.notificationInfo = CKSubscription.NotificationInfo()
+            subscription.notificationInfo?.shouldSendContentAvailable = true
+            _ = try await CloudKitService.shared.saveSubscription(subscription: subscription, to: .publicDB)
+            print("✅ [PUSH] Game subscription registered")
+        } catch {
+            print("❌ [PUSH] Failed to setup game subscription: \(error)")
+        }
+    }
+
+    /// Локальное уведомление «Хост загрузил новую игру» (вызывается после получения silent push и синхронизации)
+    func notifyNewGame(gameName: String, hostName: String, gameId: UUID? = nil) async throws {
+        let title = "Новая игра"
+        let body = "\(hostName) загрузил игру: \(gameName)"
+        saveNotificationToStore(title: title, body: body, type: "game_new", gameId: gameId)
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.categoryIdentifier = NotificationCategory.gameUpdate.rawValue
+        var userInfo: [String: Any] = ["type": "game_new"]
+        if let gameId = gameId { userInfo["gameId"] = gameId.uuidString }
+        content.userInfo = userInfo
+        badgeCount += 1
+        content.badge = NSNumber(value: badgeCount)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
+        try await notificationCenter.add(request)
+    }
+
+    /// Локальное уведомление об изменении игры
+    func notifyGameUpdated(gameName: String, gameId: UUID? = nil) async throws {
+        let title = "Игра обновлена"
+        let body = "Изменения в игре: \(gameName)"
+        saveNotificationToStore(title: title, body: body, type: "game_updated", gameId: gameId)
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.categoryIdentifier = NotificationCategory.gameUpdate.rawValue
+        var userInfo: [String: Any] = ["type": "game_updated"]
+        if let gameId = gameId { userInfo["gameId"] = gameId.uuidString }
+        content.userInfo = userInfo
+        badgeCount += 1
+        content.badge = NSNumber(value: badgeCount)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
+        try await notificationCenter.add(request)
+    }
+
+    func saveNotificationToStore(title: String, body: String, type: String, gameId: UUID? = nil) {
+        let context = PersistenceController.shared.container.viewContext
+        let notification = AppNotification(context: context)
+        notification.id = UUID()
+        notification.title = title
+        notification.body = body
+        notification.type = type
+        notification.isRead = false
+        notification.createdAt = Date()
+        notification.gameId = gameId
+        try? context.save()
+    }
 }
 
 // MARK: - UNUserNotificationCenterDelegate
@@ -345,9 +432,11 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             if let claimId = userInfo["claimId"] as? String {
                 await deepLink(to: .claim(claimId))
             }
-        case "game_invite":
+        case "game_invite", "game_new", "game_updated":
             if let gameId = userInfo["gameId"] as? String {
                 await deepLink(to: .game(gameId))
+            } else {
+                NotificationCenter.default.post(name: .openNotificationsTab, object: nil)
             }
         default:
             break

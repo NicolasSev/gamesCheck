@@ -63,6 +63,7 @@ struct AddGameSheet: View {
             // Автоматическая синхронизация в CloudKit
             Task {
                 await CloudKitSyncService.shared.quickSyncGame(newGame)
+                try? await MaterializedViewsService.shared.updateGameSummary(gameId: newGame.gameId)
             }
         } catch {
             print("Ошибка сохранения игры: \(error.localizedDescription)")

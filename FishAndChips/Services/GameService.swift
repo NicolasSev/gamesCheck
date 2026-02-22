@@ -4,6 +4,10 @@ import CoreData
 final class GameService {
     private let persistence: PersistenceController
 
+    // Phase 2: Кеш статистики (5 мин)
+    private var statisticsCache: [UUID: (stats: UserStatistics, timestamp: Date)] = [:]
+    private let cacheExpiration: TimeInterval = 300
+
     init(persistence: PersistenceController = .shared) {
         self.persistence = persistence
     }
@@ -59,6 +63,19 @@ final class GameService {
             return getAllGamesForUser(userId).filter { gameProfit(for: $0, userId: userId) < 0 }
         }
     }
+
+    /// Phase 2: Постраничная загрузка игр из Core Data
+    func getGames(offset: Int, limit: Int, filter: GameFilter, forUser userId: UUID?) -> [Game] {
+        let allGames: [Game]
+        if let userId = userId {
+            allGames = getGames(filter: filter, forUser: userId)
+        } else {
+            allGames = getAllGames()
+        }
+        let endIndex = min(offset + limit, allGames.count)
+        guard offset < allGames.count else { return [] }
+        return Array(allGames[offset..<endIndex])
+    }
     
     // Получить все игры независимо от пользователя (для просмотра всех игр на устройстве)
     func getAllGames() -> [Game] {
@@ -83,6 +100,97 @@ final class GameService {
     }
 
     // MARK: - Statistics
+    func getUserStatistics(byPlayerNames namesSet: Set<String>) -> UserStatistics {
+        guard !namesSet.isEmpty else { return emptyStatistics() }
+        if namesSet.count == 1, let single = namesSet.first {
+            return getUserStatistics(byPlayerName: single)
+        }
+        let allGames = getAllGames()
+        var totalBuyins: Decimal = 0
+        var totalCashouts: Decimal = 0
+        var wins = 0
+        var profitByType: [String: Decimal] = [:]
+        var sessionProfits: [Decimal] = []
+        var sessionsWithParticipation = 0
+        var mvpCount = 0
+        var gamesParticipated = 0
+        for game in allGames {
+            let participations = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
+            guard let myParticipation = participations.first(where: { gwp in
+                guard let player = gwp.player, let name = player.name else { return false }
+                return namesSet.contains(name.lowercased())
+            }) else { continue }
+            gamesParticipated += 1
+            sessionsWithParticipation += 1
+            let buyin = Decimal(Int(myParticipation.buyin))
+            let cashout = Decimal(Int(myParticipation.cashout))
+            let profit = cashout - (buyin * 2000)
+            totalBuyins += buyin
+            totalCashouts += cashout
+            sessionProfits.append(profit)
+            if profit > 0 { wins += 1 }
+            if let gameType = game.gameType { profitByType[gameType, default: 0] += profit }
+            let playersWithProfit = participations.compactMap { gwp -> (name: String, profit: Decimal)? in
+                guard let player = gwp.player, let name = player.name else { return nil }
+                let b = Decimal(Int(gwp.buyin))
+                let c = Decimal(Int(gwp.cashout))
+                return (name: name, profit: c - (b * 2000))
+            }
+            if let max = playersWithProfit.max(by: { $0.profit < $1.profit }),
+               namesSet.contains(max.name.lowercased()) { mvpCount += 1 }
+        }
+        let totalSessions = sessionsWithParticipation
+        let currentBalance = totalCashouts - (totalBuyins * 2000)
+        let winRate = totalSessions > 0 ? Double(wins) / Double(totalSessions) : 0
+        let averageProfit = totalSessions > 0 ? currentBalance / Decimal(totalSessions) : 0
+        let bestSession = sessionProfits.max() ?? 0
+        let worstSession = sessionProfits.min() ?? 0
+        let recentGames = allGames
+            .filter { game in
+                let p = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
+                return p.contains { gwp in
+                    guard let pl = gwp.player, let n = pl.name else { return false }
+                    return namesSet.contains(n.lowercased())
+                }
+            }
+            .sorted { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }
+            .prefix(10)
+            .map { game -> GameSummary in
+                let p = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
+                let my = p.first { gwp in
+                    guard let pl = gwp.player, let n = pl.name else { return false }
+                    return namesSet.contains(n.lowercased())
+                }
+                let buyin = Decimal(Int(my?.buyin ?? 0))
+                let cashout = Decimal(Int(my?.cashout ?? 0))
+                return GameSummary(
+                    gameId: game.gameId,
+                    gameType: game.gameType ?? "Unknown",
+                    timestamp: game.timestamp ?? Date(),
+                    totalPlayers: p.count,
+                    myBuyin: buyin,
+                    myCashout: cashout,
+                    profit: cashout - (buyin * 2000),
+                    isCreator: false
+                )
+            }
+        return UserStatistics(
+            totalGamesCreated: 0,
+            totalGamesParticipated: gamesParticipated,
+            totalBuyins: totalBuyins,
+            totalCashouts: totalCashouts,
+            currentBalance: currentBalance,
+            winRate: winRate,
+            profitByGameType: profitByType,
+            recentGames: Array(recentGames),
+            bestSession: bestSession,
+            worstSession: worstSession,
+            averageProfit: averageProfit,
+            totalSessions: totalSessions,
+            mvpCount: mvpCount
+        )
+    }
+
     func getUserStatistics(byPlayerName playerName: String) -> UserStatistics {
         // Получаем все игры
         let allGames = getAllGames()
@@ -198,6 +306,11 @@ final class GameService {
     }
     
     func getUserStatistics(_ userId: UUID) -> UserStatistics {
+        if let cached = statisticsCache[userId],
+           Date().timeIntervalSince(cached.timestamp) < cacheExpiration {
+            return cached.stats
+        }
+
         let createdGames = getGamesCreatedByUser(userId)
         let participatedGames = getGamesParticipatedByUser(userId)
         let allGames = Set(createdGames).union(Set(participatedGames)).filter { !$0.softDeleted }
@@ -264,7 +377,7 @@ final class GameService {
             .prefix(10)
             .map { createGameSummary(from: $0, userId: userId, profile: profile) }
 
-        return UserStatistics(
+        let stats = UserStatistics(
             totalGamesCreated: createdGames.count,
             totalGamesParticipated: participatedGames.count,
             totalBuyins: totalBuyins,
@@ -279,6 +392,13 @@ final class GameService {
             totalSessions: totalSessions,
             mvpCount: mvpCount
         )
+        statisticsCache[userId] = (stats, Date())
+        return stats
+    }
+
+    /// Phase 2: Сбросить кеш при изменениях данных
+    func invalidateStatisticsCache(userId: UUID) {
+        statisticsCache.removeValue(forKey: userId)
     }
 
     func getGameTypeStatistics(_ userId: UUID) -> [GameTypeStatistics] {
@@ -365,7 +485,8 @@ final class GameService {
         )
     }
 
-    private func emptyStatistics() -> UserStatistics {
+    /// Возвращает пустую статистику (для профилей без игр). Доступен для PlayerPublicProfileView.
+    func emptyStatistics() -> UserStatistics {
         UserStatistics(
             totalGamesCreated: 0,
             totalGamesParticipated: 0,

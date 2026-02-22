@@ -113,6 +113,45 @@ struct OverviewTabView: View {
                         )
                     }
 
+                    if authViewModel != nil, selectedPlayerNameForStats == nil, let userId = authViewModel?.currentUserId,
+                       let profile = persistence.fetchPlayerProfile(byUserId: userId) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Профиль")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Toggle("Сделать профиль публичным", isOn: Binding(
+                                get: { profile.isPublic },
+                                set: { newValue in
+                                    profile.isPublic = newValue
+                                    try? viewContext.save()
+                                    Task {
+                                        try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+                                    }
+                                }
+                            ))
+                            .tint(.blue)
+                            Button {
+                                if !profile.isPublic {
+                                    profile.isPublic = true
+                                    try? viewContext.save()
+                                    Task { try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile) }
+                                }
+                                let url = URL(string: "fishchips://profile/\(profile.profileId.uuidString)")!
+                                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                   let rootVC = windowScene.windows.first?.rootViewController {
+                                    rootVC.present(av, animated: true)
+                                }
+                            } label: {
+                                Label("Поделиться профилем", systemImage: "square.and.arrow.up")
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 15)
+                        .padding(.horizontal)
+                    }
+
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Последние игры")
                             .font(.headline)

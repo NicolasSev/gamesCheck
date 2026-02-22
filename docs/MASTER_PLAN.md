@@ -2,12 +2,14 @@
 
 > **Единый источник правды для всех агентов, работающих над проектом**
 
-**Последнее обновление:** 2026-02-06 23:50
+**Последнее обновление:** 2026-02-22 12:00
 
 **📊 Документация:**
 - [Диаграмма данных и схема базы данных](DATA_DIAGRAM.md) - полная схема Core Data, CloudKit, flow синхронизации
 
 **История обновлений:**
+- 2026-02-22 (12:00): 📋 ФАЗА 3 НАЧАТА — Витрины, Пуши, Игроки, Скорость: обновлён MASTER_PLAN, добавлены правила для агентов (читать план, обновлять DATA_DIAGRAM при изменении данных)
+- 2026-02-11 (14:00): ✅ ФАЗА 2 ЗАВЕРШЕНА — Оптимизация производительности: Materialized Views, двухфазная загрузка (minimal + background), lazy loading GWP, пагинация игр, кеш статистики, Background Fetch, миграция данных
 - 2026-02-06 (23:50): 🐛 Импорт игр: исправлен пустой список имён при выборе хоста — uniquePlayerNames заполняется при валидации (в т.ч. при конфликтах), fallback-сообщение в PlayerSelectionSheet
 - 2026-02-06 (вечер): ✅ Профиль игрока: полный сброс при «Сменить игрока», объединённая статистика по нескольким выбранным именам (выборка увеличивается)
 - 2026-02-07 (00:15): 🚀 КРИТИЧЕСКОЕ: Реализована полная пагинация CloudKit для GameWithPlayer (CKQueryOperation.Cursor)
@@ -802,18 +804,57 @@ enum DatabaseType {
   - Pull-to-refresh в списках игр
   - Фоновая синхронизация (background fetch)
 
-**Фаза 2: Incremental Sync (оптимизация)**
+**Фаза 2: Оптимизация производительности** — ✅ ЗАВЕРШЕНА (2026-02-11)
 
-**Задача 2.1:** Использовать CKServerChangeToken
-- Сохранять токен последней синхронизации
-- При следующем fetch загружать только изменения (delta sync)
-- Это экономит трафик и время загрузки
+Реализовано:
+- **Materialized Views:** UserStatisticsSummary, GameSummaryRecord, UserGameIndex в Core Data и CloudKit
+- **Двухфазная загрузка:** performMinimalSync() (< 3 сек) → UI готов → performBackgroundSync() в фоне
+- **Lazy loading:** GameWithPlayer загружаются по требованию при открытии игры
+- **Пагинация:** loadMoreGames() в MainViewModel, постраничная загрузка в GamesListTabView
+- **Кеш статистики:** 5 мин TTL в GameService, invalidateStatisticsCache() при изменениях
+- **Background Fetch + Silent Push:** автоматическая синхронизация при возврате и push
+- **Миграция:** DataMigrationService.generateMaterializedViews() для существующих данных
+- **UI:** SkeletonLoadingView, индикатор фоновой синхронизации в MainView, PerformanceMonitor
 
-**Задача 2.2:** Реализовать фоновую синхронизацию
-- Background Fetch (периодическая синхронизация)
-- Push-триггерная синхронизация (при получении silent push)
+**Задача 2.1 (устарела):** CKServerChangeToken — заменено на двухфазную загрузку
 
-**Фаза 3: Обработка Deep Links**
+**Задача 2.2:** ✅ Реализовать фоновую синхронизацию
+- Background Fetch (периодическая синхронизация) — реализовано в AppDelegate
+- Push-триггерная синхронизация (при получении silent push) — в didReceiveRemoteNotification
+
+---
+
+## 🤖 Правила для AI-агентов (ОБЯЗАТЕЛЬНО)
+
+**Перед началом любой задачи:**
+1. **Прочитать** `docs/MASTER_PLAN.md` — единый источник правды
+2. **Убедиться**, что действия соответствуют текущей фазе проекта
+
+**При изменении структуры данных:**
+- **ОБЯЗАТЕЛЬНО обновлять** `docs/DATA_DIAGRAM.md` (entity, атрибуты, CloudKit schema, flow)
+- К изменениям относятся: новые/изменённые entity, атрибуты, relationships, CloudKit record types, порядок синхронизации
+
+**Парадигма работы:** Small diffs → компиляция → CloudKit Dashboard проверка (если касается CloudKit) → следующий шаг.
+
+---
+
+## 📋 Фаза 3 MVP: Витрины, Пуши, Игроки, Скорость (2026-02)
+
+**Статус:** ✅ РЕАЛИЗОВАНО (2026-02-22)
+
+**Блоки:**
+- [x] Блок 0: Обновить MASTER_PLAN
+- [x] Блок 1: Исправить "Я" в снипетах (displayName вместо player.name, rebuildAllGameSummaries)
+- [x] Блок 7: Исправить pending claims (push после approve/reject)
+- [x] Блок 2: Витринная синхронизация (smartSync, checksum, fetchSummariesOnly)
+- [x] Блок 3: Push-уведомления о новых/обновлённых играх (CKSubscription)
+- [x] Блок 4: Экран "Уведомления" в профиле (AppNotification entity)
+- [x] Блок 5: Раздел "Игроки" (isPublic, PlayersTabView, поделиться профилем)
+- [x] Блок 6: SuperAdmin просмотр профиля (PlayerPublicProfileView, SuperAdminProfileInfo)
+
+---
+
+**Фаза 3 (Legacy): Обработка Deep Links**
 
 **Задача 3.1:** Улучшить обработку deep link для несуществующих игр
 - Если игра не найдена локально → fetch конкретную игру из CloudKit по ID

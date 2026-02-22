@@ -123,6 +123,7 @@ extension PlayerProfile {
         
         record["displayName"] = displayName as CKRecordValue
         record["isAnonymous"] = (isAnonymous ? 1 : 0) as CKRecordValue
+        record["isPublic"] = (isPublic ? 1 : 0) as CKRecordValue
         record["createdAt"] = createdAt as CKRecordValue
         record["totalGamesPlayed"] = totalGamesPlayed as CKRecordValue
         record["totalBuyins"] = NSNumber(value: (totalBuyins as NSDecimalNumber).doubleValue)
@@ -143,9 +144,11 @@ extension PlayerProfile {
         if let displayName = record["displayName"] as? String {
             self.displayName = displayName
         }
-        // isAnonymous хранится в CloudKit как Int64 (0 или 1)
         if let isAnonymousInt = record["isAnonymous"] as? Int64 {
             self.isAnonymous = (isAnonymousInt == 1)
+        }
+        if let isPublicInt = record["isPublic"] as? Int64 {
+            self.isPublic = (isPublicInt == 1)
         }
         if let createdAt = record["createdAt"] as? Date {
             self.createdAt = createdAt

@@ -133,6 +133,20 @@ struct ProfileView: View {
                         .padding()
                         .liquidGlass(cornerRadius: 15)
                         .padding(.horizontal)
+
+                        // Уведомления
+                        NavigationLink(destination: NotificationsView()) {
+                            HStack {
+                                Text("Уведомления")
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 15)
+                        .padding(.horizontal)
                         
                         // Безопасность
                         VStack(alignment: .leading, spacing: 8) {

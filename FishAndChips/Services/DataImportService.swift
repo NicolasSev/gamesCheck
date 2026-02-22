@@ -343,8 +343,31 @@ class DataImportService {
         }
         
         try viewContext.save()
+
+        // Phase 2: Обновить materialized views в фоне
+        if let userId = userId {
+            Task {
+                do {
+                    try await MaterializedViewsService.shared.updateUserStatisticsSummary(userId: userId)
+                    for parsedGame in parsedGames {
+                        // Находим созданную игру по дате для обновления GameSummary
+                        let gameDate = calendar.startOfDay(for: parsedGame.date)
+                        let startOfDay = calendar.startOfDay(for: parsedGame.date)
+                        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+                        let fr: NSFetchRequest<Game> = Game.fetchRequest()
+                        fr.predicate = NSPredicate(format: "timestamp >= %@ AND timestamp < %@", startOfDay as NSDate, endOfDay as NSDate)
+                        fr.fetchLimit = 1
+                        if let game = try? viewContext.fetch(fr).first {
+                            try? await MaterializedViewsService.shared.updateGameSummary(gameId: game.gameId)
+                        }
+                    }
+                } catch {
+                    print("⚠️ [MaterializedViews] Failed to update: \(error)")
+                }
+            }
+        }
     }
-    
+
     enum ImportError: LocalizedError {
         case noGamesFound
         case invalidData

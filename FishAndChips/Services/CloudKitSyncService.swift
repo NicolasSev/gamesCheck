@@ -15,6 +15,7 @@ class CloudKitSyncService: ObservableObject {
     static let shared = CloudKitSyncService()
     
     @Published var isSyncing = false
+    @Published var isBackgroundSyncing = false
     @Published var lastSyncDate: Date?
     @Published var syncError: String?
     
@@ -533,17 +534,299 @@ class CloudKitSyncService: ObservableObject {
         // 3. Fetch private data from CloudKit
         try await fetchPlayerClaims()
         
+        // 4. Пересобрать materialized views после pull (актуализирует GameSummaryRecord)
+        try? await MaterializedViewsService.shared.rebuildAllGameSummaries()
+
         // ПРИМЕЧАНИЕ: PUSH (sync()) НЕ вызывается!
         // Данные загружаются в CloudKit ТОЛЬКО в момент их создания:
         // - Импорт игры → quickSyncGame()
         // - Создание заявки → syncPlayerClaims()
         // - Одобрение заявки → синхронизация в PlayerClaimService
-        
+
         print("✅ Full sync completed (CloudKit data pulled)")
     }
-    
+
+    // MARK: - Phase 2: Two-Phase Loading
+
+    /// Быстрая загрузка для показа UI (< 2 сек). Загружает только данные текущего пользователя.
+    func performMinimalSync() async throws {
+        guard await cloudKit.isCloudKitAvailable() else {
+            throw CloudKitSyncError.cloudKitNotAvailable
+        }
+
+        let start = Date()
+        print("🚀 Phase 1: Minimal sync for fast app launch...")
+
+        let userId = getCurrentUserId()
+
+        // 1. Профиль текущего пользователя (ТОЛЬКО СВОЙ)
+        if let userId = userId {
+            try await fetchMyPlayerProfile(userId: userId)
+        }
+
+        // 2. Последние 20 игр (без GWP - тяжёлая часть)
+        try await fetchRecentGames(limit: 20)
+
+        // 3. Заявки (для badge count) - только pending для текущего хоста
+        if let userId = userId {
+            try await fetchPendingClaimsForHost(userId: userId)
+        }
+
+        // 4. UserStatisticsSummary - если есть в CloudKit (опционально)
+        if let userId = userId {
+            try? await fetchUserStatisticsSummary(userId: userId)
+        }
+
+        let duration = Date().timeIntervalSince(start)
+        print("✅ Phase 1 completed in \(String(format: "%.2f", duration))s - app can show UI now")
+    }
+
+    /// Фоновая загрузка остальных данных (без GWP - они загружаются по требованию).
+    func performBackgroundSync() async throws {
+        guard await cloudKit.isCloudKitAvailable() else { return }
+
+        await MainActor.run { isBackgroundSyncing = true }
+        defer { Task { @MainActor in isBackgroundSyncing = false } }
+
+        print("🔄 Phase 2: Background sync (full data, no GWP)...")
+
+        do {
+            // Параллельная загрузка
+            try await fetchPlayerProfiles()
+            try await fetchPublicGames()
+            try await fetchPublicPlayerAliases()
+            try await fetchPlayerClaims()
+
+            // GWP НЕ загружаем - они будут загружены по требованию при открытии игры
+
+            let now = Date()
+            await MainActor.run { lastSyncDate = now }
+            UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
+
+            print("✅ Phase 2 completed - all data synced (GWP excluded, lazy load)")
+        } catch {
+            print("❌ Phase 2 sync error: \(error)")
+            throw error
+        }
+    }
+
+    // MARK: - Phase 3: Smart Sync (витринная синхронизация)
+
+    /// Быстрая загрузка только GameSummary из CloudKit (без Game, GWP и т.д.)
+    private func fetchSummariesOnly() async throws -> [CKRecord] {
+        let result = try await cloudKit.queryRecords(
+            withType: .gameSummary,
+            from: .publicDB,
+            predicate: NSPredicate(value: true),
+            sortDescriptors: nil,
+            resultsLimit: 1000
+        )
+        print("📊 [SMART_SYNC] Fetched \(result.records.count) GameSummary from CloudKit")
+        return result.records
+    }
+
+    /// Сравнить checksums CloudKit с локальными GameSummaryRecord. true = синхронизировано, false = нужна полная синхронизация.
+    private func compareSummariesWithLocal(_ cloudRecords: [CKRecord]) -> Bool {
+        let context = persistence.container.viewContext
+        let localRequest: NSFetchRequest<GameSummaryRecord> = GameSummaryRecord.fetchRequest()
+        guard let localSummaries = try? context.fetch(localRequest) else { return false }
+
+        var cloudMap: [UUID: String] = [:]
+        for record in cloudRecords {
+            guard let gameIdStr = record["gameId"] as? String,
+                  let gameId = UUID(uuidString: gameIdStr) else { continue }
+            cloudMap[gameId] = record["checksum"] as? String ?? ""
+        }
+
+        for local in localSummaries {
+            let ckChecksum = cloudMap[local.gameId]
+            let localChecksum = local.checksum ?? ""
+            if ckChecksum != localChecksum {
+                print("📊 [SMART_SYNC] Mismatch for game \(local.gameId): cloud=\(ckChecksum ?? "nil") local=\(localChecksum)")
+                return false
+            }
+        }
+        if cloudMap.count != localSummaries.count {
+            print("📊 [SMART_SYNC] Count mismatch: cloud=\(cloudMap.count) local=\(localSummaries.count)")
+            return false
+        }
+        print("📊 [SMART_SYNC] Summaries match - no full sync needed")
+        return true
+    }
+
+    /// Двухфазная умная синхронизация: Phase 1 — минимальная загрузка, Phase 2 — проверка витрин, при расхождении полная синхронизация
+    func smartSync() async throws {
+        let start = Date()
+        print("🚀 [SMART_SYNC] Starting...")
+
+        guard await cloudKit.isCloudKitAvailable() else {
+            throw CloudKitSyncError.cloudKitNotAvailable
+        }
+
+        // Phase 1: Минимальная загрузка для быстрого показа UI
+        try await performMinimalSync()
+        let phase1Duration = Date().timeIntervalSince(start)
+        print("✅ [SMART_SYNC] Phase 1 completed in \(String(format: "%.2f", phase1Duration))s")
+
+        // Phase 2: Фоновая проверка витрин и при необходимости полная синхронизация
+        Task {
+            do {
+                let cloudSummaries = try await fetchSummariesOnly()
+                let needsFullSync = !compareSummariesWithLocal(cloudSummaries)
+
+                if needsFullSync {
+                    print("🔄 [SMART_SYNC] Summaries differ, starting full background sync...")
+                    await MainActor.run { isBackgroundSyncing = true }
+                    defer { Task { @MainActor in isBackgroundSyncing = false } }
+                    try await performBackgroundSync()
+                    try? await MaterializedViewsService.shared.rebuildAllGameSummaries()
+                    let now = Date()
+                    await MainActor.run { lastSyncDate = now }
+                    UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
+                    NotificationCenter.default.post(name: .syncCompletedSuccessfully, object: nil)
+                    print("✅ [SMART_SYNC] Full sync completed successfully")
+                } else {
+                    let now = Date()
+                    await MainActor.run { lastSyncDate = now }
+                    UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
+                    print("✅ [SMART_SYNC] No full sync needed")
+                }
+            } catch {
+                print("❌ [SMART_SYNC] Phase 2 error: \(error)")
+                NotificationCenter.default.post(name: .syncCompletedWithError, object: error)
+            }
+        }
+    }
+
+    private func getCurrentUserId() -> UUID? {
+        KeychainService.shared.getUserId().flatMap { UUID(uuidString: $0) }
+    }
+
+    private func fetchMyPlayerProfile(userId: UUID) async throws {
+        print("☁️ [MINIMAL] Fetching my PlayerProfile for user \(userId)...")
+
+        let userRecordID = CKRecord.ID(recordName: userId.uuidString)
+        let userReference = CKRecord.Reference(recordID: userRecordID, action: .none)
+        let predicate = NSPredicate(format: "user == %@", userReference)
+
+        let result = try await cloudKit.queryRecords(
+            withType: .playerProfile,
+            from: .publicDB,
+            predicate: predicate,
+            sortDescriptors: nil,
+            resultsLimit: 5
+        )
+
+        if !result.records.isEmpty {
+            print("📥 [MINIMAL] Fetched \(result.records.count) profile(s) for current user")
+            await mergePlayerProfilesWithLocal(result.records)
+        } else {
+            print("ℹ️ [MINIMAL] No profile found in CloudKit for user (may not exist yet)")
+        }
+    }
+
+    private func fetchRecentGames(limit: Int) async throws {
+        print("☁️ [MINIMAL] Fetching \(limit) most recent games...")
+
+        let predicate = NSPredicate(format: "softDeleted == NO")
+        let sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+
+        do {
+            let result = try await cloudKit.queryRecords(
+                withType: .game,
+                from: .publicDB,
+                predicate: predicate,
+                sortDescriptors: sortDescriptors,
+                resultsLimit: limit
+            )
+
+            if !result.records.isEmpty {
+                print("📥 [MINIMAL] Fetched \(result.records.count) recent games")
+                await mergeGamesWithLocal(result.records)
+            } else {
+                print("ℹ️ [MINIMAL] No games found in CloudKit")
+                await mergeGamesWithLocal([])
+            }
+        } catch {
+            // Fallback: если timestamp не индексирован, загружаем без сортировки
+            print("⚠️ [MINIMAL] Sorted fetch failed, trying without sort: \(error.localizedDescription)")
+            let result = try await cloudKit.queryRecords(
+                withType: .game,
+                from: .publicDB,
+                predicate: predicate,
+                sortDescriptors: nil,
+                resultsLimit: limit
+            )
+            if !result.records.isEmpty {
+                await mergeGamesWithLocal(result.records)
+            } else {
+                await mergeGamesWithLocal([])
+            }
+        }
+    }
+
+    private func fetchPendingClaimsForHost(userId: UUID) async throws {
+        print("☁️ [MINIMAL] Fetching pending claims for host \(userId)...")
+
+        let hostRecordID = CKRecord.ID(recordName: userId.uuidString)
+        let hostReference = CKRecord.Reference(recordID: hostRecordID, action: .none)
+        let predicate = NSPredicate(format: "hostUser == %@ AND status == %@", hostReference, "pending")
+
+        let result = try await cloudKit.queryRecords(
+            withType: .playerClaim,
+            from: .publicDB,
+            predicate: predicate,
+            sortDescriptors: nil,
+            resultsLimit: 100
+        )
+
+        if !result.records.isEmpty {
+            print("📥 [MINIMAL] Fetched \(result.records.count) pending claims")
+            await mergePlayerClaimsWithLocal(result.records, deleteMissing: false)
+        }
+        // Полная загрузка claims будет в Phase 2 (performBackgroundSync)
+    }
+
+    private func fetchUserStatisticsSummary(userId: UUID) async throws {
+        print("☁️ [MINIMAL] Fetching UserStatisticsSummary for user \(userId)...")
+
+        let predicate = NSPredicate(format: "userId == %@", userId.uuidString)
+        let result = try await cloudKit.queryRecords(
+            withType: .userStatisticsSummary,
+            from: .publicDB,
+            predicate: predicate,
+            sortDescriptors: [NSSortDescriptor(key: "lastUpdated", ascending: false)],
+            resultsLimit: 1
+        )
+
+        if let record = result.records.first {
+            await mergeUserStatisticsSummaryWithLocal([record])
+        }
+    }
+
+    @MainActor
+    private func mergeUserStatisticsSummaryWithLocal(_ cloudRecords: [CKRecord]) async {
+        let context = persistence.container.viewContext
+        for record in cloudRecords {
+            guard let userIdString = record["userId"] as? String,
+                  let userId = UUID(uuidString: userIdString) else { continue }
+
+            let fetchRequest: NSFetchRequest<UserStatisticsSummary> = UserStatisticsSummary.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "userId == %@", userId as CVarArg)
+
+            if let existing = try? context.fetch(fetchRequest).first {
+                existing.updateFromCKRecord(record)
+            } else {
+                let newSummary = UserStatisticsSummary(context: context)
+                newSummary.userId = userId
+                newSummary.updateFromCKRecord(record)
+            }
+        }
+        if context.hasChanges { try? context.save() }
+    }
+
     // MARK: - Fetch Public Games
-    
+
     func fetchPlayerProfiles() async throws {
         print("☁️ [FETCH_PROFILES] Fetching PlayerProfiles from CloudKit PUBLIC DB...")
         
@@ -1154,10 +1437,10 @@ class CloudKitSyncService: ObservableObject {
     // MARK: - Merge PlayerClaim with Local
     
     @MainActor
-    private func mergePlayerClaimsWithLocal(_ cloudRecords: [CKRecord]) async {
+    private func mergePlayerClaimsWithLocal(_ cloudRecords: [CKRecord], deleteMissing: Bool = true) async {
         let context = persistence.container.viewContext
         
-        print("🔄 [MERGE_CLAIMS] Starting merge of \(cloudRecords.count) claims...")
+        print("🔄 [MERGE_CLAIMS] Starting merge of \(cloudRecords.count) claims (deleteMissing: \(deleteMissing))...")
         
         var validClaims = 0
         var skippedClaims = 0
@@ -1229,25 +1512,27 @@ class CloudKitSyncService: ObservableObject {
             }
         }
         
-        // CloudKit = Source of Truth: удаляем локальные claims, которых нет в CloudKit
-        do {
-            let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
-            let allLocalClaims = try context.fetch(fetchRequest)
-            
-            var deletedCount = 0
-            for localClaim in allLocalClaims {
-                if !cloudClaimIds.contains(localClaim.claimId) {
-                    print("🗑️ [MERGE_CLAIMS] Deleting local claim not in CloudKit: \(localClaim.claimId)")
-                    context.delete(localClaim)
-                    deletedCount += 1
+        // CloudKit = Source of Truth: удаляем локальные claims, которых нет в CloudKit (если deleteMissing)
+        if deleteMissing {
+            do {
+                let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
+                let allLocalClaims = try context.fetch(fetchRequest)
+                
+                var deletedCount = 0
+                for localClaim in allLocalClaims {
+                    if !cloudClaimIds.contains(localClaim.claimId) {
+                        print("🗑️ [MERGE_CLAIMS] Deleting local claim not in CloudKit: \(localClaim.claimId)")
+                        context.delete(localClaim)
+                        deletedCount += 1
+                    }
                 }
+                
+                if deletedCount > 0 {
+                    print("🗑️ [MERGE_CLAIMS] Deleted \(deletedCount) local claims not found in CloudKit")
+                }
+            } catch {
+                print("❌ [MERGE_CLAIMS] Error fetching local claims for cleanup: \(error)")
             }
-            
-            if deletedCount > 0 {
-                print("🗑️ [MERGE_CLAIMS] Deleted \(deletedCount) local claims not found in CloudKit")
-            }
-        } catch {
-            print("❌ [MERGE_CLAIMS] Error fetching local claims for cleanup: \(error)")
         }
         
         print("📊 [MERGE_CLAIMS] Validation results: \(validClaims) valid, \(skippedClaims) skipped")
@@ -1336,12 +1621,23 @@ class CloudKitSyncService: ObservableObject {
     }
     
     // MARK: - Incremental Sync (Delta Sync)
-    
+
+    /// Phase 2: Улучшенный incremental sync - не загружает GWP, использует minimal при недавней синхронизации
     func performIncrementalSync() async throws {
-        // TODO: Implement incremental sync with CKServerChangeToken
-        // For now, fallback to full sync
-        print("ℹ️ Incremental sync not yet implemented, using full sync")
-        try await performFullSync()
+        print("🔄 Starting incremental sync...")
+
+        let lastSync = UserDefaults.standard.object(forKey: "lastCloudKitSyncDate") as? Date
+
+        // Если синхронизация была недавно (< 2 мин), делаем только minimal sync
+        if let lastSync = lastSync, Date().timeIntervalSince(lastSync) < 120 {
+            print("ℹ️ Recent sync (\(Int(Date().timeIntervalSince(lastSync)))s ago), using minimal sync")
+            try await performMinimalSync()
+            return
+        }
+
+        // Иначе - фоновая синхронизация (без GWP, быстрее чем full)
+        print("🔄 Running background sync (no GWP)...")
+        try await performBackgroundSync()
     }
     
     // MARK: - Fetch User from CloudKit (for login recovery)
@@ -1563,6 +1859,7 @@ class CloudKitSyncService: ObservableObject {
         profile.profileId = profileId
         profile.displayName = (record["displayName"] as? String) ?? ""
         profile.isAnonymous = (record["isAnonymous"] as? Int64 == 1)
+        profile.isPublic = (record["isPublic"] as? Int64 == 1)
         profile.createdAt = (record["createdAt"] as? Date) ?? Date()
         
         // Преобразуем Int64 → Int32
@@ -1829,5 +2126,14 @@ extension CloudKitSyncService {
         
         print("✅ [PUSH_PENDING] All pending data pushed successfully")
     }
+}
+
+// MARK: - Sync Completion Notifications
+
+extension Notification.Name {
+    static let syncCompletedSuccessfully = Notification.Name("syncCompletedSuccessfully")
+    static let syncCompletedWithError = Notification.Name("syncCompletedWithError")
+    static let openNotificationsTab = Notification.Name("openNotificationsTab")
+    static let openGameFromNotification = Notification.Name("openGameFromNotification")
 }
 

@@ -34,6 +34,7 @@
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="displayName" attributeType="String"/>
         <attribute name="isAnonymous" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="isPublic" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="profileId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="totalBuyins" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
         <attribute name="totalCashouts" attributeType="Decimal" defaultValueString="0" usesScalarValueType="NO"/>
@@ -76,6 +77,46 @@
             <constraint value="username"/>
             <constraint value="email"/>
         </uniquenessConstraints>
+    </entity>
+    <entity name="GameSummaryRecord" representedClassName="GameSummaryRecord" syncable="YES">
+        <attribute name="gameId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="creatorUserId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="gameType" optional="YES" attributeType="String"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="totalPlayers" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalBuyins" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="isPublic" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastModified" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="checksum" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="UserGameIndex" representedClassName="UserGameIndex" syncable="YES">
+        <attribute name="indexId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="userId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="gameId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="buyin" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="cashout" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="isHost" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+    </entity>
+    <entity name="UserStatisticsSummary" representedClassName="UserStatisticsSummary" syncable="YES">
+        <attribute name="userId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="totalGamesPlayed" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalBuyins" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="totalCashouts" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="balance" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="lastGameDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="winRate" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="avgProfit" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="lastUpdated" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="AppNotification" representedClassName="AppNotification" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="body" attributeType="String"/>
+        <attribute name="type" attributeType="String"/>
+        <attribute name="isRead" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="gameId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
     </entity>
     <entity name="PlayerClaim" representedClassName="PlayerClaim" syncable="YES">
         <attribute name="claimId" attributeType="UUID" usesScalarValueType="NO"/>

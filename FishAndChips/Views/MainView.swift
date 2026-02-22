@@ -5,6 +5,7 @@ struct MainView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
     @EnvironmentObject var deepLinkService: DeepLinkService
+    @EnvironmentObject var syncService: CloudKitSyncService
     @StateObject private var viewModel = MainViewModel()
 
     @State private var selectedTab: MainTab = .overview
@@ -20,6 +21,7 @@ struct MainView: View {
         case overview
         case games
         case statistics
+        case players
     }
 
     var body: some View {
@@ -49,7 +51,8 @@ struct MainView: View {
                     games: viewModel.filteredGames,
                     userId: authViewModel.currentUserId,
                     selectedFilter: $viewModel.selectedFilter,
-                    onFilterChange: viewModel.applyFilter
+                    onFilterChange: viewModel.applyFilter,
+                    onLoadMore: viewModel.loadMoreGames
                 )
                 .tabItem { Label("Игры", systemImage: "list.bullet") }
                 .tag(MainTab.games)
@@ -62,6 +65,12 @@ struct MainView: View {
                 )
                 .tabItem { Label("Статистика", systemImage: "chart.pie.fill") }
                 .tag(MainTab.statistics)
+
+                PlayersTabView()
+                    .environmentObject(authViewModel)
+                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                    .tabItem { Label("Игроки", systemImage: "person.2.fill") }
+                    .tag(MainTab.players)
             }
             .navigationTitle(titleForTab(selectedTab))
             .navigationBarTitleDisplayMode(.inline)
@@ -92,7 +101,12 @@ struct MainView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
+                    HStack(spacing: 8) {
+                        if syncService.isBackgroundSyncing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                        Menu {
                         Button {
                             showingAddGame = true
                         } label: {
@@ -108,10 +122,12 @@ struct MainView: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
                     }
+                    }
                 }
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileView()
+                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                     .environmentObject(authViewModel)
             }
             .sheet(isPresented: $showingAddGame) {
@@ -170,6 +186,12 @@ struct MainView: View {
             .onChange(of: deepLinkService.activeDeepLink) { newDeepLink in
                 handleDeepLink(newDeepLink)
             }
+            .onChange(of: syncService.isBackgroundSyncing) { _, isSyncing in
+                // При завершении фоновой синхронизации обновить данные
+                if !isSyncing {
+                    viewModel.refresh()
+                }
+            }
             .onAppear {
                 // Настройка цвета текста и иконки активного таба
                 let tabBarAppearance = UITabBarAppearance()
@@ -216,6 +238,7 @@ struct MainView: View {
         case .overview: return "Обзор"
         case .games: return "Игры"
         case .statistics: return "Статистика"
+        case .players: return "Игроки"
         }
     }
     

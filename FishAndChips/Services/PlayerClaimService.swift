@@ -389,7 +389,10 @@ class PlayerClaimService {
             // 4. Синхронизируем PlayerAliases
             try await CloudKitSyncService.shared.syncPlayerAliases()
             print("✅ [APPROVE_LINK_ALL] PlayerAliases synced")
-            
+
+            // 5. Phase 2: Обновить materialized views для клаиманта
+            try? await MaterializedViewsService.shared.updateUserStatisticsSummary(userId: claim.claimantUserId)
+
             print("✅ [APPROVE_LINK_ALL] All changes synced to CloudKit")
         } catch {
             print("⚠️ [APPROVE_LINK_ALL] Failed to sync to CloudKit: \(error)")
@@ -493,32 +496,41 @@ class PlayerClaimService {
         claimId: UUID,
         resolverUserId: UUID,
         notes: String? = nil
-    ) throws {
+    ) async throws {
         let context = persistence.container.viewContext
-        
+
         guard let claim = getClaim(byId: claimId) else {
             throw ClaimError.claimNotFound
         }
-        
+
         // Проверка что это хост игры
         guard claim.hostUserId == resolverUserId else {
             throw ClaimError.unauthorized
         }
-        
+
         // Проверка что заявка еще pending
         guard claim.isPending else {
             throw ClaimError.claimAlreadyResolved
         }
-        
+
         // Обновить заявку
         claim.status = "rejected"
         claim.resolvedAt = Date()
         claim.resolvedByUserId = resolverUserId
         claim.resolvedByUser = persistence.fetchUser(byId: resolverUserId)
         claim.notes = notes
-        
+
         try context.save()
-        
+
+        // Сразу пушим в CloudKit, иначе при следующей синхронизации статус перезапишется обратно на pending
+        do {
+            try await CloudKitSyncService.shared.syncPlayerClaims()
+            print("✅ [REJECT_CLAIM] Claim synced to CloudKit")
+        } catch {
+            print("❌ [REJECT_CLAIM] Failed to sync claim to CloudKit: \(error)")
+            PendingSyncTracker.shared.addPendingPlayerClaim(claimId)
+        }
+
         // Send notification to claimant
         Task { @MainActor in
             do {

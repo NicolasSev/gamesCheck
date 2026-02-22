@@ -275,7 +275,7 @@ struct GameDetailView: View {
             let cashout = Decimal(Int(gwp.cashout))
             let profit = cashout - (buyin * 2000)
             return PlayerResult(
-                playerName: gwp.player?.name ?? "Без имени",
+                playerName: gwp.playerProfile?.displayName ?? gwp.player?.name ?? "Без имени",
                 profit: profit,
                 buyin: gwp.buyin,
                 cashout: gwp.cashout
@@ -492,6 +492,19 @@ struct GameDetailView: View {
             }
         )
         .navigationTitle("Детали игры")
+        .task(id: game.gameId) {
+            // Phase 2: Lazy load GWP при открытии игры (если ещё не загружены)
+            let count = game.gameWithPlayers?.count ?? 0
+            guard count == 0 else { return }
+
+            do {
+                print("📥 [GameDetail] Loading players for game \(game.gameId) (lazy load)")
+                try await CloudKitSyncService.shared.fetchGameWithPlayers(forGameId: game.gameId)
+                print("✅ [GameDetail] Players loaded")
+            } catch {
+                print("❌ [GameDetail] Failed to load players: \(error)")
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 // Кнопка "Подать заявку" (только для не-хостов)
@@ -606,7 +619,7 @@ struct GameDetailView: View {
             message += "Дата игры: \(formatter.string(from: timestamp))\n"
         }
         for gwp in gameWithPlayers {
-            let playerName = gwp.player?.name ?? "Без имени"
+            let playerName = gwp.playerProfile?.displayName ?? gwp.player?.name ?? "Без имени"
             message += "\(playerName): Buy-in: \(gwp.buyin), Cashout: \(gwp.cashout)\n"
         }
         return message

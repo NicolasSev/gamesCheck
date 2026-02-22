@@ -30,6 +30,10 @@ class CloudKitService {
         case playerAlias = "PlayerAlias"
         case gameWithPlayer = "GameWithPlayer"
         case playerClaim = "PlayerClaim"
+        // Phase 2: Materialized views
+        case userStatisticsSummary = "UserStatisticsSummary"
+        case gameSummary = "GameSummary"
+        case userGameIndex = "UserGameIndex"
     }
     
     // MARK: - Initialization
@@ -287,8 +291,9 @@ class CloudKitService {
     
     // MARK: - Subscriptions
     
-    func saveSubscription(subscription: CKSubscription) async throws -> CKSubscription {
-        return try await privateDatabase.save(subscription)
+    func saveSubscription(subscription: CKSubscription, to database: DatabaseType = .privateDB) async throws -> CKSubscription {
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        return try await db.save(subscription)
     }
     
     func fetchAllSubscriptions() async throws -> [CKSubscription] {

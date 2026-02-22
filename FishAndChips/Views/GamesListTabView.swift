@@ -5,6 +5,7 @@ struct GamesListTabView: View {
     let userId: UUID?
     @Binding var selectedFilter: GameFilter
     let onFilterChange: (GameFilter) -> Void
+    var onLoadMore: (() -> Void)? = nil
     
     @StateObject private var syncService = CloudKitSyncService.shared
     @State private var searchText = ""
@@ -355,7 +356,7 @@ struct GamesListTabView: View {
                             .frame(minHeight: 200)
                         } else {
                             VStack(spacing: 12) {
-                                ForEach(filteredBySearch, id: \.gameId) { game in
+                                ForEach(Array(filteredBySearch.enumerated()), id: \.element.gameId) { index, game in
                                     NavigationLink {
                                         if let type = game.gameType, type == "Бильярд" {
                                             BilliardGameDetailView(game: game)
@@ -366,6 +367,11 @@ struct GamesListTabView: View {
                                         GameListRowView(game: game, userId: userId)
                                     }
                                     .buttonStyle(PlainButtonStyle())
+                                    .onAppear {
+                                        if index == filteredBySearch.count - 1 {
+                                            onLoadMore?()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -441,8 +447,9 @@ struct GamesListTabView: View {
             guard !participations.isEmpty else { return nil }
             
             let playersWithProfit = participations.compactMap { gwp -> (name: String, profit: Decimal)? in
-                guard let player = gwp.player,
-                      let name = player.name else { return nil }
+                // Предпочитаем displayName профиля (Ник) вместо сырого player.name (Я/я) для корректного отображения у других пользователей
+                let name = gwp.playerProfile?.displayName ?? gwp.player?.name ?? ""
+                guard !name.isEmpty else { return nil }
                 
                 // Конвертируем байин в тенге: 1 байин = 2000 тенге
                 let buyin = Decimal(Int(gwp.buyin))
