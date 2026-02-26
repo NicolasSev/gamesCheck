@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @EnvironmentObject var notificationService: NotificationService
+    @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) var dismiss
     @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     @State private var showingPendingClaims = false
@@ -134,10 +136,36 @@ struct ProfileView: View {
                         .liquidGlass(cornerRadius: 15)
                         .padding(.horizontal)
 
-                        // Уведомления
-                        NavigationLink(destination: NotificationsView()) {
+                        // Подписка на push о новых играх
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Уведомления")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Toggle("Подписка на новые игры", isOn: Binding(
+                                get: { notificationService.isGameSubscriptionEnabled },
+                                set: { newValue in
+                                    Task {
+                                        if newValue {
+                                            await notificationService.enableGameSubscription()
+                                        } else {
+                                            await notificationService.disableGameSubscription()
+                                        }
+                                    }
+                                }
+                            ))
+                            .tint(.blue)
+                            Text("Получать push при импорте/обновлении игр другими пользователями")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 15)
+                        .padding(.horizontal)
+
+                        // Список уведомлений
+                        NavigationLink(destination: NotificationsView().environment(\.managedObjectContext, viewContext)) {
                             HStack {
-                                Text("Уведомления")
+                                Text("История уведомлений")
                                     .foregroundColor(.white)
                                 Spacer()
                                 Image(systemName: "chevron.right")

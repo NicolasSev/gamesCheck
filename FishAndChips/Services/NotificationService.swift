@@ -19,6 +19,9 @@ class NotificationService: NSObject, ObservableObject {
     @Published var deviceToken: String?
     @Published var badgeCount: Int = 0
     
+    /// Флаг подписки на push о новых/изменённых играх (CloudKit Game subscription). Хранится в UserDefaults.
+    @Published var isGameSubscriptionEnabled: Bool
+    
     private let notificationCenter = UNUserNotificationCenter.current()
     
     // MARK: - Notification Categories
@@ -42,6 +45,7 @@ class NotificationService: NSObject, ObservableObject {
     // MARK: - Initialization
     
     private override init() {
+        self.isGameSubscriptionEnabled = UserDefaults.standard.object(forKey: "gameSubscriptionEnabled") as? Bool ?? true
         super.init()
         setupNotificationCategories()
         checkAuthorizationStatus()
@@ -212,6 +216,7 @@ class NotificationService: NSObject, ObservableObject {
         )
         
         try await notificationCenter.add(request)
+        saveNotificationToStore(title: "Новая заявка на игрока", body: "\(playerName) хочет присвоить себя в игре \(gameName)", type: "new_claim")
         print("📬 Sent claim notification to host \(hostUserId): \(playerName)")
     }
     
@@ -245,6 +250,7 @@ class NotificationService: NSObject, ObservableObject {
         )
         
         try await notificationCenter.add(request)
+        saveNotificationToStore(title: "Заявка одобрена ✅", body: "Ваша заявка на \(playerName) в игре \(gameName) была одобрена", type: "claim_approved")
         print("✅ Sent approval notification to claimant \(claimantUserId): \(playerName)")
     }
     
@@ -282,6 +288,7 @@ class NotificationService: NSObject, ObservableObject {
         )
         
         try await notificationCenter.add(request)
+        saveNotificationToStore(title: "Заявка отклонена ❌", body: body, type: "claim_rejected")
         print("❌ Sent rejection notification to claimant \(claimantUserId): \(playerName)")
     }
     
@@ -320,6 +327,7 @@ class NotificationService: NSObject, ObservableObject {
     /// Подписка на изменения игр в CloudKit Public DB. При создании/изменении игры пользователи получают push.
     func setupGameSubscription() async {
         guard await CloudKitService.shared.isCloudKitAvailable() else { return }
+        guard isGameSubscriptionEnabled else { return }
         do {
             let predicate = NSPredicate(value: true)
             let subscription = CKQuerySubscription(
@@ -334,6 +342,66 @@ class NotificationService: NSObject, ObservableObject {
             print("✅ [PUSH] Game subscription registered")
         } catch {
             print("❌ [PUSH] Failed to setup game subscription: \(error)")
+        }
+    }
+
+    /// Включить подписку на push о новых играх: регистрирует CloudKit subscription.
+    func enableGameSubscription() async {
+        isGameSubscriptionEnabled = true
+        UserDefaults.standard.set(true, forKey: "gameSubscriptionEnabled")
+        await setupGameSubscription()
+    }
+
+    /// Выключить подписку: удаляет CloudKit subscription.
+    func disableGameSubscription() async {
+        isGameSubscriptionEnabled = false
+        UserDefaults.standard.set(false, forKey: "gameSubscriptionEnabled")
+        do {
+            try await CloudKitService.shared.deleteSubscription(withID: gameSubscriptionID, from: .publicDB)
+            print("✅ [PUSH] Game subscription removed")
+        } catch {
+            print("❌ [PUSH] Failed to remove game subscription: \(error)")
+        }
+    }
+
+    // MARK: - CloudKit PlayerProfile Subscription
+
+    private let profileSubscriptionID = "profile-public"
+
+    /// Подписка на CloudKit: PlayerProfile становится публичным. При изменении isPublic пользователи получают push.
+    func setupPlayerProfileSubscription() async {
+        guard await CloudKitService.shared.isCloudKitAvailable() else { return }
+        do {
+            let predicate = NSPredicate(format: "isPublic == %d", 1)
+            let subscription = CKQuerySubscription(
+                recordType: "PlayerProfile",
+                predicate: predicate,
+                subscriptionID: profileSubscriptionID,
+                options: [.firesOnRecordCreation, .firesOnRecordUpdate]
+            )
+            subscription.notificationInfo = CKSubscription.NotificationInfo()
+            subscription.notificationInfo?.shouldSendContentAvailable = true
+            _ = try await CloudKitService.shared.saveSubscription(subscription: subscription, to: .publicDB)
+            print("✅ [PUSH] PlayerProfile subscription registered")
+        } catch {
+            print("❌ [PUSH] Failed to setup PlayerProfile subscription: \(error)")
+        }
+    }
+
+    /// Локальное уведомление + AppNotification: «Игрок X открыл профиль» (для получателей push)
+    func notifyProfileBecamePublic(displayName: String) async {
+        let title = "Новый публичный игрок"
+        let body = "\(displayName) открыл свой профиль"
+        saveNotificationToStore(title: title, body: body, type: "profile_public")
+        do {
+            try await sendLocalNotification(
+                title: title,
+                body: body,
+                category: .gameUpdate,
+                userInfo: ["type": "profile_public"]
+            )
+        } catch {
+            print("❌ Failed to send profile public notification: \(error)")
         }
     }
 
@@ -438,6 +506,8 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             } else {
                 NotificationCenter.default.post(name: .openNotificationsTab, object: nil)
             }
+        case "profile_public":
+            NotificationCenter.default.post(name: .openNotificationsTab, object: nil)
         default:
             break
         }

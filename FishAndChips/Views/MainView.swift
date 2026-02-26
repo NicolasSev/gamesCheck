@@ -129,6 +129,7 @@ struct MainView: View {
                 ProfileView()
                     .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                     .environmentObject(authViewModel)
+                    .environmentObject(NotificationService.shared)
             }
             .sheet(isPresented: $showingAddGame) {
                 AddGameSheet(isPresented: $showingAddGame)

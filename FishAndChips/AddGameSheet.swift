@@ -64,6 +64,10 @@ struct AddGameSheet: View {
             Task {
                 await CloudKitSyncService.shared.quickSyncGame(newGame)
                 try? await MaterializedViewsService.shared.updateGameSummary(gameId: newGame.gameId)
+                // Push уведомление создавшему (потом уберём)
+                let gameName = newGame.gameType ?? "Покер"
+                let hostName = authViewModel.currentUsername
+                try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: newGame.gameId)
             }
         } catch {
             print("Ошибка сохранения игры: \(error.localizedDescription)")

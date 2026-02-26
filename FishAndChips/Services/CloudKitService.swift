@@ -296,12 +296,14 @@ class CloudKitService {
         return try await db.save(subscription)
     }
     
-    func fetchAllSubscriptions() async throws -> [CKSubscription] {
-        return try await privateDatabase.allSubscriptions()
+    func fetchAllSubscriptions(from database: DatabaseType = .privateDB) async throws -> [CKSubscription] {
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        return try await db.allSubscriptions()
     }
     
-    func deleteSubscription(withID subscriptionID: CKSubscription.ID) async throws {
-        _ = try await privateDatabase.deleteSubscription(withID: subscriptionID)
+    func deleteSubscription(withID subscriptionID: CKSubscription.ID, from database: DatabaseType = .privateDB) async throws {
+        let db = database == .publicDB ? publicDatabase : privateDatabase
+        _ = try await db.deleteSubscription(withID: subscriptionID)
     }
     
     // MARK: - Error Handling

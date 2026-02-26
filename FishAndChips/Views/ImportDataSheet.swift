@@ -326,6 +326,10 @@ struct ImportDataSheet: View {
                     print("☁️ [IMPORT] Pushing imported games to CloudKit...")
                     try await CloudKitSyncService.shared.sync()
                     print("✅ [IMPORT] Successfully synced to CloudKit")
+                    // Push уведомление загрузившему (потом уберём)
+                    let hostName = authViewModel.currentUsername
+                    let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
+                    try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
                 } catch {
                     print("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
                     // Не блокируем UI при ошибке синхронизации
@@ -422,6 +426,10 @@ struct ImportDataSheet: View {
                     print("☁️ [IMPORT] Pushing imported games to CloudKit...")
                     try await CloudKitSyncService.shared.sync()
                     print("✅ [IMPORT] Successfully synced to CloudKit")
+                    // Push уведомление загрузившему (потом уберём)
+                    let hostName = authViewModel.currentUsername
+                    let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
+                    try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
                 } catch {
                     print("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
                     // Не блокируем UI при ошибке синхронизации
