@@ -9,54 +9,6 @@ import SwiftUI
 import CoreData
 import UIKit
 
-struct SimpleTextEditor: UIViewRepresentable {
-    @Binding var text: String
-    
-    func makeUIView(context: Context) -> UITextView {
-        let textView = UITextView()
-        textView.font = UIFont.monospacedSystemFont(ofSize: 17, weight: .regular)
-        textView.delegate = context.coordinator
-        textView.backgroundColor = .clear
-        textView.textContainerInset = UIEdgeInsets(top: 8, left: 4, bottom: 8, right: 4)
-        // Критически важно для отключения AutoFill
-        // Используем .none или nil - оба должны отключить AutoFill
-        textView.textContentType = nil
-        textView.isSecureTextEntry = false
-        textView.autocorrectionType = .no
-        textView.autocapitalizationType = .none
-        // Отключаем все умные функции, которые могут вызвать AutoFill
-        textView.smartDashesType = .no
-        textView.smartQuotesType = .no
-        textView.smartInsertDeleteType = .no
-        return textView
-    }
-    
-    func updateUIView(_ uiView: UITextView, context: Context) {
-        if uiView.text != text {
-            uiView.text = text
-        }
-        // Каждый раз принудительно отключаем AutoFill
-        uiView.textContentType = nil
-        uiView.isSecureTextEntry = false
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UITextViewDelegate {
-        var parent: SimpleTextEditor
-        
-        init(_ parent: SimpleTextEditor) {
-            self.parent = parent
-        }
-        
-        func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
-        }
-    }
-}
-
 struct ImportDataSheet: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -81,7 +33,7 @@ struct ImportDataSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -308,7 +260,7 @@ struct ImportDataSheet: View {
             } catch {
                 let errorMsg = "Ошибка импорта игры за \(dateFormatter.string(from: parsedGame.date)): \(error.localizedDescription)"
                 errors.append(errorMsg)
-                print(errorMsg)
+                debugLog(errorMsg)
             }
         }
         
@@ -323,15 +275,15 @@ struct ImportDataSheet: View {
             // Синхронизируем импортированные игры с CloudKit
             Task {
                 do {
-                    print("☁️ [IMPORT] Pushing imported games to CloudKit...")
+                    debugLog("☁️ [IMPORT] Pushing imported games to CloudKit...")
                     try await CloudKitSyncService.shared.sync()
-                    print("✅ [IMPORT] Successfully synced to CloudKit")
+                    debugLog("✅ [IMPORT] Successfully synced to CloudKit")
                     // Push уведомление загрузившему (потом уберём)
                     let hostName = authViewModel.currentUsername
                     let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
                     try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
                 } catch {
-                    print("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
+                    debugLog("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
                     // Не блокируем UI при ошибке синхронизации
                 }
             }
@@ -401,7 +353,7 @@ struct ImportDataSheet: View {
             } catch {
                 let errorMsg = "Ошибка импорта игры за \(dateFormatter.string(from: parsedGame.date)): \(error.localizedDescription)"
                 errors.append(errorMsg)
-                print(errorMsg)
+                debugLog(errorMsg)
             }
         }
         
@@ -423,15 +375,15 @@ struct ImportDataSheet: View {
             // Синхронизируем импортированные игры с CloudKit
             Task {
                 do {
-                    print("☁️ [IMPORT] Pushing imported games to CloudKit...")
+                    debugLog("☁️ [IMPORT] Pushing imported games to CloudKit...")
                     try await CloudKitSyncService.shared.sync()
-                    print("✅ [IMPORT] Successfully synced to CloudKit")
+                    debugLog("✅ [IMPORT] Successfully synced to CloudKit")
                     // Push уведомление загрузившему (потом уберём)
                     let hostName = authViewModel.currentUsername
                     let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
                     try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
                 } catch {
-                    print("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
+                    debugLog("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
                     // Не блокируем UI при ошибке синхронизации
                 }
             }

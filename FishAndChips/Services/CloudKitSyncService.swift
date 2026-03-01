@@ -10,8 +10,15 @@ import CloudKit
 import CoreData
 import Combine
 
+/// Protocol for auth-related CloudKit operations — enables mocking in tests
+protocol AuthCloudKitSyncProtocol: AnyObject {
+    func fetchUser(byEmail email: String) async throws -> User?
+    func quickSyncUser(_ user: User) async
+    func quickSyncPlayerProfile(_ profile: PlayerProfile) async
+}
+
 /// Service to synchronize CoreData with CloudKit
-class CloudKitSyncService: ObservableObject {
+class CloudKitSyncService: ObservableObject, AuthCloudKitSyncProtocol {
     static let shared = CloudKitSyncService()
     
     @Published var isSyncing = false
@@ -45,7 +52,7 @@ class CloudKitSyncService: ObservableObject {
     
     func sync() async throws {
         guard !isSyncing else {
-            print("Sync already in progress")
+            debugLog("Sync already in progress")
             return
         }
         
@@ -82,7 +89,7 @@ class CloudKitSyncService: ObservableObject {
             }
             UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
             
-            print("✅ CloudKit sync completed successfully")
+            debugLog("✅ CloudKit sync completed successfully")
         } catch {
             let errorMessage = cloudKit.handleCloudKitError(error)
             await MainActor.run {
@@ -111,7 +118,7 @@ class CloudKitSyncService: ObservableObject {
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ Synced \(records.count) users to Public Database")
+            debugLog("✅ Synced \(records.count) users to Public Database")
         }
     }
     
@@ -128,7 +135,7 @@ class CloudKitSyncService: ObservableObject {
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .publicDB)  // ИЗМЕНЕНО: Public DB
-            print("✅ Synced \(records.count) player profiles to Private Database")
+            debugLog("✅ Synced \(records.count) player profiles to Private Database")
         }
     }
     
@@ -145,7 +152,7 @@ class CloudKitSyncService: ObservableObject {
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ Synced \(records.count) player aliases to Public Database")
+            debugLog("✅ Synced \(records.count) player aliases to Public Database")
         }
     }
     
@@ -163,7 +170,7 @@ class CloudKitSyncService: ObservableObject {
         
         if !records.isEmpty {
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ Synced \(records.count) games to Public Database")
+            debugLog("✅ Synced \(records.count) games to Public Database")
         }
     }
     
@@ -178,7 +185,7 @@ class CloudKitSyncService: ObservableObject {
         
         let gameWithPlayers = try context.fetch(fetchRequest)
         
-        print("🔄 [SYNC_GWP] Found \(gameWithPlayers.count) GameWithPlayer records to sync")
+        debugLog("🔄 [SYNC_GWP] Found \(gameWithPlayers.count) GameWithPlayer records to sync")
         
         // Конвертируем в records безопасно, без изменения коллекции во время итерации
         var records: [CKRecord] = []
@@ -192,16 +199,16 @@ class CloudKitSyncService: ObservableObject {
             records.append(record)
             
             if (index + 1) % 100 == 0 {
-                print("📦 [SYNC_GWP] Converted \(index + 1)/\(gwpArray.count) records")
+                debugLog("📦 [SYNC_GWP] Converted \(index + 1)/\(gwpArray.count) records")
             }
         }
         
         if !records.isEmpty {
-            print("☁️ [SYNC_GWP] Saving \(records.count) records to CloudKit...")
+            debugLog("☁️ [SYNC_GWP] Saving \(records.count) records to CloudKit...")
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ [SYNC_GWP] Synced \(records.count) game-player records to Public Database")
+            debugLog("✅ [SYNC_GWP] Synced \(records.count) game-player records to Public Database")
         } else {
-            print("ℹ️ [SYNC_GWP] No valid records to sync")
+            debugLog("ℹ️ [SYNC_GWP] No valid records to sync")
         }
     }
     
@@ -213,31 +220,31 @@ class CloudKitSyncService: ObservableObject {
         let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         let claims = try context.fetch(fetchRequest)
         
-        print("🔄 [SYNC_CLAIMS] Found \(claims.count) claims to sync")
+        debugLog("🔄 [SYNC_CLAIMS] Found \(claims.count) claims to sync")
         
         // Фильтруем и конвертируем claims в CKRecords с обработкой ошибок
         var records: [CKRecord] = []
         for (index, claim) in claims.enumerated() {
             do {
-                print("📦 [SYNC_CLAIMS] Converting claim \(index + 1)/\(claims.count): \(claim.claimId)")
+                debugLog("📦 [SYNC_CLAIMS] Converting claim \(index + 1)/\(claims.count): \(claim.claimId)")
                 let record = claim.toCKRecord()
                 records.append(record)
             } catch {
-                print("❌ [SYNC_CLAIMS] Failed to convert claim \(claim.claimId) to CKRecord: \(error)")
-                print("   - playerName: \(claim.playerName)")
-                print("   - gameId: \(claim.gameId)")
-                print("   - status: \(claim.status)")
+                debugLog("❌ [SYNC_CLAIMS] Failed to convert claim \(claim.claimId) to CKRecord: \(error)")
+                debugLog("   - playerName: \(claim.playerName)")
+                debugLog("   - gameId: \(claim.gameId)")
+                debugLog("   - status: \(claim.status)")
                 // Пропускаем проблемную запись и продолжаем
                 continue
             }
         }
         
         if !records.isEmpty {
-            print("☁️ [SYNC_CLAIMS] Saving \(records.count) claims to CloudKit Public Database...")
+            debugLog("☁️ [SYNC_CLAIMS] Saving \(records.count) claims to CloudKit Public Database...")
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ [SYNC_CLAIMS] Synced \(records.count) player claims to Public Database")
+            debugLog("✅ [SYNC_CLAIMS] Synced \(records.count) player claims to Public Database")
         } else {
-            print("ℹ️ [SYNC_CLAIMS] No valid claims to sync")
+            debugLog("ℹ️ [SYNC_CLAIMS] No valid claims to sync")
         }
     }
     
@@ -248,7 +255,7 @@ class CloudKitSyncService: ObservableObject {
             throw CloudKitSyncError.cloudKitNotAvailable
         }
         
-        print("🔄 [PULL] Fetching changes from CloudKit...")
+        debugLog("🔄 [PULL] Fetching changes from CloudKit...")
         
         // Fetch changes from CloudKit
         let users = try await cloudKit.fetchRecords(withType: .user, from: .publicDB)
@@ -258,7 +265,7 @@ class CloudKitSyncService: ObservableObject {
         let gameWithPlayers = try await cloudKit.fetchRecords(withType: .gameWithPlayer, from: .publicDB)
         let aliases = try await cloudKit.fetchRecords(withType: .playerAlias, from: .publicDB)
         
-        print("📥 [PULL] Fetched: \(users.count) users, \(profiles.count) profiles, \(claims.count) claims, \(games.count) games, \(gameWithPlayers.count) gameWithPlayers, \(aliases.count) aliases")
+        debugLog("📥 [PULL] Fetched: \(users.count) users, \(profiles.count) profiles, \(claims.count) claims, \(games.count) games, \(gameWithPlayers.count) gameWithPlayers, \(aliases.count) aliases")
         
         // Update local CoreData
         let context = persistence.container.viewContext
@@ -284,7 +291,7 @@ class CloudKitSyncService: ObservableObject {
                     newUser.userId = userId
                     newUser.updateFromCKRecord(record)
                     newUser.passwordHash = "remote_user_no_auth" // Placeholder
-                    print("➕ [PULL] Created user from CloudKit: \(newUser.username)")
+                    debugLog("➕ [PULL] Created user from CloudKit: \(newUser.username)")
                 }
             }
         }
@@ -303,23 +310,23 @@ class CloudKitSyncService: ObservableObject {
             for localUser in allLocalUsers {
                 // НЕ удаляем текущего пользователя
                 if let currentUserId = currentUserId, localUser.userId == currentUserId {
-                    print("🔒 [PULL] Skipping current user (logged in): \(localUser.username)")
+                    debugLog("🔒 [PULL] Skipping current user (logged in): \(localUser.username)")
                     continue
                 }
                 
                 // Удаляем если нет в CloudKit
                 if !cloudUserIds.contains(localUser.userId) {
-                    print("🗑️ [PULL] Deleting local user not in CloudKit: \(localUser.username) (remote user)")
+                    debugLog("🗑️ [PULL] Deleting local user not in CloudKit: \(localUser.username) (remote user)")
                     context.delete(localUser)
                     deletedCount += 1
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [PULL] Deleted \(deletedCount) remote users not found in CloudKit")
+                debugLog("🗑️ [PULL] Deleted \(deletedCount) remote users not found in CloudKit")
             }
         } catch {
-            print("❌ [PULL] Error fetching local users for cleanup: \(error)")
+            debugLog("❌ [PULL] Error fetching local users for cleanup: \(error)")
         }
         
         // Process profiles
@@ -335,7 +342,7 @@ class CloudKitSyncService: ObservableObject {
                     let newProfile = PlayerProfile(context: context)
                     newProfile.profileId = profileId
                     newProfile.updateFromCKRecord(record)
-                    print("➕ [PULL] Created PlayerProfile from CloudKit: \(newProfile.displayName)")
+                    debugLog("➕ [PULL] Created PlayerProfile from CloudKit: \(newProfile.displayName)")
                 }
             }
         }
@@ -348,22 +355,22 @@ class CloudKitSyncService: ObservableObject {
             var deletedCount = 0
             for localProfile in allLocalProfiles {
                 if !cloudProfileIds.contains(localProfile.profileId) {
-                    print("🗑️ [PULL] Deleting local profile not in CloudKit: \(localProfile.displayName)")
+                    debugLog("🗑️ [PULL] Deleting local profile not in CloudKit: \(localProfile.displayName)")
                     context.delete(localProfile)
                     deletedCount += 1
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [PULL] Deleted \(deletedCount) local profiles not found in CloudKit")
+                debugLog("🗑️ [PULL] Deleted \(deletedCount) local profiles not found in CloudKit")
             }
         } catch {
-            print("❌ [PULL] Error fetching local profiles for cleanup: \(error)")
+            debugLog("❌ [PULL] Error fetching local profiles for cleanup: \(error)")
         }
         
         // Process claims (с merge логикой)
         if !claims.isEmpty {
-            print("🔄 [PULL] Merging \(claims.count) claims with local database...")
+            debugLog("🔄 [PULL] Merging \(claims.count) claims with local database...")
             await mergePlayerClaimsWithLocal(claims)
         }
         
@@ -385,7 +392,7 @@ class CloudKitSyncService: ObservableObject {
                     let newGame = Game(context: context)
                     newGame.gameId = gameId
                     newGame.updateFromCKRecord(record)
-                    print("➕ [PULL] Created game from CloudKit: \(gameId)")
+                    debugLog("➕ [PULL] Created game from CloudKit: \(gameId)")
                 }
             }
         }
@@ -401,28 +408,28 @@ class CloudKitSyncService: ObservableObject {
             for localGame in allLocalGames {
                 // Проверяем: нет в CloudKit И нет в pending списке
                 if !cloudGameIds.contains(localGame.gameId) && !pendingGames.contains(localGame.gameId) {
-                    print("🗑️ [PULL] Deleting local game not in CloudKit: \(localGame.gameId)")
+                    debugLog("🗑️ [PULL] Deleting local game not in CloudKit: \(localGame.gameId)")
                     context.delete(localGame)
                     deletedCount += 1
                 } else if !cloudGameIds.contains(localGame.gameId) && pendingGames.contains(localGame.gameId) {
-                    print("📌 [PULL] Keeping pending game (not yet synced): \(localGame.gameId)")
+                    debugLog("📌 [PULL] Keeping pending game (not yet synced): \(localGame.gameId)")
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [PULL] Deleted \(deletedCount) local games not found in CloudKit")
+                debugLog("🗑️ [PULL] Deleted \(deletedCount) local games not found in CloudKit")
             }
         } catch {
-            print("❌ [PULL] Error fetching local games for cleanup: \(error)")
+            debugLog("❌ [PULL] Error fetching local games for cleanup: \(error)")
         }
         
         // Process gameWithPlayers - используем merge логику (с удалением внутри)
         if !gameWithPlayers.isEmpty {
-            print("🔄 [PULL] Merging \(gameWithPlayers.count) GameWithPlayer records...")
+            debugLog("🔄 [PULL] Merging \(gameWithPlayers.count) GameWithPlayer records...")
             await mergeGameWithPlayersWithLocal(gameWithPlayers)
         } else {
             // Если в CloudKit нет GWP, удаляем все локальные
-            print("🗑️ [PULL] CloudKit has 0 GameWithPlayer - deleting all local GWP")
+            debugLog("🗑️ [PULL] CloudKit has 0 GameWithPlayer - deleting all local GWP")
             do {
                 let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
                 let allLocalGWP = try context.fetch(fetchRequest)
@@ -430,10 +437,10 @@ class CloudKitSyncService: ObservableObject {
                     context.delete(gwp)
                 }
                 if !allLocalGWP.isEmpty {
-                    print("🗑️ [PULL] Deleted \(allLocalGWP.count) local GameWithPlayer")
+                    debugLog("🗑️ [PULL] Deleted \(allLocalGWP.count) local GameWithPlayer")
                 }
             } catch {
-                print("❌ [PULL] Error deleting local GWP: \(error)")
+                debugLog("❌ [PULL] Error deleting local GWP: \(error)")
             }
         }
         
@@ -452,11 +459,11 @@ class CloudKitSyncService: ObservableObject {
                     // Ищем PlayerProfile для этого алиаса
                     if let profile = persistence.fetchPlayerProfile(byProfileId: newAlias.profileId) {
                         newAlias.profile = profile
-                        print("➕ [PULL] Created PlayerAlias: \(newAlias.aliasName) for profile \(profile.displayName)")
+                        debugLog("➕ [PULL] Created PlayerAlias: \(newAlias.aliasName) for profile \(profile.displayName)")
                     } else {
                         // Профиль не найден - удаляем созданный алиас
                         context.delete(newAlias)
-                        print("⚠️ [PULL] Skipping PlayerAlias \(newAlias.aliasName) - PlayerProfile \(newAlias.profileId) not found locally (will sync when profile arrives)")
+                        debugLog("⚠️ [PULL] Skipping PlayerAlias \(newAlias.aliasName) - PlayerProfile \(newAlias.profileId) not found locally (will sync when profile arrives)")
                     }
                 }
             }
@@ -470,17 +477,17 @@ class CloudKitSyncService: ObservableObject {
             var deletedCount = 0
             for localAlias in allLocalAliases {
                 if !cloudAliasIds.contains(localAlias.aliasId) {
-                    print("🗑️ [PULL] Deleting local alias not in CloudKit: \(localAlias.aliasName)")
+                    debugLog("🗑️ [PULL] Deleting local alias not in CloudKit: \(localAlias.aliasName)")
                     context.delete(localAlias)
                     deletedCount += 1
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [PULL] Deleted \(deletedCount) local aliases not found in CloudKit")
+                debugLog("🗑️ [PULL] Deleted \(deletedCount) local aliases not found in CloudKit")
             }
         } catch {
-            print("❌ [PULL] Error fetching local aliases for cleanup: \(error)")
+            debugLog("❌ [PULL] Error fetching local aliases for cleanup: \(error)")
         }
         
         // CloudKit = Source of Truth: удаляем локальные claims, которых нет в CloudKit
@@ -491,17 +498,17 @@ class CloudKitSyncService: ObservableObject {
             var deletedCount = 0
             for localClaim in allLocalClaims {
                 if !cloudClaimIds.contains(localClaim.claimId) {
-                    print("🗑️ [PULL] Deleting local claim not in CloudKit: \(localClaim.claimId)")
+                    debugLog("🗑️ [PULL] Deleting local claim not in CloudKit: \(localClaim.claimId)")
                     context.delete(localClaim)
                     deletedCount += 1
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [PULL] Deleted \(deletedCount) local claims not found in CloudKit")
+                debugLog("🗑️ [PULL] Deleted \(deletedCount) local claims not found in CloudKit")
             }
         } catch {
-            print("❌ [PULL] Error fetching local claims for cleanup: \(error)")
+            debugLog("❌ [PULL] Error fetching local claims for cleanup: \(error)")
         }
         
         // Save context
@@ -509,7 +516,7 @@ class CloudKitSyncService: ObservableObject {
             try context.save()
         }
         
-        print("✅ [PULL] CloudKit sync completed - local database matches CloudKit (Source of Truth)")
+        debugLog("✅ [PULL] CloudKit sync completed - local database matches CloudKit (Source of Truth)")
     }
     
     // MARK: - Full Sync (Push local + Pull public)
@@ -519,7 +526,7 @@ class CloudKitSyncService: ObservableObject {
             throw CloudKitSyncError.cloudKitNotAvailable
         }
         
-        print("🚀 Starting full sync (PULL ONLY - CloudKit is Source of Truth)...")
+        debugLog("🚀 Starting full sync (PULL ONLY - CloudKit is Source of Truth)...")
         
         // ТОЛЬКО PULL: Скачиваем данные из CloudKit
         // 1. Fetch PlayerProfiles FIRST (needed for aliases and GWP)
@@ -543,7 +550,7 @@ class CloudKitSyncService: ObservableObject {
         // - Создание заявки → syncPlayerClaims()
         // - Одобрение заявки → синхронизация в PlayerClaimService
 
-        print("✅ Full sync completed (CloudKit data pulled)")
+        debugLog("✅ Full sync completed (CloudKit data pulled)")
     }
 
     // MARK: - Phase 2: Two-Phase Loading
@@ -555,7 +562,7 @@ class CloudKitSyncService: ObservableObject {
         }
 
         let start = Date()
-        print("🚀 Phase 1: Minimal sync for fast app launch...")
+        debugLog("🚀 Phase 1: Minimal sync for fast app launch...")
 
         let userId = getCurrentUserId()
 
@@ -578,7 +585,7 @@ class CloudKitSyncService: ObservableObject {
         }
 
         let duration = Date().timeIntervalSince(start)
-        print("✅ Phase 1 completed in \(String(format: "%.2f", duration))s - app can show UI now")
+        debugLog("✅ Phase 1 completed in \(String(format: "%.2f", duration))s - app can show UI now")
     }
 
     /// Фоновая загрузка остальных данных (без GWP - они загружаются по требованию).
@@ -588,7 +595,7 @@ class CloudKitSyncService: ObservableObject {
         await MainActor.run { isBackgroundSyncing = true }
         defer { Task { @MainActor in isBackgroundSyncing = false } }
 
-        print("🔄 Phase 2: Background sync (full data, no GWP)...")
+        debugLog("🔄 Phase 2: Background sync (full data, no GWP)...")
 
         do {
             // Параллельная загрузка
@@ -603,9 +610,9 @@ class CloudKitSyncService: ObservableObject {
             await MainActor.run { lastSyncDate = now }
             UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
 
-            print("✅ Phase 2 completed - all data synced (GWP excluded, lazy load)")
+            debugLog("✅ Phase 2 completed - all data synced (GWP excluded, lazy load)")
         } catch {
-            print("❌ Phase 2 sync error: \(error)")
+            debugLog("❌ Phase 2 sync error: \(error)")
             throw error
         }
     }
@@ -621,7 +628,7 @@ class CloudKitSyncService: ObservableObject {
             sortDescriptors: nil,
             resultsLimit: 1000
         )
-        print("📊 [SMART_SYNC] Fetched \(result.records.count) GameSummary from CloudKit")
+        debugLog("📊 [SMART_SYNC] Fetched \(result.records.count) GameSummary from CloudKit")
         return result.records
     }
 
@@ -642,22 +649,22 @@ class CloudKitSyncService: ObservableObject {
             let ckChecksum = cloudMap[local.gameId]
             let localChecksum = local.checksum ?? ""
             if ckChecksum != localChecksum {
-                print("📊 [SMART_SYNC] Mismatch for game \(local.gameId): cloud=\(ckChecksum ?? "nil") local=\(localChecksum)")
+                debugLog("📊 [SMART_SYNC] Mismatch for game \(local.gameId): cloud=\(ckChecksum ?? "nil") local=\(localChecksum)")
                 return false
             }
         }
         if cloudMap.count != localSummaries.count {
-            print("📊 [SMART_SYNC] Count mismatch: cloud=\(cloudMap.count) local=\(localSummaries.count)")
+            debugLog("📊 [SMART_SYNC] Count mismatch: cloud=\(cloudMap.count) local=\(localSummaries.count)")
             return false
         }
-        print("📊 [SMART_SYNC] Summaries match - no full sync needed")
+        debugLog("📊 [SMART_SYNC] Summaries match - no full sync needed")
         return true
     }
 
     /// Двухфазная умная синхронизация: Phase 1 — минимальная загрузка, Phase 2 — проверка витрин, при расхождении полная синхронизация
     func smartSync() async throws {
         let start = Date()
-        print("🚀 [SMART_SYNC] Starting...")
+        debugLog("🚀 [SMART_SYNC] Starting...")
 
         guard await cloudKit.isCloudKitAvailable() else {
             throw CloudKitSyncError.cloudKitNotAvailable
@@ -666,7 +673,7 @@ class CloudKitSyncService: ObservableObject {
         // Phase 1: Минимальная загрузка для быстрого показа UI
         try await performMinimalSync()
         let phase1Duration = Date().timeIntervalSince(start)
-        print("✅ [SMART_SYNC] Phase 1 completed in \(String(format: "%.2f", phase1Duration))s")
+        debugLog("✅ [SMART_SYNC] Phase 1 completed in \(String(format: "%.2f", phase1Duration))s")
 
         // Phase 2: Фоновая проверка витрин и при необходимости полная синхронизация
         Task {
@@ -675,7 +682,7 @@ class CloudKitSyncService: ObservableObject {
                 let needsFullSync = !compareSummariesWithLocal(cloudSummaries)
 
                 if needsFullSync {
-                    print("🔄 [SMART_SYNC] Summaries differ, starting full background sync...")
+                    debugLog("🔄 [SMART_SYNC] Summaries differ, starting full background sync...")
                     await MainActor.run { isBackgroundSyncing = true }
                     defer { Task { @MainActor in isBackgroundSyncing = false } }
                     try await performBackgroundSync()
@@ -684,15 +691,15 @@ class CloudKitSyncService: ObservableObject {
                     await MainActor.run { lastSyncDate = now }
                     UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
                     NotificationCenter.default.post(name: .syncCompletedSuccessfully, object: nil)
-                    print("✅ [SMART_SYNC] Full sync completed successfully")
+                    debugLog("✅ [SMART_SYNC] Full sync completed successfully")
                 } else {
                     let now = Date()
                     await MainActor.run { lastSyncDate = now }
                     UserDefaults.standard.set(now, forKey: "lastCloudKitSyncDate")
-                    print("✅ [SMART_SYNC] No full sync needed")
+                    debugLog("✅ [SMART_SYNC] No full sync needed")
                 }
             } catch {
-                print("❌ [SMART_SYNC] Phase 2 error: \(error)")
+                debugLog("❌ [SMART_SYNC] Phase 2 error: \(error)")
                 NotificationCenter.default.post(name: .syncCompletedWithError, object: error)
             }
         }
@@ -703,7 +710,7 @@ class CloudKitSyncService: ObservableObject {
     }
 
     private func fetchMyPlayerProfile(userId: UUID) async throws {
-        print("☁️ [MINIMAL] Fetching my PlayerProfile for user \(userId)...")
+        debugLog("☁️ [MINIMAL] Fetching my PlayerProfile for user \(userId)...")
 
         let userRecordID = CKRecord.ID(recordName: userId.uuidString)
         let userReference = CKRecord.Reference(recordID: userRecordID, action: .none)
@@ -718,15 +725,15 @@ class CloudKitSyncService: ObservableObject {
         )
 
         if !result.records.isEmpty {
-            print("📥 [MINIMAL] Fetched \(result.records.count) profile(s) for current user")
+            debugLog("📥 [MINIMAL] Fetched \(result.records.count) profile(s) for current user")
             await mergePlayerProfilesWithLocal(result.records)
         } else {
-            print("ℹ️ [MINIMAL] No profile found in CloudKit for user (may not exist yet)")
+            debugLog("ℹ️ [MINIMAL] No profile found in CloudKit for user (may not exist yet)")
         }
     }
 
     private func fetchRecentGames(limit: Int) async throws {
-        print("☁️ [MINIMAL] Fetching \(limit) most recent games...")
+        debugLog("☁️ [MINIMAL] Fetching \(limit) most recent games...")
 
         let predicate = NSPredicate(format: "softDeleted == NO")
         let sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
@@ -741,15 +748,15 @@ class CloudKitSyncService: ObservableObject {
             )
 
             if !result.records.isEmpty {
-                print("📥 [MINIMAL] Fetched \(result.records.count) recent games")
+                debugLog("📥 [MINIMAL] Fetched \(result.records.count) recent games")
                 await mergeGamesWithLocal(result.records)
             } else {
-                print("ℹ️ [MINIMAL] No games found in CloudKit")
+                debugLog("ℹ️ [MINIMAL] No games found in CloudKit")
                 await mergeGamesWithLocal([])
             }
         } catch {
             // Fallback: если timestamp не индексирован, загружаем без сортировки
-            print("⚠️ [MINIMAL] Sorted fetch failed, trying without sort: \(error.localizedDescription)")
+            debugLog("⚠️ [MINIMAL] Sorted fetch failed, trying without sort: \(error.localizedDescription)")
             let result = try await cloudKit.queryRecords(
                 withType: .game,
                 from: .publicDB,
@@ -766,7 +773,7 @@ class CloudKitSyncService: ObservableObject {
     }
 
     private func fetchPendingClaimsForHost(userId: UUID) async throws {
-        print("☁️ [MINIMAL] Fetching pending claims for host \(userId)...")
+        debugLog("☁️ [MINIMAL] Fetching pending claims for host \(userId)...")
 
         let hostRecordID = CKRecord.ID(recordName: userId.uuidString)
         let hostReference = CKRecord.Reference(recordID: hostRecordID, action: .none)
@@ -781,14 +788,14 @@ class CloudKitSyncService: ObservableObject {
         )
 
         if !result.records.isEmpty {
-            print("📥 [MINIMAL] Fetched \(result.records.count) pending claims")
+            debugLog("📥 [MINIMAL] Fetched \(result.records.count) pending claims")
             await mergePlayerClaimsWithLocal(result.records, deleteMissing: false)
         }
         // Полная загрузка claims будет в Phase 2 (performBackgroundSync)
     }
 
     private func fetchUserStatisticsSummary(userId: UUID) async throws {
-        print("☁️ [MINIMAL] Fetching UserStatisticsSummary for user \(userId)...")
+        debugLog("☁️ [MINIMAL] Fetching UserStatisticsSummary for user \(userId)...")
 
         let predicate = NSPredicate(format: "userId == %@", userId.uuidString)
         let result = try await cloudKit.queryRecords(
@@ -827,8 +834,8 @@ class CloudKitSyncService: ObservableObject {
 
     // MARK: - Fetch Public Games
 
-    func fetchPlayerProfiles() async throws {
-        print("☁️ [FETCH_PROFILES] Fetching PlayerProfiles from CloudKit PUBLIC DB...")
+    func fetchPlayerProfiles(notifyOnNewPublic: Bool = false) async throws {
+        debugLog("☁️ [FETCH_PROFILES] Fetching PlayerProfiles from CloudKit PUBLIC DB...")
         
         let predicate = NSPredicate(value: true)
         let records = try await cloudKit.fetchRecords(
@@ -839,11 +846,11 @@ class CloudKitSyncService: ObservableObject {
         )
         
         if records.isEmpty {
-            print("ℹ️ [FETCH_PROFILES] No profiles found in CloudKit")
+            debugLog("ℹ️ [FETCH_PROFILES] No profiles found in CloudKit")
             // Не удаляем локальные профили, т.к. это может быть текущий пользователь
         } else {
-            print("📥 [FETCH_PROFILES] Fetched \(records.count) profiles from CloudKit PUBLIC DB")
-            await mergePlayerProfilesWithLocal(records)
+            debugLog("📥 [FETCH_PROFILES] Fetched \(records.count) profiles from CloudKit PUBLIC DB")
+            await mergePlayerProfilesWithLocal(records, notifyOnNewPublic: notifyOnNewPublic)
         }
     }
     
@@ -861,12 +868,12 @@ class CloudKitSyncService: ObservableObject {
         )
         
         if records.isEmpty {
-            print("ℹ️ [FETCH_GAMES] No public games found in CloudKit")
-            print("☁️ [FETCH_GAMES] CloudKit = Source of Truth: will delete all local games (except pending)")
+            debugLog("ℹ️ [FETCH_GAMES] No public games found in CloudKit")
+            debugLog("☁️ [FETCH_GAMES] CloudKit = Source of Truth: will delete all local games (except pending)")
             // ВАЖНО: Вызываем merge с пустым массивом для удаления локальных игр
             await mergeGamesWithLocal([])
         } else {
-            print("📥 [FETCH_GAMES] Fetched \(records.count) public games from CloudKit")
+            debugLog("📥 [FETCH_GAMES] Fetched \(records.count) public games from CloudKit")
             // Merge with local data
             await mergeGamesWithLocal(records)
         }
@@ -882,10 +889,10 @@ class CloudKitSyncService: ObservableObject {
         )
         
         if !records.isEmpty {
-            print("📥 [FETCH_ALIASES] Fetched \(records.count) public player aliases from CloudKit")
+            debugLog("📥 [FETCH_ALIASES] Fetched \(records.count) public player aliases from CloudKit")
             await mergePlayerAliasesWithLocal(records)
         } else {
-            print("ℹ️ [FETCH_ALIASES] No aliases found in CloudKit")
+            debugLog("ℹ️ [FETCH_ALIASES] No aliases found in CloudKit")
             // CloudKit = Source of Truth: если в CloudKit нет алиасов, удаляем все локальные
             await deleteAllLocalAliases()
         }
@@ -894,16 +901,20 @@ class CloudKitSyncService: ObservableObject {
     // MARK: - Merge PlayerProfiles with Local
     
     @MainActor
-    private func mergePlayerProfilesWithLocal(_ cloudRecords: [CKRecord]) async {
+    private func mergePlayerProfilesWithLocal(_ cloudRecords: [CKRecord], notifyOnNewPublic: Bool = false) async {
         let context = persistence.container.viewContext
         
-        print("🔄 [MERGE_PROFILES] Starting merge: \(cloudRecords.count) profiles from CloudKit")
+        debugLog("🔄 [MERGE_PROFILES] Starting merge: \(cloudRecords.count) profiles from CloudKit")
+        
+        let currentUserId = UserDefaults.standard.string(forKey: "currentUserId")
+            .flatMap { UUID(uuidString: $0) }
+            ?? KeychainService.shared.getUserId().flatMap { UUID(uuidString: $0) }
         
         var cloudProfileIds = Set<UUID>()
         
         for record in cloudRecords {
             guard let profileId = UUID(uuidString: record.recordID.recordName) else {
-                print("⚠️ [MERGE_PROFILES] Invalid profile ID: \(record.recordID.recordName)")
+                debugLog("⚠️ [MERGE_PROFILES] Invalid profile ID: \(record.recordID.recordName)")
                 continue
             }
             
@@ -911,8 +922,16 @@ class CloudKitSyncService: ObservableObject {
             
             if let existingProfile = persistence.fetchPlayerProfile(byProfileId: profileId) {
                 // CloudKit = Source of Truth: всегда обновляем
+                let wasPublic = existingProfile.isPublic
                 existingProfile.updateFromCKRecord(record)
-                print("🔄 [MERGE_PROFILES] Updated profile: \(existingProfile.displayName)")
+                debugLog("🔄 [MERGE_PROFILES] Updated profile: \(existingProfile.displayName)")
+                // Уведомление: профиль только что стал публичным (только при push)
+                if notifyOnNewPublic, existingProfile.isPublic, !wasPublic,
+                   existingProfile.userId != currentUserId {
+                    Task {
+                        await NotificationService.shared.notifyProfileBecamePublic(displayName: existingProfile.displayName)
+                    }
+                }
             } else {
                 // Создаём новый профиль из CloudKit
                 let newProfile = PlayerProfile(context: context)
@@ -923,9 +942,15 @@ class CloudKitSyncService: ObservableObject {
                 if let userId = newProfile.userId,
                    let user = persistence.fetchUser(byId: userId) {
                     newProfile.user = user
-                    print("➕ [MERGE_PROFILES] Created profile: \(newProfile.displayName) linked to user \(user.username)")
+                    debugLog("➕ [MERGE_PROFILES] Created profile: \(newProfile.displayName) linked to user \(user.username)")
                 } else {
-                    print("➕ [MERGE_PROFILES] Created profile: \(newProfile.displayName) (no user link)")
+                    debugLog("➕ [MERGE_PROFILES] Created profile: \(newProfile.displayName) (no user link)")
+                }
+                // Уведомление: новый публичный профиль (только при push)
+                if notifyOnNewPublic, newProfile.isPublic, newProfile.userId != currentUserId {
+                    Task {
+                        await NotificationService.shared.notifyProfileBecamePublic(displayName: newProfile.displayName)
+                    }
                 }
             }
         }
@@ -944,31 +969,31 @@ class CloudKitSyncService: ObservableObject {
             for localProfile in allLocalProfiles {
                 // НЕ удаляем профиль текущего пользователя
                 if let currentUserId = currentUserId, localProfile.userId == currentUserId {
-                    print("🔒 [MERGE_PROFILES] Skipping current user's profile: \(localProfile.displayName)")
+                    debugLog("🔒 [MERGE_PROFILES] Skipping current user's profile: \(localProfile.displayName)")
                     continue
                 }
                 
                 // Удаляем если нет в CloudKit
                 if !cloudProfileIds.contains(localProfile.profileId) {
-                    print("🗑️ [MERGE_PROFILES] Deleting local profile not in CloudKit: \(localProfile.displayName)")
+                    debugLog("🗑️ [MERGE_PROFILES] Deleting local profile not in CloudKit: \(localProfile.displayName)")
                     context.delete(localProfile)
                     deletedCount += 1
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [MERGE_PROFILES] Deleted \(deletedCount) local profiles not found in CloudKit")
+                debugLog("🗑️ [MERGE_PROFILES] Deleted \(deletedCount) local profiles not found in CloudKit")
             }
         } catch {
-            print("❌ [MERGE_PROFILES] Error fetching local profiles for cleanup: \(error)")
+            debugLog("❌ [MERGE_PROFILES] Error fetching local profiles for cleanup: \(error)")
         }
         
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ [MERGE_PROFILES] Successfully merged profiles with local database")
+                debugLog("✅ [MERGE_PROFILES] Successfully merged profiles with local database")
             } catch {
-                print("❌ [MERGE_PROFILES] Failed to save merged profiles: \(error)")
+                debugLog("❌ [MERGE_PROFILES] Failed to save merged profiles: \(error)")
             }
         }
     }
@@ -979,13 +1004,13 @@ class CloudKitSyncService: ObservableObject {
     private func mergePlayerAliasesWithLocal(_ cloudRecords: [CKRecord]) async {
         let context = persistence.container.viewContext
         
-        print("🔄 [MERGE_ALIASES] Starting merge: \(cloudRecords.count) aliases from CloudKit")
+        debugLog("🔄 [MERGE_ALIASES] Starting merge: \(cloudRecords.count) aliases from CloudKit")
         
         var cloudAliasIds = Set<UUID>()
         
         for record in cloudRecords {
             guard let aliasId = UUID(uuidString: record.recordID.recordName) else {
-                print("⚠️ [MERGE_ALIASES] Invalid alias ID: \(record.recordID.recordName)")
+                debugLog("⚠️ [MERGE_ALIASES] Invalid alias ID: \(record.recordID.recordName)")
                 continue
             }
             
@@ -994,7 +1019,7 @@ class CloudKitSyncService: ObservableObject {
             if let existingAlias = persistence.fetchAlias(byId: aliasId) {
                 // CloudKit = Source of Truth: всегда обновляем
                 existingAlias.updateFromCKRecord(record)
-                print("🔄 [MERGE_ALIASES] Updated alias: \(existingAlias.aliasName)")
+                debugLog("🔄 [MERGE_ALIASES] Updated alias: \(existingAlias.aliasName)")
             } else {
                 let newAlias = PlayerAlias(context: context)
                 newAlias.aliasId = aliasId
@@ -1003,11 +1028,11 @@ class CloudKitSyncService: ObservableObject {
                 // Ищем PlayerProfile для этого алиаса
                 if let profile = persistence.fetchPlayerProfile(byProfileId: newAlias.profileId) {
                     newAlias.profile = profile
-                    print("➕ [MERGE_ALIASES] Created alias: \(newAlias.aliasName) for profile \(profile.displayName)")
+                    debugLog("➕ [MERGE_ALIASES] Created alias: \(newAlias.aliasName) for profile \(profile.displayName)")
                 } else {
                     // Профиль не найден локально - нужно удалить созданный алиас
                     context.delete(newAlias)
-                    print("⚠️ [MERGE_ALIASES] Skipping alias \(newAlias.aliasName) - PlayerProfile \(newAlias.profileId) not found locally (will sync when profile arrives)")
+                    debugLog("⚠️ [MERGE_ALIASES] Skipping alias \(newAlias.aliasName) - PlayerProfile \(newAlias.profileId) not found locally (will sync when profile arrives)")
                 }
             }
         }
@@ -1020,25 +1045,25 @@ class CloudKitSyncService: ObservableObject {
             var deletedCount = 0
             for localAlias in allLocalAliases {
                 if !cloudAliasIds.contains(localAlias.aliasId) {
-                    print("🗑️ [MERGE_ALIASES] Deleting local alias not in CloudKit: \(localAlias.aliasName)")
+                    debugLog("🗑️ [MERGE_ALIASES] Deleting local alias not in CloudKit: \(localAlias.aliasName)")
                     context.delete(localAlias)
                     deletedCount += 1
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [MERGE_ALIASES] Deleted \(deletedCount) local aliases not found in CloudKit")
+                debugLog("🗑️ [MERGE_ALIASES] Deleted \(deletedCount) local aliases not found in CloudKit")
             }
         } catch {
-            print("❌ [MERGE_ALIASES] Error fetching local aliases for cleanup: \(error)")
+            debugLog("❌ [MERGE_ALIASES] Error fetching local aliases for cleanup: \(error)")
         }
         
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ [MERGE_ALIASES] Successfully merged aliases with local database")
+                debugLog("✅ [MERGE_ALIASES] Successfully merged aliases with local database")
             } catch {
-                print("❌ [MERGE_ALIASES] Failed to save merged aliases: \(error)")
+                debugLog("❌ [MERGE_ALIASES] Failed to save merged aliases: \(error)")
             }
         }
     }
@@ -1052,16 +1077,16 @@ class CloudKitSyncService: ObservableObject {
             let allLocalAliases = try context.fetch(fetchRequest)
             
             if !allLocalAliases.isEmpty {
-                print("🗑️ [DELETE_ALIASES] CloudKit has 0 aliases - deleting all \(allLocalAliases.count) local aliases")
+                debugLog("🗑️ [DELETE_ALIASES] CloudKit has 0 aliases - deleting all \(allLocalAliases.count) local aliases")
                 for alias in allLocalAliases {
                     context.delete(alias)
                 }
                 
                 try context.save()
-                print("✅ [DELETE_ALIASES] Deleted all local aliases")
+                debugLog("✅ [DELETE_ALIASES] Deleted all local aliases")
             }
         } catch {
-            print("❌ [DELETE_ALIASES] Error deleting local aliases: \(error)")
+            debugLog("❌ [DELETE_ALIASES] Error deleting local aliases: \(error)")
         }
     }
     
@@ -1069,7 +1094,7 @@ class CloudKitSyncService: ObservableObject {
     
     private func fetchPublicGameWithPlayers() async throws {
         // PAGINATION: Fetch ВСЕ GameWithPlayer records с автоматической пагинацией
-        print("🔄 [FETCH_ALL_PLAYERS] Starting paginated fetch for ALL GameWithPlayer records...")
+        debugLog("🔄 [FETCH_ALL_PLAYERS] Starting paginated fetch for ALL GameWithPlayer records...")
         
         let allRecords = try await cloudKit.fetchAllRecords(
             withType: .gameWithPlayer,
@@ -1078,11 +1103,11 @@ class CloudKitSyncService: ObservableObject {
         )
         
         if !allRecords.isEmpty {
-            print("✅ [FETCH_ALL_PLAYERS] Total fetched: \(allRecords.count) game-player records from CloudKit (with pagination)")
+            debugLog("✅ [FETCH_ALL_PLAYERS] Total fetched: \(allRecords.count) game-player records from CloudKit (with pagination)")
             await mergeGameWithPlayersWithLocal(allRecords)
         } else {
-            print("ℹ️ [FETCH_ALL_PLAYERS] No GameWithPlayer records found in CloudKit")
-            print("☁️ [FETCH_ALL_PLAYERS] CloudKit = Source of Truth: will delete all local GameWithPlayer")
+            debugLog("ℹ️ [FETCH_ALL_PLAYERS] No GameWithPlayer records found in CloudKit")
+            debugLog("☁️ [FETCH_ALL_PLAYERS] CloudKit = Source of Truth: will delete all local GameWithPlayer")
             // ВАЖНО: Вызываем merge с пустым массивом для удаления локальных GWP
             await mergeGameWithPlayersWithLocal([])
         }
@@ -1090,15 +1115,15 @@ class CloudKitSyncService: ObservableObject {
     
     /// Загружает игроков для конкретной игры из Public Database
     func fetchGameWithPlayers(forGameId gameId: UUID) async throws {
-        print("🔍 [FETCH_PLAYERS] Starting fetch for game: \(gameId)")
+        debugLog("🔍 [FETCH_PLAYERS] Starting fetch for game: \(gameId)")
         
         // Query с фильтром по игре
         let gameRecordID = CKRecord.ID(recordName: gameId.uuidString)
         let gameRef = CKRecord.Reference(recordID: gameRecordID, action: .none)
         let predicate = NSPredicate(format: "game == %@", gameRef)
         
-        print("🔍 [FETCH_PLAYERS] Query predicate: \(predicate)")
-        print("🔍 [FETCH_PLAYERS] Game reference: \(gameRef.recordID.recordName)")
+        debugLog("🔍 [FETCH_PLAYERS] Query predicate: \(predicate)")
+        debugLog("🔍 [FETCH_PLAYERS] Game reference: \(gameRef.recordID.recordName)")
         
         do {
             let records = try await cloudKit.fetchRecords(
@@ -1109,30 +1134,30 @@ class CloudKitSyncService: ObservableObject {
             )
             
             if !records.isEmpty {
-                print("✅ [FETCH_PLAYERS] Fetched \(records.count) players for game \(gameId)")
+                debugLog("✅ [FETCH_PLAYERS] Fetched \(records.count) players for game \(gameId)")
                 for (index, record) in records.enumerated() {
                     let playerName = record["playerName"] as? String ?? "Unknown"
                     let buyin = record["buyin"] as? Int16 ?? 0
                     let cashout = record["cashout"] as? Int64 ?? 0
-                    print("   Player \(index + 1): \(playerName) (buyin: \(buyin), cashout: \(cashout))")
+                    debugLog("   Player \(index + 1): \(playerName) (buyin: \(buyin), cashout: \(cashout))")
                 }
                 await mergeGameWithPlayersWithLocal(records)
             } else {
-                print("⚠️ [FETCH_PLAYERS] No players found in CloudKit for game \(gameId)")
-                print("⚠️ [FETCH_PLAYERS] This could mean:")
-                print("   1. GameWithPlayer records were not synced to CloudKit")
-                print("   2. Schema was not deployed to Production")
-                print("   3. Records are in Private DB instead of Public DB")
+                debugLog("⚠️ [FETCH_PLAYERS] No players found in CloudKit for game \(gameId)")
+                debugLog("⚠️ [FETCH_PLAYERS] This could mean:")
+                debugLog("   1. GameWithPlayer records were not synced to CloudKit")
+                debugLog("   2. Schema was not deployed to Production")
+                debugLog("   3. Records are in Private DB instead of Public DB")
             }
         } catch {
-            print("❌ [FETCH_PLAYERS] Error fetching players: \(error)")
+            debugLog("❌ [FETCH_PLAYERS] Error fetching players: \(error)")
             throw error
         }
     }
     
     /// Загружает PlayerClaim из Public Database (changed from Private)
     private func fetchPlayerClaims() async throws {
-        print("🔄 [FETCH_CLAIMS] Fetching PlayerClaims from Public Database...")
+        debugLog("🔄 [FETCH_CLAIMS] Fetching PlayerClaims from Public Database...")
         
         let records = try await cloudKit.fetchRecords(
             withType: .playerClaim,
@@ -1141,11 +1166,11 @@ class CloudKitSyncService: ObservableObject {
         )
         
         if !records.isEmpty {
-            print("📥 [FETCH_CLAIMS] Fetched \(records.count) claims from CloudKit")
+            debugLog("📥 [FETCH_CLAIMS] Fetched \(records.count) claims from CloudKit")
             await mergePlayerClaimsWithLocal(records)
         } else {
-            print("ℹ️ [FETCH_CLAIMS] No claims found in CloudKit")
-            print("☁️ [FETCH_CLAIMS] CloudKit = Source of Truth: will delete all local claims (except pending)")
+            debugLog("ℹ️ [FETCH_CLAIMS] No claims found in CloudKit")
+            debugLog("☁️ [FETCH_CLAIMS] CloudKit = Source of Truth: will delete all local claims (except pending)")
             // ВАЖНО: Вызываем merge с пустым массивом для удаления локальных claims
             await mergePlayerClaimsWithLocal([])
         }
@@ -1153,7 +1178,7 @@ class CloudKitSyncService: ObservableObject {
     
     /// Очищает невалидные PlayerClaim из CloudKit Public Database (changed from Private)
     func cleanupInvalidClaims() async throws {
-        print("🧹 [CLEANUP_CLAIMS] Starting cleanup of invalid claims...")
+        debugLog("🧹 [CLEANUP_CLAIMS] Starting cleanup of invalid claims...")
         
         let records = try await cloudKit.fetchRecords(
             withType: .playerClaim,
@@ -1174,27 +1199,27 @@ class CloudKitSyncService: ObservableObject {
             let hasStatus = (record["status"] as? String)?.isEmpty == false
             
             if !hasPlayerName || !hasGameRef || !hasClaimantRef || !hasHostRef || !hasStatus {
-                print("⚠️ [CLEANUP_CLAIMS] Found invalid claim: \(claimId)")
-                print("   - hasPlayerName: \(hasPlayerName), hasGameRef: \(hasGameRef)")
-                print("   - hasClaimantRef: \(hasClaimantRef), hasHostRef: \(hasHostRef)")
-                print("   - hasStatus: \(hasStatus)")
+                debugLog("⚠️ [CLEANUP_CLAIMS] Found invalid claim: \(claimId)")
+                debugLog("   - hasPlayerName: \(hasPlayerName), hasGameRef: \(hasGameRef)")
+                debugLog("   - hasClaimantRef: \(hasClaimantRef), hasHostRef: \(hasHostRef)")
+                debugLog("   - hasStatus: \(hasStatus)")
                 invalidClaimIds.append(record.recordID)
             }
         }
         
         if !invalidClaimIds.isEmpty {
-            print("🗑️ [CLEANUP_CLAIMS] Deleting \(invalidClaimIds.count) invalid claims from CloudKit...")
+            debugLog("🗑️ [CLEANUP_CLAIMS] Deleting \(invalidClaimIds.count) invalid claims from CloudKit...")
             for recordID in invalidClaimIds {
                 do {
                     try await cloudKit.delete(recordID: recordID, from: .publicDB)
-                    print("✅ [CLEANUP_CLAIMS] Deleted \(recordID.recordName)")
+                    debugLog("✅ [CLEANUP_CLAIMS] Deleted \(recordID.recordName)")
                 } catch {
-                    print("❌ [CLEANUP_CLAIMS] Failed to delete \(recordID.recordName): \(error)")
+                    debugLog("❌ [CLEANUP_CLAIMS] Failed to delete \(recordID.recordName): \(error)")
                 }
             }
-            print("✅ [CLEANUP_CLAIMS] Cleanup completed: deleted \(invalidClaimIds.count) invalid claims")
+            debugLog("✅ [CLEANUP_CLAIMS] Cleanup completed: deleted \(invalidClaimIds.count) invalid claims")
         } else {
-            print("✅ [CLEANUP_CLAIMS] No invalid claims found")
+            debugLog("✅ [CLEANUP_CLAIMS] No invalid claims found")
         }
     }
     
@@ -1204,7 +1229,7 @@ class CloudKitSyncService: ObservableObject {
     private func mergeGamesWithLocal(_ cloudRecords: [CKRecord]) async {
         let context = persistence.container.viewContext
         
-        print("🔄 [MERGE_GAMES] Starting merge: \(cloudRecords.count) games from CloudKit")
+        debugLog("🔄 [MERGE_GAMES] Starting merge: \(cloudRecords.count) games from CloudKit")
         
         // Собираем все gameId из CloudKit
         var cloudGameIds = Set<UUID>()
@@ -1217,7 +1242,7 @@ class CloudKitSyncService: ObservableObject {
             
             let gameIdString = record.recordID.recordName
             guard let gameId = UUID(uuidString: gameIdString) else {
-                print("⚠️ Invalid game ID in CloudKit record: \(gameIdString)")
+                debugLog("⚠️ Invalid game ID in CloudKit record: \(gameIdString)")
                 continue
             }
             
@@ -1231,15 +1256,15 @@ class CloudKitSyncService: ObservableObject {
                 if let localGame = try context.fetch(fetchRequest).first {
                     // Game exists locally - CloudKit is source of truth, always update
                     localGame.updateFromCKRecord(record)
-                    print("🔄 [MERGE_GAMES] Updated local game: \(gameId)")
+                    debugLog("🔄 [MERGE_GAMES] Updated local game: \(gameId)")
                 } else {
                     // Game doesn't exist locally - create it
                     if self.createGameFromCKRecord(record, in: context) != nil {
-                        print("➕ [MERGE_GAMES] Created local game: \(gameId)")
+                        debugLog("➕ [MERGE_GAMES] Created local game: \(gameId)")
                     }
                 }
             } catch {
-                print("❌ [MERGE_GAMES] Error processing game \(gameId): \(error)")
+                debugLog("❌ [MERGE_GAMES] Error processing game \(gameId): \(error)")
             }
         }
         
@@ -1254,28 +1279,28 @@ class CloudKitSyncService: ObservableObject {
             for localGame in allLocalGames {
                 // Проверяем: нет в CloudKit И нет в pending списке
                 if !cloudGameIds.contains(localGame.gameId) && !pendingGames.contains(localGame.gameId) {
-                    print("🗑️ [MERGE_GAMES] Deleting local game not in CloudKit: \(localGame.gameId)")
+                    debugLog("🗑️ [MERGE_GAMES] Deleting local game not in CloudKit: \(localGame.gameId)")
                     context.delete(localGame)
                     deletedCount += 1
                 } else if !cloudGameIds.contains(localGame.gameId) && pendingGames.contains(localGame.gameId) {
-                    print("📌 [MERGE_GAMES] Keeping pending game (not yet synced): \(localGame.gameId)")
+                    debugLog("📌 [MERGE_GAMES] Keeping pending game (not yet synced): \(localGame.gameId)")
                 }
             }
             
             if deletedCount > 0 {
-                print("🗑️ [MERGE_GAMES] Deleted \(deletedCount) local games not found in CloudKit")
+                debugLog("🗑️ [MERGE_GAMES] Deleted \(deletedCount) local games not found in CloudKit")
             }
         } catch {
-            print("❌ [MERGE_GAMES] Error fetching local games for cleanup: \(error)")
+            debugLog("❌ [MERGE_GAMES] Error fetching local games for cleanup: \(error)")
         }
         
         // Save all changes
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ [MERGE_GAMES] Merged \(cloudRecords.count) games with local database")
+                debugLog("✅ [MERGE_GAMES] Merged \(cloudRecords.count) games with local database")
             } catch {
-                print("❌ [MERGE_GAMES] Failed to save merged games: \(error)")
+                debugLog("❌ [MERGE_GAMES] Failed to save merged games: \(error)")
             }
         }
     }
@@ -1286,7 +1311,7 @@ class CloudKitSyncService: ObservableObject {
     private func createGameFromCKRecord(_ record: CKRecord, in context: NSManagedObjectContext) -> Game? {
         let gameIdString = record.recordID.recordName
         guard let gameId = UUID(uuidString: gameIdString) else {
-            print("⚠️ Invalid game ID in CloudKit record: \(gameIdString)")
+            debugLog("⚠️ Invalid game ID in CloudKit record: \(gameIdString)")
             return nil
         }
         
@@ -1303,7 +1328,7 @@ class CloudKitSyncService: ObservableObject {
     private func mergeGameWithPlayersWithLocal(_ cloudRecords: [CKRecord]) async {
         let context = persistence.container.viewContext
         
-        print("🔄 [MERGE_GWP] Starting merge: \(cloudRecords.count) GameWithPlayer from CloudKit")
+        debugLog("🔄 [MERGE_GWP] Starting merge: \(cloudRecords.count) GameWithPlayer from CloudKit")
         
         // Собираем все пары (gameId, playerName) из CloudKit
         var cloudGWPKeys = Set<String>() // "gameId|playerName"
@@ -1311,12 +1336,12 @@ class CloudKitSyncService: ObservableObject {
         for record in cloudRecords {
             // Получаем gameId из reference
             guard let gameRef = record["game"] as? CKRecord.Reference else {
-                print("⚠️ [MERGE_GWP] GameWithPlayer record without game reference")
+                debugLog("⚠️ [MERGE_GWP] GameWithPlayer record without game reference")
                 continue
             }
             let gameIdString = gameRef.recordID.recordName
             guard let gameId = UUID(uuidString: gameIdString) else {
-                print("⚠️ [MERGE_GWP] Invalid game ID: \(gameIdString)")
+                debugLog("⚠️ [MERGE_GWP] Invalid game ID: \(gameIdString)")
                 continue
             }
             
@@ -1325,7 +1350,7 @@ class CloudKitSyncService: ObservableObject {
             gameFetch.predicate = NSPredicate(format: "gameId == %@", gameId as CVarArg)
             
             guard let game = try? context.fetch(gameFetch).first else {
-                print("⚠️ [MERGE_GWP] Game \(gameId) not found locally, skipping GameWithPlayer")
+                debugLog("⚠️ [MERGE_GWP] Game \(gameId) not found locally, skipping GameWithPlayer")
                 continue
             }
             
@@ -1340,7 +1365,7 @@ class CloudKitSyncService: ObservableObject {
             
             // Получаем имя игрока
             guard let playerName = record["playerName"] as? String else {
-                print("⚠️ [MERGE_GWP] GameWithPlayer record without playerName")
+                debugLog("⚠️ [MERGE_GWP] GameWithPlayer record without playerName")
                 continue
             }
             
@@ -1359,7 +1384,7 @@ class CloudKitSyncService: ObservableObject {
                 let newPlayer = Player(context: context)
                 newPlayer.name = playerName
                 player = newPlayer
-                print("➕ [MERGE_GWP] Created Player: \(playerName)")
+                debugLog("➕ [MERGE_GWP] Created Player: \(playerName)")
             }
             
             // Проверяем не существует ли уже GameWithPlayer
@@ -1380,13 +1405,13 @@ class CloudKitSyncService: ObservableObject {
                 if playerProfile != nil {
                     // Появилась новая привязка - всегда обновляем
                     existingGWP.playerProfile = playerProfile
-                    print("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - linked to profile \(playerProfile!.displayName)")
+                    debugLog("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - linked to profile \(playerProfile!.displayName)")
                 } else if existingGWP.playerProfile == nil {
                     // Оба nil - ничего не меняем
-                    print("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - no profile (unclaimed)")
+                    debugLog("🔄 [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - no profile (unclaimed)")
                 } else {
                     // CloudKit говорит nil, но локально есть профиль - оставляем локальный!
-                    print("⚠️ [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - keeping local profile (CloudKit has nil)")
+                    debugLog("⚠️ [MERGE_GWP] Updated GameWithPlayer for \(playerName) in game \(gameId) - keeping local profile (CloudKit has nil)")
                 }
             } else {
                 // Создаём новый
@@ -1395,7 +1420,7 @@ class CloudKitSyncService: ObservableObject {
                 gwp.player = player
                 gwp.playerProfile = playerProfile
                 gwp.updateFromCKRecord(record)
-                print("➕ [MERGE_GWP] Created GameWithPlayer for \(playerName) in game \(gameId)")
+                debugLog("➕ [MERGE_GWP] Created GameWithPlayer for \(playerName) in game \(gameId)")
             }
         }
         
@@ -1409,7 +1434,7 @@ class CloudKitSyncService: ObservableObject {
                 if let game = localGWP.game, let player = localGWP.player, let playerName = player.name {
                     let key = "\(game.gameId.uuidString)|\(playerName)"
                     if !cloudGWPKeys.contains(key) {
-                        print("🗑️ [MERGE_GWP] Deleting local GWP not in CloudKit: \(playerName) in game \(game.gameId)")
+                        debugLog("🗑️ [MERGE_GWP] Deleting local GWP not in CloudKit: \(playerName) in game \(game.gameId)")
                         context.delete(localGWP)
                         deletedCount += 1
                     }
@@ -1417,19 +1442,19 @@ class CloudKitSyncService: ObservableObject {
             }
             
             if deletedCount > 0 {
-                print("🗑️ [MERGE_GWP] Deleted \(deletedCount) local GameWithPlayer not found in CloudKit")
+                debugLog("🗑️ [MERGE_GWP] Deleted \(deletedCount) local GameWithPlayer not found in CloudKit")
             }
         } catch {
-            print("❌ [MERGE_GWP] Error fetching local GWP for cleanup: \(error)")
+            debugLog("❌ [MERGE_GWP] Error fetching local GWP for cleanup: \(error)")
         }
         
         // Сохраняем все изменения
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ [MERGE_GWP] Merged GameWithPlayer records with local database")
+                debugLog("✅ [MERGE_GWP] Merged GameWithPlayer records with local database")
             } catch {
-                print("❌ [MERGE_GWP] Failed to save merged GameWithPlayer: \(error)")
+                debugLog("❌ [MERGE_GWP] Failed to save merged GameWithPlayer: \(error)")
             }
         }
     }
@@ -1440,7 +1465,7 @@ class CloudKitSyncService: ObservableObject {
     private func mergePlayerClaimsWithLocal(_ cloudRecords: [CKRecord], deleteMissing: Bool = true) async {
         let context = persistence.container.viewContext
         
-        print("🔄 [MERGE_CLAIMS] Starting merge of \(cloudRecords.count) claims (deleteMissing: \(deleteMissing))...")
+        debugLog("🔄 [MERGE_CLAIMS] Starting merge of \(cloudRecords.count) claims (deleteMissing: \(deleteMissing))...")
         
         var validClaims = 0
         var skippedClaims = 0
@@ -1449,7 +1474,7 @@ class CloudKitSyncService: ObservableObject {
         for record in cloudRecords {
             let claimIdString = record.recordID.recordName
             guard let claimId = UUID(uuidString: claimIdString) else {
-                print("⚠️ [MERGE_CLAIMS] Invalid claim ID: \(claimIdString)")
+                debugLog("⚠️ [MERGE_CLAIMS] Invalid claim ID: \(claimIdString)")
                 skippedClaims += 1
                 continue
             }
@@ -1457,40 +1482,40 @@ class CloudKitSyncService: ObservableObject {
             // ВАЛИДАЦИЯ: проверяем обязательные поля
             guard let playerName = record["playerName"] as? String,
                   !playerName.isEmpty else {
-                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing playerName")
+                debugLog("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing playerName")
                 skippedClaims += 1
                 continue
             }
             
             guard let gameRef = record["game"] as? CKRecord.Reference,
                   let gameIdString = UUID(uuidString: gameRef.recordID.recordName) else {
-                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid gameId")
+                debugLog("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid gameId")
                 skippedClaims += 1
                 continue
             }
             
             guard let claimantRef = record["claimantUser"] as? CKRecord.Reference,
                   let claimantIdString = UUID(uuidString: claimantRef.recordID.recordName) else {
-                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid claimantUserId")
+                debugLog("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid claimantUserId")
                 skippedClaims += 1
                 continue
             }
             
             guard let hostRef = record["hostUser"] as? CKRecord.Reference,
                   let hostIdString = UUID(uuidString: hostRef.recordID.recordName) else {
-                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid hostUserId")
+                debugLog("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing or invalid hostUserId")
                 skippedClaims += 1
                 continue
             }
             
             guard let status = record["status"] as? String,
                   !status.isEmpty else {
-                print("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing status")
+                debugLog("⚠️ [MERGE_CLAIMS] Skipping claim \(claimId): missing status")
                 skippedClaims += 1
                 continue
             }
             
-            print("✅ [MERGE_CLAIMS] Claim \(claimId) passed validation")
+            debugLog("✅ [MERGE_CLAIMS] Claim \(claimId) passed validation")
             cloudClaimIds.insert(claimId) // Добавляем в Set
             
             // Проверяем существует ли claim локально
@@ -1500,14 +1525,14 @@ class CloudKitSyncService: ObservableObject {
             if let existingClaim = try? context.fetch(fetchRequest).first {
                 // CloudKit = Source of Truth: всегда обновляем
                 existingClaim.updateFromCKRecord(record)
-                print("🔄 [MERGE_CLAIMS] Updated claim \(claimId)")
+                debugLog("🔄 [MERGE_CLAIMS] Updated claim \(claimId)")
                 validClaims += 1
             } else {
                 // Создаём новый
                 let newClaim = PlayerClaim(context: context)
                 newClaim.claimId = claimId
                 newClaim.updateFromCKRecord(record)
-                print("➕ [MERGE_CLAIMS] Created claim \(claimId) (playerName: \(newClaim.playerName), status: \(newClaim.status))")
+                debugLog("➕ [MERGE_CLAIMS] Created claim \(claimId) (playerName: \(newClaim.playerName), status: \(newClaim.status))")
                 validClaims += 1
             }
         }
@@ -1521,32 +1546,32 @@ class CloudKitSyncService: ObservableObject {
                 var deletedCount = 0
                 for localClaim in allLocalClaims {
                     if !cloudClaimIds.contains(localClaim.claimId) {
-                        print("🗑️ [MERGE_CLAIMS] Deleting local claim not in CloudKit: \(localClaim.claimId)")
+                        debugLog("🗑️ [MERGE_CLAIMS] Deleting local claim not in CloudKit: \(localClaim.claimId)")
                         context.delete(localClaim)
                         deletedCount += 1
                     }
                 }
                 
                 if deletedCount > 0 {
-                    print("🗑️ [MERGE_CLAIMS] Deleted \(deletedCount) local claims not found in CloudKit")
+                    debugLog("🗑️ [MERGE_CLAIMS] Deleted \(deletedCount) local claims not found in CloudKit")
                 }
             } catch {
-                print("❌ [MERGE_CLAIMS] Error fetching local claims for cleanup: \(error)")
+                debugLog("❌ [MERGE_CLAIMS] Error fetching local claims for cleanup: \(error)")
             }
         }
         
-        print("📊 [MERGE_CLAIMS] Validation results: \(validClaims) valid, \(skippedClaims) skipped")
+        debugLog("📊 [MERGE_CLAIMS] Validation results: \(validClaims) valid, \(skippedClaims) skipped")
         
         // Сохраняем все изменения
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ [MERGE_CLAIMS] Successfully merged \(validClaims) claims with local database")
+                debugLog("✅ [MERGE_CLAIMS] Successfully merged \(validClaims) claims with local database")
             } catch {
-                print("❌ [MERGE_CLAIMS] Failed to save merged claims: \(error)")
+                debugLog("❌ [MERGE_CLAIMS] Failed to save merged claims: \(error)")
             }
         } else {
-            print("ℹ️ [MERGE_CLAIMS] No valid claims to save")
+            debugLog("ℹ️ [MERGE_CLAIMS] No valid claims to save")
         }
     }
     
@@ -1570,12 +1595,12 @@ class CloudKitSyncService: ObservableObject {
                     
                     // Если текущий пользователь не создатель - отказываем в доступе
                     if currentUserId != creatorId {
-                        print("❌ Game \(gameId) is not public and user is not the creator")
+                        debugLog("❌ Game \(gameId) is not public and user is not the creator")
                         throw CloudKitSyncError.gameNotPublic
                     }
                 } else {
                     // Нет информации о создателе или текущем пользователе - отказываем
-                    print("❌ Game \(gameId) is not public and cannot verify creator")
+                    debugLog("❌ Game \(gameId) is not public and cannot verify creator")
                     throw CloudKitSyncError.gameNotPublic
                 }
             }
@@ -1599,23 +1624,23 @@ class CloudKitSyncService: ObservableObject {
             
             // Загрузить игроков для этой игры - КРИТИЧНО для отображения данных!
             if let unwrappedGame = game {
-                print("🔄 [FETCH_GAME] Game found, now fetching players for game \(gameId)...")
+                debugLog("🔄 [FETCH_GAME] Game found, now fetching players for game \(gameId)...")
                 do {
                     try await fetchGameWithPlayers(forGameId: gameId)
-                    print("✅ [FETCH_GAME] Players loaded successfully for game \(gameId)")
+                    debugLog("✅ [FETCH_GAME] Players loaded successfully for game \(gameId)")
                 } catch {
-                    print("❌ [FETCH_GAME] FAILED to load players for game \(gameId): \(error)")
-                    print("❌ [FETCH_GAME] Error type: \(type(of: error))")
-                    print("❌ [FETCH_GAME] Localized: \(error.localizedDescription)")
+                    debugLog("❌ [FETCH_GAME] FAILED to load players for game \(gameId): \(error)")
+                    debugLog("❌ [FETCH_GAME] Error type: \(type(of: error))")
+                    debugLog("❌ [FETCH_GAME] Localized: \(error.localizedDescription)")
                     // НЕ бросаем исключение - игра уже загружена, просто игроков нет
                 }
             } else {
-                print("⚠️ [FETCH_GAME] Game is nil after fetch, cannot load players")
+                debugLog("⚠️ [FETCH_GAME] Game is nil after fetch, cannot load players")
             }
             
             return game
         } catch {
-            print("❌ Failed to fetch game \(gameId) from CloudKit: \(error)")
+            debugLog("❌ Failed to fetch game \(gameId) from CloudKit: \(error)")
             throw CloudKitSyncError.gameNotFound
         }
     }
@@ -1624,19 +1649,19 @@ class CloudKitSyncService: ObservableObject {
 
     /// Phase 2: Улучшенный incremental sync - не загружает GWP, использует minimal при недавней синхронизации
     func performIncrementalSync() async throws {
-        print("🔄 Starting incremental sync...")
+        debugLog("🔄 Starting incremental sync...")
 
         let lastSync = UserDefaults.standard.object(forKey: "lastCloudKitSyncDate") as? Date
 
         // Если синхронизация была недавно (< 2 мин), делаем только minimal sync
         if let lastSync = lastSync, Date().timeIntervalSince(lastSync) < 120 {
-            print("ℹ️ Recent sync (\(Int(Date().timeIntervalSince(lastSync)))s ago), using minimal sync")
+            debugLog("ℹ️ Recent sync (\(Int(Date().timeIntervalSince(lastSync)))s ago), using minimal sync")
             try await performMinimalSync()
             return
         }
 
         // Иначе - фоновая синхронизация (без GWP, быстрее чем full)
-        print("🔄 Running background sync (no GWP)...")
+        debugLog("🔄 Running background sync (no GWP)...")
         try await performBackgroundSync()
     }
     
@@ -1645,7 +1670,7 @@ class CloudKitSyncService: ObservableObject {
     /// Загружает пользователя из CloudKit Private Database по username
     /// Используется при входе если пользователь не найден локально (например, после переустановки)
     func fetchUser(byUsername username: String) async throws -> User? {
-        print("🔍 Trying to fetch user '\(username)' from CloudKit Public Database...")
+        debugLog("🔍 Trying to fetch user '\(username)' from CloudKit Public Database...")
         
         // Query для поиска пользователя по username в Public DB
         let predicate = NSPredicate(format: "username == %@", username)
@@ -1659,11 +1684,11 @@ class CloudKitSyncService: ObservableObject {
         )
         
         guard let userRecord = result.records.first else {
-            print("❌ User '\(username)' not found in CloudKit")
+            debugLog("❌ User '\(username)' not found in CloudKit")
             return nil
         }
         
-        print("✅ Found user '\(username)' in CloudKit, creating local copy...")
+        debugLog("✅ Found user '\(username)' in CloudKit, creating local copy...")
         
         // Создать локальную копию пользователя из CloudKit
         let user = try await MainActor.run {
@@ -1681,7 +1706,7 @@ class CloudKitSyncService: ObservableObject {
     /// Загружает пользователя из CloudKit Private Database по email
     /// Используется при входе если пользователь не найден локально (например, после переустановки)
     func fetchUser(byEmail email: String) async throws -> User? {
-        print("🔍 Trying to fetch user by email '\(email)' from CloudKit Public Database...")
+        debugLog("🔍 Trying to fetch user by email '\(email)' from CloudKit Public Database...")
         
         // Query для поиска пользователя по email в Public DB
         let predicate = NSPredicate(format: "email == %@", email)
@@ -1695,11 +1720,11 @@ class CloudKitSyncService: ObservableObject {
         )
         
         guard let userRecord = result.records.first else {
-            print("❌ User with email '\(email)' not found in CloudKit")
+            debugLog("❌ User with email '\(email)' not found in CloudKit")
             return nil
         }
         
-        print("✅ Found user by email in CloudKit, creating local copy...")
+        debugLog("✅ Found user by email in CloudKit, creating local copy...")
         
         // Создать локальную копию пользователя из CloudKit
         let user = try await MainActor.run {
@@ -1721,9 +1746,9 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             try await cloudKit.delete(recordID: recordID, from: .publicDB)
-            print("🗑️ Deleted user \(userId) from CloudKit Public Database")
+            debugLog("🗑️ Deleted user \(userId) from CloudKit Public Database")
         } catch {
-            print("❌ Failed to delete user \(userId) from CloudKit: \(error)")
+            debugLog("❌ Failed to delete user \(userId) from CloudKit: \(error)")
             throw error
         }
     }
@@ -1734,9 +1759,9 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             try await cloudKit.delete(recordID: recordID, from: .publicDB)
-            print("🗑️ [DELETE_CLAIM] Deleted invalid claim \(claimId) from CloudKit Public Database")
+            debugLog("🗑️ [DELETE_CLAIM] Deleted invalid claim \(claimId) from CloudKit Public Database")
         } catch {
-            print("❌ [DELETE_CLAIM] Failed to delete claim \(claimId) from CloudKit: \(error)")
+            debugLog("❌ [DELETE_CLAIM] Failed to delete claim \(claimId) from CloudKit: \(error)")
             throw error
         }
     }
@@ -1751,15 +1776,15 @@ class CloudKitSyncService: ObservableObject {
         if let claim = try context.fetch(fetchRequest).first {
             context.delete(claim)
             try context.save()
-            print("🗑️ [DELETE_CLAIM] Deleted local claim \(claimId)")
+            debugLog("🗑️ [DELETE_CLAIM] Deleted local claim \(claimId)")
         } else {
-            print("ℹ️ [DELETE_CLAIM] Claim \(claimId) not found locally")
+            debugLog("ℹ️ [DELETE_CLAIM] Claim \(claimId) not found locally")
         }
     }
     
     /// Загружает PlayerProfile из CloudKit для пользователя
     private func fetchPlayerProfile(forUserId userId: UUID) async {
-        print("🔍 Trying to fetch PlayerProfile for user \(userId)...")
+        debugLog("🔍 Trying to fetch PlayerProfile for user \(userId)...")
         
         do {
             let predicate = NSPredicate(format: "userId == %@", userId.uuidString)
@@ -1772,18 +1797,18 @@ class CloudKitSyncService: ObservableObject {
             )
             
             guard let profileRecord = result.records.first else {
-                print("⚠️ PlayerProfile not found in CloudKit")
+                debugLog("⚠️ PlayerProfile not found in CloudKit")
                 return
             }
             
-            print("✅ Found PlayerProfile in CloudKit, creating local copy...")
+            debugLog("✅ Found PlayerProfile in CloudKit, creating local copy...")
             
             await MainActor.run {
                 let context = persistence.container.viewContext
                 _ = createPlayerProfileFromCKRecord(profileRecord, in: context)
             }
         } catch {
-            print("❌ Failed to fetch PlayerProfile: \(error)")
+            debugLog("❌ Failed to fetch PlayerProfile: \(error)")
         }
     }
     
@@ -1792,7 +1817,7 @@ class CloudKitSyncService: ObservableObject {
     private func createUserFromCKRecord(_ record: CKRecord, in context: NSManagedObjectContext) -> User? {
         // Извлекаем userId из recordName
         guard let userId = UUID(uuidString: record.recordID.recordName) else {
-            print("❌ Invalid userId in CKRecord")
+            debugLog("❌ Invalid userId in CKRecord")
             return nil
         }
         
@@ -1801,7 +1826,7 @@ class CloudKitSyncService: ObservableObject {
         fetchRequest.predicate = NSPredicate(format: "userId == %@", userId as CVarArg)
         
         if let existingUser = try? context.fetch(fetchRequest).first {
-            print("ℹ️ User already exists locally, returning existing")
+            debugLog("ℹ️ User already exists locally, returning existing")
             return existingUser
         }
         
@@ -1810,7 +1835,7 @@ class CloudKitSyncService: ObservableObject {
               let passwordHash = record["passwordHash"] as? String,
               let subscriptionStatus = record["subscriptionStatus"] as? String,
               let createdAt = record["createdAt"] as? Date else {
-            print("❌ Missing required fields in User CKRecord")
+            debugLog("❌ Missing required fields in User CKRecord")
             return nil
         }
         
@@ -1828,10 +1853,10 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             try context.save()
-            print("✅ User created locally from CloudKit")
+            debugLog("✅ User created locally from CloudKit")
             return user
         } catch {
-            print("❌ Failed to save user: \(error)")
+            debugLog("❌ Failed to save user: \(error)")
             return nil
         }
     }
@@ -1841,7 +1866,7 @@ class CloudKitSyncService: ObservableObject {
     private func createPlayerProfileFromCKRecord(_ record: CKRecord, in context: NSManagedObjectContext) -> PlayerProfile? {
         // Извлекаем profileId из recordName
         guard let profileId = UUID(uuidString: record.recordID.recordName) else {
-            print("❌ Invalid profileId in CKRecord")
+            debugLog("❌ Invalid profileId in CKRecord")
             return nil
         }
         
@@ -1850,7 +1875,7 @@ class CloudKitSyncService: ObservableObject {
         fetchRequest.predicate = NSPredicate(format: "profileId == %@", profileId as CVarArg)
         
         if let existingProfile = try? context.fetch(fetchRequest).first {
-            print("ℹ️ PlayerProfile already exists locally, returning existing")
+            debugLog("ℹ️ PlayerProfile already exists locally, returning existing")
             return existingProfile
         }
         
@@ -1894,10 +1919,10 @@ class CloudKitSyncService: ObservableObject {
         
         do {
             try context.save()
-            print("✅ PlayerProfile created locally from CloudKit")
+            debugLog("✅ PlayerProfile created locally from CloudKit")
             return profile
         } catch {
-            print("❌ Failed to save PlayerProfile: \(error)")
+            debugLog("❌ Failed to save PlayerProfile: \(error)")
             return nil
         }
     }
@@ -1908,33 +1933,33 @@ class CloudKitSyncService: ObservableObject {
     /// DEPRECATED: User should NOT be synced to CloudKit - use PlayerProfile instead
     @available(*, deprecated, message: "User sync is disabled. User is local authentication data only.")
     func quickSyncUser(_ user: User) async {
-        print("🔄 [QUICK_SYNC_USER] Starting sync for user: \(user.username)")
+        debugLog("🔄 [QUICK_SYNC_USER] Starting sync for user: \(user.username)")
         
         let isAvailable = await cloudKit.isCloudKitAvailable()
-        print("☁️ [QUICK_SYNC_USER] CloudKit available: \(isAvailable)")
+        debugLog("☁️ [QUICK_SYNC_USER] CloudKit available: \(isAvailable)")
         
         guard isAvailable else {
-            print("❌ [QUICK_SYNC_USER] CloudKit NOT available - skipping sync")
+            debugLog("❌ [QUICK_SYNC_USER] CloudKit NOT available - skipping sync")
             return
         }
         
         do {
-            print("📦 [QUICK_SYNC_USER] Creating CKRecord for user \(user.userId)")
+            debugLog("📦 [QUICK_SYNC_USER] Creating CKRecord for user \(user.userId)")
             let record = user.toCKRecord()
-            print("📦 [QUICK_SYNC_USER] Record created: \(record.recordType), recordID: \(record.recordID.recordName)")
-            print("📦 [QUICK_SYNC_USER] Record fields: username=\(record["username"] ?? "nil"), email=\(record["email"] ?? "nil")")
-            print("📦 [QUICK_SYNC_USER] NOTE: passwordHash is NOT included (local only)")
+            debugLog("📦 [QUICK_SYNC_USER] Record created: \(record.recordType), recordID: \(record.recordID.recordName)")
+            debugLog("📦 [QUICK_SYNC_USER] Record fields: username=\(record["username"] ?? "nil"), email=\(record["email"] ?? "nil")")
+            debugLog("📦 [QUICK_SYNC_USER] NOTE: passwordHash is NOT included (local only)")
             
-            print("☁️ [QUICK_SYNC_USER] Saving to CloudKit Public Database...")
+            debugLog("☁️ [QUICK_SYNC_USER] Saving to CloudKit Public Database...")
             let savedRecord = try await cloudKit.save(record: record, to: .publicDB)
-            print("✅ [QUICK_SYNC_USER] SUCCESS! User synced to CloudKit Public Database")
-            print("✅ [QUICK_SYNC_USER] Saved record ID: \(savedRecord.recordID.recordName)")
-            print("✅ [QUICK_SYNC_USER] Username: \(user.username)")
+            debugLog("✅ [QUICK_SYNC_USER] SUCCESS! User synced to CloudKit Public Database")
+            debugLog("✅ [QUICK_SYNC_USER] Saved record ID: \(savedRecord.recordID.recordName)")
+            debugLog("✅ [QUICK_SYNC_USER] Username: \(user.username)")
         } catch {
-            print("❌ [QUICK_SYNC_USER] FAILED to sync User")
-            print("❌ [QUICK_SYNC_USER] Error type: \(type(of: error))")
-            print("❌ [QUICK_SYNC_USER] Error description: \(error)")
-            print("❌ [QUICK_SYNC_USER] Localized: \(error.localizedDescription)")
+            debugLog("❌ [QUICK_SYNC_USER] FAILED to sync User")
+            debugLog("❌ [QUICK_SYNC_USER] Error type: \(type(of: error))")
+            debugLog("❌ [QUICK_SYNC_USER] Error description: \(error)")
+            debugLog("❌ [QUICK_SYNC_USER] Localized: \(error.localizedDescription)")
         }
     }
     
@@ -1945,41 +1970,41 @@ class CloudKitSyncService: ObservableObject {
         do {
             let record = game.toCKRecord()
             _ = try await cloudKit.save(record: record, to: .publicDB)
-            print("✅ Quick synced Game: \(game.gameId)")
+            debugLog("✅ Quick synced Game: \(game.gameId)")
         } catch {
-            print("❌ Failed to quick sync Game: \(error)")
+            debugLog("❌ Failed to quick sync Game: \(error)")
         }
     }
     
     /// Быстрая синхронизация GameWithPlayer после создания/изменения
     func quickSyncGameWithPlayers(_ gameWithPlayers: [GameWithPlayer]) async {
-        print("🔄 [QUICK_SYNC] Starting quick sync for \(gameWithPlayers.count) GameWithPlayer records")
+        debugLog("🔄 [QUICK_SYNC] Starting quick sync for \(gameWithPlayers.count) GameWithPlayer records")
         
         guard await cloudKit.isCloudKitAvailable() else {
-            print("❌ [QUICK_SYNC] CloudKit not available")
+            debugLog("❌ [QUICK_SYNC] CloudKit not available")
             return
         }
         guard !gameWithPlayers.isEmpty else {
-            print("⚠️ [QUICK_SYNC] No records to sync")
+            debugLog("⚠️ [QUICK_SYNC] No records to sync")
             return
         }
         
         do {
             let records = gameWithPlayers.map { $0.toCKRecord() }
-            print("📤 [QUICK_SYNC] Converted to \(records.count) CKRecords")
+            debugLog("📤 [QUICK_SYNC] Converted to \(records.count) CKRecords")
             
             for (index, record) in records.enumerated() {
                 if let game = gameWithPlayers[index].game {
                     let playerName = gameWithPlayers[index].player?.name ?? "Unknown"
-                    print("   Record \(index + 1): \(playerName) for game \(game.gameId)")
+                    debugLog("   Record \(index + 1): \(playerName) for game \(game.gameId)")
                 }
             }
             
             _ = try await cloudKit.saveRecords(records, to: .publicDB)
-            print("✅ [QUICK_SYNC] Successfully synced \(records.count) GameWithPlayer records to Public DB")
+            debugLog("✅ [QUICK_SYNC] Successfully synced \(records.count) GameWithPlayer records to Public DB")
         } catch {
-            print("❌ [QUICK_SYNC] Failed to quick sync GameWithPlayers: \(error)")
-            print("❌ [QUICK_SYNC] Error details: \(error.localizedDescription)")
+            debugLog("❌ [QUICK_SYNC] Failed to quick sync GameWithPlayers: \(error)")
+            debugLog("❌ [QUICK_SYNC] Error details: \(error.localizedDescription)")
         }
     }
     
@@ -1990,9 +2015,9 @@ class CloudKitSyncService: ObservableObject {
         do {
             let record = profile.toCKRecord()
             _ = try await cloudKit.save(record: record, to: .publicDB)  // ИЗМЕНЕНО: Public DB
-            print("✅ Quick synced PlayerProfile: \(profile.displayName) to PUBLIC DB")
+            debugLog("✅ Quick synced PlayerProfile: \(profile.displayName) to PUBLIC DB")
         } catch {
-            print("❌ Failed to quick sync PlayerProfile: \(error)")
+            debugLog("❌ Failed to quick sync PlayerProfile: \(error)")
         }
     }
     
@@ -2067,19 +2092,19 @@ extension CloudKitSyncService {
         let tracker = PendingSyncTracker.shared
         let context = persistence.container.viewContext
         
-        print("🔄 [PUSH_PENDING] Starting to push pending data...")
+        debugLog("🔄 [PUSH_PENDING] Starting to push pending data...")
         
         // 1. Push pending games
         let pendingGameIds = tracker.getPendingGames()
         if !pendingGameIds.isEmpty {
-            print("📤 [PUSH_PENDING] Found \(pendingGameIds.count) pending games")
+            debugLog("📤 [PUSH_PENDING] Found \(pendingGameIds.count) pending games")
             let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "gameId IN %@", Array(pendingGameIds))
             
             if let games = try? context.fetch(fetchRequest), !games.isEmpty {
                 let records = games.map { $0.toCKRecord() }
                 _ = try await cloudKit.saveRecords(records, to: .publicDB)
-                print("✅ [PUSH_PENDING] Pushed \(games.count) games")
+                debugLog("✅ [PUSH_PENDING] Pushed \(games.count) games")
                 
                 // Remove from pending
                 for game in games {
@@ -2091,7 +2116,7 @@ extension CloudKitSyncService {
         // 2. Push pending GameWithPlayer
         let pendingGWPIds = tracker.getPendingGameWithPlayers()
         if !pendingGWPIds.isEmpty {
-            print("📤 [PUSH_PENDING] Found \(pendingGWPIds.count) pending GameWithPlayer")
+            debugLog("📤 [PUSH_PENDING] Found \(pendingGWPIds.count) pending GameWithPlayer")
             // GameWithPlayer doesn't have gameWithPlayerId, so we sync all
             try await syncGameWithPlayers()
             tracker.getPendingGameWithPlayers().forEach { tracker.removePendingGameWithPlayer($0) }
@@ -2100,14 +2125,14 @@ extension CloudKitSyncService {
         // 3. Push pending PlayerAliases
         let pendingAliasIds = tracker.getPendingPlayerAliases()
         if !pendingAliasIds.isEmpty {
-            print("📤 [PUSH_PENDING] Found \(pendingAliasIds.count) pending PlayerAliases")
+            debugLog("📤 [PUSH_PENDING] Found \(pendingAliasIds.count) pending PlayerAliases")
             let fetchRequest: NSFetchRequest<PlayerAlias> = PlayerAlias.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "aliasId IN %@", Array(pendingAliasIds))
             
             if let aliases = try? context.fetch(fetchRequest), !aliases.isEmpty {
                 let records = aliases.map { $0.toCKRecord() }
                 _ = try await cloudKit.saveRecords(records, to: .publicDB)
-                print("✅ [PUSH_PENDING] Pushed \(aliases.count) aliases")
+                debugLog("✅ [PUSH_PENDING] Pushed \(aliases.count) aliases")
                 
                 // Remove from pending
                 for alias in aliases {
@@ -2119,12 +2144,12 @@ extension CloudKitSyncService {
         // 4. Push pending PlayerClaims
         let pendingClaimIds = tracker.getPendingPlayerClaims()
         if !pendingClaimIds.isEmpty {
-            print("📤 [PUSH_PENDING] Found \(pendingClaimIds.count) pending PlayerClaims")
+            debugLog("📤 [PUSH_PENDING] Found \(pendingClaimIds.count) pending PlayerClaims")
             try await syncPlayerClaims()
             tracker.getPendingPlayerClaims().forEach { tracker.removePendingPlayerClaim($0) }
         }
         
-        print("✅ [PUSH_PENDING] All pending data pushed successfully")
+        debugLog("✅ [PUSH_PENDING] All pending data pushed successfully")
     }
 }
 

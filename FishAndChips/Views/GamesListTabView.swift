@@ -343,6 +343,7 @@ struct GamesListTabView: View {
                                 }
                             }
                         }
+                        .accessibilityIdentifier("games_filter")
                         .background(.ultraThinMaterial)
                         .cornerRadius(10)
                         
@@ -381,6 +382,7 @@ struct GamesListTabView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical)
             }
+            .accessibilityIdentifier("games_list")
             .scrollContentBackground(.hidden)
             .searchable(text: $searchText, prompt: "Поиск игр")
             .background(
@@ -427,12 +429,12 @@ struct GamesListTabView: View {
     }
     
     private func refreshGames() async {
-        print("🔄 Pull-to-refresh triggered in GamesListTabView")
+        debugLog("🔄 Pull-to-refresh triggered in GamesListTabView")
         do {
             try await syncService.performIncrementalSync()
-            print("✅ Pull-to-refresh completed")
+            debugLog("✅ Pull-to-refresh completed")
         } catch {
-            print("❌ Pull-to-refresh error: \(error)")
+            debugLog("❌ Pull-to-refresh error: \(error)")
         }
     }
     

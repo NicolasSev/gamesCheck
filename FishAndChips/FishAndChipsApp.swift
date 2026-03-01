@@ -29,24 +29,24 @@ struct FishAndChipsApp: App {
         
         // Миграция creatorUserId — один раз для исправления импортированных игр
         let hasMigratedCreatorUserId = UserDefaults.standard.bool(forKey: "hasMigratedCreatorUserId")
-        print("🔧 hasMigratedCreatorUserId: \(hasMigratedCreatorUserId)")
+        debugLog("🔧 hasMigratedCreatorUserId: \(hasMigratedCreatorUserId)")
         if !hasMigratedCreatorUserId {
             let keychain = KeychainService.shared
             if let userIdString = keychain.getUserId(),
                let userId = UUID(uuidString: userIdString) {
-                print("🔧 Starting creatorUserId migration for user: \(userId)")
+                debugLog("🔧 Starting creatorUserId migration for user: \(userId)")
                 let importService = DataImportService(
                     viewContext: persistenceController.container.viewContext,
                     userId: userId
                 )
                 try? importService.updateCreatorUserIdForAllGames()
                 UserDefaults.standard.set(true, forKey: "hasMigratedCreatorUserId")
-                print("🔧 Migration completed and flag set")
+                debugLog("🔧 Migration completed and flag set")
             } else {
-                print("⚠️ Cannot migrate: no currentUserId found in Keychain")
+                debugLog("⚠️ Cannot migrate: no currentUserId found in Keychain")
             }
         } else {
-            print("✅ Migration already completed")
+            debugLog("✅ Migration already completed")
         }
     }
     
@@ -81,7 +81,7 @@ struct AppBodyView: View {
                     .environmentObject(deepLinkService)
                     .environmentObject(syncService)
                     .onOpenURL { url in
-                        print("🔗 App received URL: \(url)")
+                        debugLog("🔗 App received URL: \(url)")
                         deepLinkService.handleURL(url)
                     }
                     .onAppear {
@@ -97,6 +97,10 @@ struct AppBodyView: View {
                         Task {
                             await notificationService.setupGameSubscription()
                         }
+                        // CloudKit PlayerProfile subscription для push при публикации профиля
+                        Task {
+                            await notificationService.setupPlayerProfileSubscription()
+                        }
 
                         // Test CloudKit connection
                         Task {
@@ -104,20 +108,20 @@ struct AppBodyView: View {
                                 let status = try await CloudKitService.shared.checkAccountStatus()
                                 switch status {
                                 case .available:
-                                    print("✅ CloudKit Status: AVAILABLE - Ready to use!")
+                                    debugLog("✅ CloudKit Status: AVAILABLE - Ready to use!")
                                 case .noAccount:
-                                    print("❌ CloudKit Status: NO ACCOUNT - Please sign in to iCloud")
+                                    debugLog("❌ CloudKit Status: NO ACCOUNT - Please sign in to iCloud")
                                 case .restricted:
-                                    print("⚠️ CloudKit Status: RESTRICTED - iCloud access is restricted")
+                                    debugLog("⚠️ CloudKit Status: RESTRICTED - iCloud access is restricted")
                                 case .couldNotDetermine:
-                                    print("⚠️ CloudKit Status: COULD NOT DETERMINE")
+                                    debugLog("⚠️ CloudKit Status: COULD NOT DETERMINE")
                                 case .temporarilyUnavailable:
-                                    print("⚠️ CloudKit Status: TEMPORARILY UNAVAILABLE")
+                                    debugLog("⚠️ CloudKit Status: TEMPORARILY UNAVAILABLE")
                                 @unknown default:
-                                    print("⚠️ CloudKit Status: UNKNOWN")
+                                    debugLog("⚠️ CloudKit Status: UNKNOWN")
                                 }
                             } catch {
-                                print("❌ CloudKit Status Check Failed: \(error.localizedDescription)")
+                                debugLog("❌ CloudKit Status Check Failed: \(error.localizedDescription)")
                             }
                         }
                     }
@@ -131,10 +135,10 @@ struct AppBodyView: View {
             do {
                 // Phase 1: Минимальная загрузка для быстрого показа UI
                 // Phase 2 (в фоне): Проверка витрин, при расхождении — полная синхронизация
-                print("🚀 Starting smart sync...")
+                debugLog("🚀 Starting smart sync...")
                 try await syncService.smartSync()
                 isInitialSyncComplete = true
-                print("✅ Smart sync Phase 1 completed - UI ready")
+                debugLog("✅ Smart sync Phase 1 completed - UI ready")
 
                 // Phase 2: Миграция materialized views - один раз (после синхронизации)
                 let hasMigrated = UserDefaults.standard.bool(forKey: "hasMigratedMaterializedViewsV1")
@@ -143,7 +147,7 @@ struct AppBodyView: View {
                     UserDefaults.standard.set(true, forKey: "hasMigratedMaterializedViewsV1")
                 }
             } catch {
-                print("❌ Sync error: \(error)")
+                debugLog("❌ Sync error: \(error)")
                 // Не блокируем запуск приложения при ошибке синхронизации
                 isInitialSyncComplete = true
             }
@@ -151,14 +155,14 @@ struct AppBodyView: View {
         // Синхронизация при возврате из фона
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
-                print("🔄 App became active, starting background sync...")
+                debugLog("🔄 App became active, starting background sync...")
                 Task {
                     do {
                         // Используем incremental sync если возможно
                         try await syncService.performIncrementalSync()
-                        print("✅ Background sync completed")
+                        debugLog("✅ Background sync completed")
                     } catch {
-                        print("❌ Background sync error: \(error)")
+                        debugLog("❌ Background sync error: \(error)")
                     }
                 }
             }
@@ -194,27 +198,35 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("❌ Failed to register for remote notifications: \(error.localizedDescription)")
+        debugLog("❌ Failed to register for remote notifications: \(error.localizedDescription)")
     }
     
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any]
     ) async -> UIBackgroundFetchResult {
-        print("📬 Received remote notification: \(userInfo)")
+        debugLog("📬 Received remote notification: \(userInfo)")
         
-        // Handle silent push notifications - CloudKit subscription (Game, Claims и т.д.)
+        // Handle silent push notifications - CloudKit subscription (Game, PlayerProfile, Claims и т.д.)
         if userInfo["ck"] != nil {
             do {
-                try await CloudKitSyncService.shared.performIncrementalSync()
-                await MainActor.run {
-                    Task {
-                        try? await NotificationService.shared.notifyGameUpdated(gameName: "Есть обновления")
+                let subscriptionID = (userInfo["ck"] as? [String: Any])
+                    .flatMap { $0["qry"] as? [String: Any] }
+                    .flatMap { $0["sid"] as? String }
+
+                if subscriptionID == "profile-public" {
+                    try await CloudKitSyncService.shared.fetchPlayerProfiles(notifyOnNewPublic: true)
+                } else {
+                    try await CloudKitSyncService.shared.performIncrementalSync()
+                    await MainActor.run {
+                        Task {
+                            try? await NotificationService.shared.notifyGameUpdated(gameName: "Есть обновления")
+                        }
                     }
                 }
                 return .newData
             } catch {
-                print("❌ Sync failed: \(error)")
+                debugLog("❌ Sync failed: \(error)")
                 return .failed
             }
         }
@@ -227,13 +239,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        print("🔄 Background fetch triggered")
+        debugLog("🔄 Background fetch triggered")
         Task {
             do {
                 try await CloudKitSyncService.shared.performIncrementalSync()
                 completionHandler(.newData)
             } catch {
-                print("❌ Background fetch error: \(error)")
+                debugLog("❌ Background fetch error: \(error)")
                 completionHandler(.failed)
             }
         }

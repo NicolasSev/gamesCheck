@@ -1,219 +1,6 @@
 import SwiftUI
 import CoreData
 
-// Структура для передачи элементов в лист шаринга.
-// Делаем её Identifiable, чтобы использовать sheet(item:)
-struct ShareData: Identifiable {
-    let id = UUID()
-    let items: [Any]
-}
-
-// Структура для данных гистограммы
-struct PlayerResult: Identifiable, Hashable {
-    let id = UUID()
-    let playerName: String
-    let profit: Decimal
-    let buyin: Int16
-    let cashout: Int64
-    
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    static func == (lhs: PlayerResult, rhs: PlayerResult) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-// Компонент гистограммы результатов игроков
-struct GameResultsChart: View {
-    let playerResults: [PlayerResult]
-    @State private var selectedResult: PlayerResult?
-    
-    private var maxAbsoluteProfit: Decimal {
-        let profits = playerResults.map { abs($0.profit) }
-        return profits.max() ?? 1
-    }
-    
-    private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "₸"
-        formatter.currencyCode = "KZT"
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "₸0"
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        formatter.locale = Locale(identifier: "ru_RU")
-        return formatter.string(from: date)
-    }
-    
-    private func formatBuyinInTenge(_ buyin: Int16) -> String {
-        let buyinInTenge = Decimal(buyin) * 2000
-        return formatCurrency(buyinInTenge)
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Результаты игры")
-                .font(.headline)
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-            
-            if playerResults.isEmpty {
-                Text("Нет данных")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else {
-                VStack(spacing: 16) {
-                    ForEach(playerResults) { result in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(result.playerName)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.white)
-                                    .frame(width: 80, alignment: .leading)
-                                
-                                Spacer()
-                                
-                                Text(formatCurrency(result.profit))
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(result.profit >= 0 ? .green : .red)
-                                    .frame(width: 100, alignment: .trailing)
-                            }
-                            
-                            GeometryReader { geometry in
-                                ZStack(alignment: .leading) {
-                                    // Фоновая линия
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.1))
-                                        .frame(height: 24)
-                                        .cornerRadius(12)
-                                    
-                                    // Столбец гистограммы
-                                    if result.profit != 0 {
-                                        let profitValue = Double(truncating: NSDecimalNumber(decimal: abs(result.profit)))
-                                        let maxValue = Double(truncating: NSDecimalNumber(decimal: maxAbsoluteProfit))
-                                        let width = maxValue > 0 ? (profitValue / maxValue) * geometry.size.width : 0
-                                        
-                                        HStack {
-                                            if result.profit < 0 {
-                                                Spacer()
-                                                Rectangle()
-                                                    .fill(Color.red.opacity(0.8))
-                                                    .frame(width: width, height: 24)
-                                                    .cornerRadius(12)
-                                            } else {
-                                                Rectangle()
-                                                    .fill(Color.green.opacity(0.8))
-                                                    .frame(width: width, height: 24)
-                                                    .cornerRadius(12)
-                                                Spacer()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(height: 24)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedResult = result
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-        }
-        .liquidGlass(cornerRadius: 12)
-        .popover(item: $selectedResult) { result in
-            VStack(alignment: .leading, spacing: 12) {
-                Text(result.playerName)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Байины:")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(result.buyin)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                    }
-                    
-                    HStack {
-                        Text("Байины (в тенге):")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(formatBuyinInTenge(result.buyin))
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                    }
-                    
-                    HStack {
-                        Text("Кэшаут:")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(formatCurrency(Decimal(result.cashout)))
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Divider()
-                    
-                    HStack {
-                        Text("Результат:")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text(formatCurrency(result.profit))
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(result.profit >= 0 ? .green : .red)
-                    }
-                }
-            }
-            .padding()
-            .frame(width: 280)
-        }
-    }
-}
-
-// Обёртка над UIActivityViewController для Share Sheet
-struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-    var excludedActivityTypes: [UIActivity.ActivityType]? = nil
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-        controller.excludedActivityTypes = excludedActivityTypes
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) { }
-}
-
 struct GameDetailView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
@@ -223,7 +10,6 @@ struct GameDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var isClaimPlayerSheetPresented = false
     @State private var isHandAddSheetPresented = false
-    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     @State private var refreshHandsToggle = false // Для обновления списка раздач
 
     // Вместо флагов и массивов используем один @State shareData
@@ -235,20 +21,20 @@ struct GameDetailView: View {
     private var currentUserId: UUID? {
         guard let userIdString = keychain.getUserId(),
               let userId = UUID(uuidString: userIdString) else {
-            print("❌ No currentUserId in Keychain")
+            debugLog("❌ No currentUserId in Keychain")
             return nil
         }
-        print("✅ Current userId: \(userId)")
+        debugLog("✅ Current userId: \(userId)")
         return userId
     }
     
     private var isHost: Bool {
         guard let userId = currentUserId else {
-            print("❌ isHost: false - no currentUserId")
+            debugLog("❌ isHost: false - no currentUserId")
             return false
         }
         let result = game.creatorUserId == userId
-        print("🔍 isHost check: game.creatorUserId=\(game.creatorUserId?.uuidString ?? "nil"), currentUserId=\(userId.uuidString), isHost=\(result)")
+        debugLog("🔍 isHost check: game.creatorUserId=\(game.creatorUserId?.uuidString ?? "nil"), currentUserId=\(userId.uuidString), isHost=\(result)")
         return result
     }
     
@@ -283,16 +69,6 @@ struct GameDetailView: View {
         }.sorted { $0.profit > $1.profit }
     }
     
-    private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "₸"
-        formatter.currencyCode = "KZT"
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "₸0"
-    }
-    
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -324,7 +100,7 @@ struct GameDetailView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.7))
                             Spacer()
-                            Text("\(Int(truncating: NSDecimalNumber(decimal: game.totalBuyins))) (\(formatCurrency(game.totalBuyins * 2000)))")
+                            Text("\(Int(truncating: NSDecimalNumber(decimal: game.totalBuyins))) (\((game.totalBuyins * 2000).formatCurrency()))")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.white)
@@ -451,6 +227,7 @@ struct GameDetailView: View {
                             .frame(maxWidth: .infinity)
                             .liquidGlass(cornerRadius: 12)
                         }
+                        .accessibilityIdentifier("game_detail_share_link_button")
                     }
                     
                     // Кнопка "Отправить статистику" (для всех)
@@ -463,34 +240,13 @@ struct GameDetailView: View {
                             .frame(maxWidth: .infinity)
                             .liquidGlass(cornerRadius: 12)
                     }
+                    .accessibilityIdentifier("game_detail_share_stats_button")
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 16)
             }
-        .background(
-            Group {
-                if let image = backgroundImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .ignoresSafeArea()
-                        .overlay(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.4),
-                                    Color.black.opacity(0.6)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .ignoresSafeArea()
-                        )
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
-            }
-        )
+        .casinoBackground()
         .navigationTitle("Детали игры")
         .task(id: game.gameId) {
             // Phase 2: Lazy load GWP при открытии игры (если ещё не загружены)
@@ -498,11 +254,11 @@ struct GameDetailView: View {
             guard count == 0 else { return }
 
             do {
-                print("📥 [GameDetail] Loading players for game \(game.gameId) (lazy load)")
+                debugLog("📥 [GameDetail] Loading players for game \(game.gameId) (lazy load)")
                 try await CloudKitSyncService.shared.fetchGameWithPlayers(forGameId: game.gameId)
-                print("✅ [GameDetail] Players loaded")
+                debugLog("✅ [GameDetail] Players loaded")
             } catch {
-                print("❌ [GameDetail] Failed to load players: \(error)")
+                debugLog("❌ [GameDetail] Failed to load players: \(error)")
             }
         }
         .toolbar {
@@ -514,6 +270,7 @@ struct GameDetailView: View {
                     } label: {
                         Label("Подать заявку", systemImage: "person.badge.plus")
                     }
+                    .accessibilityIdentifier("game_detail_claim_button")
                 }
                 
                 // Кнопка "Добавить игрока" (только для хоста)
@@ -523,6 +280,7 @@ struct GameDetailView: View {
                     } label: {
                         Label("Добавить игрока", systemImage: "person.fill.badge.plus")
                     }
+                    .accessibilityIdentifier("game_detail_add_player_button")
                 }
                 
                 // Кнопка "Добавить раздачу"
@@ -531,6 +289,7 @@ struct GameDetailView: View {
                 } label: {
                     Label("Добавить раздачу", systemImage: "rectangle.stack.fill.badge.plus")
                 }
+                .accessibilityIdentifier("game_detail_add_hand_button")
                 
                 // Кнопка "Удалить игру" (только для хоста)
                 if isHost {
@@ -539,6 +298,7 @@ struct GameDetailView: View {
                     } label: {
                         Label("Удалить игру", systemImage: "trash")
                     }
+                    .accessibilityIdentifier("game_detail_delete_button")
                 }
             }
         }
@@ -605,7 +365,7 @@ struct GameDetailView: View {
             try viewContext.save()
             game.objectWillChange.send()
         } catch {
-            print("Ошибка сохранения: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения: \(error.localizedDescription)")
         }
     }
 
@@ -634,13 +394,13 @@ struct GameDetailView: View {
             try message.write(to: fileURL, atomically: true, encoding: .utf8)
             // Считываем данные из файла для проверки
             let data = try Data(contentsOf: fileURL)
-            print("Файл записан, размер: \(data.count) байт")
+            debugLog("Файл записан, размер: \(data.count) байт")
 
             // Создаём объект ShareData
             shareData = ShareData(items: [fileURL])
             // При присвоении shareData, SwiftUI автоматически вызывает sheet(item:)
         } catch {
-            print("Ошибка записи файла статистики: \(error.localizedDescription)")
+            debugLog("Ошибка записи файла статистики: \(error.localizedDescription)")
         }
     }
     

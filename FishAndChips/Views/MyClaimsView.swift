@@ -26,7 +26,7 @@ struct MyClaimsView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if myClaims.isEmpty {
                     VStack(spacing: 16) {

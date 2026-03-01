@@ -13,7 +13,7 @@ enum PerformanceMonitor {
         let start = Date()
         let result = try await block()
         let duration = Date().timeIntervalSince(start)
-        print("⏱️ [\(operation)] took \(String(format: "%.2f", duration))s")
+        debugLog("⏱️ [\(operation)] took \(String(format: "%.2f", duration))s")
         return result
     }
 
@@ -22,7 +22,7 @@ enum PerformanceMonitor {
         let start = Date()
         let result = try block()
         let duration = Date().timeIntervalSince(start)
-        print("⏱️ [\(operation)] took \(String(format: "%.2f", duration))s")
+        debugLog("⏱️ [\(operation)] took \(String(format: "%.2f", duration))s")
         return result
     }
 }

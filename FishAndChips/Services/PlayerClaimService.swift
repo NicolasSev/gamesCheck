@@ -76,11 +76,11 @@ class PlayerClaimService {
         // Синхронизируем заявку с CloudKit сразу после создания
         Task {
             do {
-                print("☁️ [SUBMIT_CLAIM] Pushing claim to CloudKit...")
+                debugLog("☁️ [SUBMIT_CLAIM] Pushing claim to CloudKit...")
                 try await CloudKitSyncService.shared.syncPlayerClaims()
-                print("✅ [SUBMIT_CLAIM] Claim synced to CloudKit")
+                debugLog("✅ [SUBMIT_CLAIM] Claim synced to CloudKit")
             } catch {
-                print("❌ [SUBMIT_CLAIM] Failed to sync claim to CloudKit: \(error)")
+                debugLog("❌ [SUBMIT_CLAIM] Failed to sync claim to CloudKit: \(error)")
                 // Помечаем как pending для последующей синхронизации
                 PendingSyncTracker.shared.addPendingPlayerClaim(claim.claimId)
             }
@@ -96,7 +96,7 @@ class PlayerClaimService {
                     hostUserId: hostUserId.uuidString
                 )
             } catch {
-                print("Failed to send notification: \(error)")
+                debugLog("Failed to send notification: \(error)")
             }
         }
         
@@ -126,7 +126,7 @@ class PlayerClaimService {
             
             return pending + resolved
         } catch {
-            print("Error fetching my claims: \(error)")
+            debugLog("Error fetching my claims: \(error)")
             return []
         }
     }
@@ -141,7 +141,7 @@ class PlayerClaimService {
         do {
             return try context.fetch(request)
         } catch {
-            print("Error fetching pending claims: \(error)")
+            debugLog("Error fetching pending claims: \(error)")
             return []
         }
     }
@@ -162,7 +162,7 @@ class PlayerClaimService {
             
             return pending + resolved
         } catch {
-            print("Error fetching all claims for host: \(error)")
+            debugLog("Error fetching all claims for host: \(error)")
             return []
         }
     }
@@ -177,7 +177,7 @@ class PlayerClaimService {
         do {
             return try context.fetch(request).first
         } catch {
-            print("Error fetching claim: \(error)")
+            debugLog("Error fetching claim: \(error)")
             return nil
         }
     }
@@ -230,23 +230,23 @@ class PlayerClaimService {
             throw ClaimError.claimAlreadyResolved
         }
         
-        print("🔍 [APPROVE_LINK_ALL] Starting approval for claim \(claim.claimId)")
-        print("   - playerName: \(claim.playerName)")
-        print("   - claimantUserId: \(claim.claimantUserId)")
-        print("   - linkAllGames: \(linkAllGames)")
+        debugLog("🔍 [APPROVE_LINK_ALL] Starting approval for claim \(claim.claimId)")
+        debugLog("   - playerName: \(claim.playerName)")
+        debugLog("   - claimantUserId: \(claim.claimantUserId)")
+        debugLog("   - linkAllGames: \(linkAllGames)")
         
         // Получить или создать PlayerProfile для пользователя
-        print("🔍 [APPROVE_LINK_ALL] Looking for PlayerProfile for user \(claim.claimantUserId)...")
+        debugLog("🔍 [APPROVE_LINK_ALL] Looking for PlayerProfile for user \(claim.claimantUserId)...")
         var profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
         
         if profile == nil {
-            print("⚠️ [APPROVE_LINK_ALL] PlayerProfile not found locally, checking CloudKit...")
+            debugLog("⚠️ [APPROVE_LINK_ALL] PlayerProfile not found locally, checking CloudKit...")
             
             // Пытаемся загрузить User из CloudKit если его нет локально
             var user = persistence.fetchUser(byId: claim.claimantUserId)
             
             if user == nil {
-                print("⚠️ [APPROVE_LINK_ALL] User not found locally, fetching from CloudKit...")
+                debugLog("⚠️ [APPROVE_LINK_ALL] User not found locally, fetching from CloudKit...")
                 do {
                     // Загружаем User из CloudKit Public DB
                     let predicate = NSPredicate(format: "TRUEPREDICATE")
@@ -260,7 +260,7 @@ class PlayerClaimService {
                     
                     // Ищем пользователя с нужным userId
                     if let userRecord = records.records.first(where: { $0.recordID.recordName == claim.claimantUserId.uuidString }) {
-                        print("✅ [APPROVE_LINK_ALL] Found user in CloudKit, creating local copy...")
+                        debugLog("✅ [APPROVE_LINK_ALL] Found user in CloudKit, creating local copy...")
                         
                         // Создаем локальную копию User
                         let newUser = User(context: context)
@@ -269,13 +269,13 @@ class PlayerClaimService {
                         newUser.passwordHash = "remote_user_no_auth"
                         
                         user = newUser
-                        print("✅ [APPROVE_LINK_ALL] Created local User: \(newUser.username)")
+                        debugLog("✅ [APPROVE_LINK_ALL] Created local User: \(newUser.username)")
                     } else {
-                        print("❌ [APPROVE_LINK_ALL] User \(claim.claimantUserId) not found in CloudKit")
+                        debugLog("❌ [APPROVE_LINK_ALL] User \(claim.claimantUserId) not found in CloudKit")
                         throw ClaimError.userNotFound
                     }
                 } catch {
-                    print("❌ [APPROVE_LINK_ALL] Failed to fetch user from CloudKit: \(error)")
+                    debugLog("❌ [APPROVE_LINK_ALL] Failed to fetch user from CloudKit: \(error)")
                     throw ClaimError.userNotFound
                 }
             }
@@ -284,24 +284,24 @@ class PlayerClaimService {
                 throw ClaimError.userNotFound
             }
             
-            print("📝 [APPROVE_LINK_ALL] Creating PlayerProfile for user \(user.username)...")
+            debugLog("📝 [APPROVE_LINK_ALL] Creating PlayerProfile for user \(user.username)...")
             profile = persistence.createPlayerProfile(
                 displayName: user.username,
                 userId: claim.claimantUserId
             )
-            print("✅ [APPROVE_LINK_ALL] Created PlayerProfile")
+            debugLog("✅ [APPROVE_LINK_ALL] Created PlayerProfile")
         }
         
         guard let profile = profile else {
             throw ClaimError.profileCreationFailed
         }
         
-        print("✅ [APPROVE_LINK_ALL] PlayerProfile ready: \(profile.displayName)")
+        debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile ready: \(profile.displayName)")
         
         // Создать alias если нужно
         if persistence.fetchAlias(byName: claim.playerName) == nil {
             _ = persistence.createAlias(aliasName: claim.playerName, forProfile: profile)
-            print("✅ [APPROVE_LINK_ALL] Created alias '\(claim.playerName)'")
+            debugLog("✅ [APPROVE_LINK_ALL] Created alias '\(claim.playerName)'")
         }
         
         var linkedCount = 0
@@ -309,7 +309,7 @@ class PlayerClaimService {
         
         if linkAllGames {
             // МАССОВОЕ ОДОБРЕНИЕ: Найти ВСЕ GWP с таким playerName у хоста
-            print("🔍 [APPROVE_LINK_ALL] Searching for ALL GWP with playerName '\(claim.playerName)' from host...")
+            debugLog("🔍 [APPROVE_LINK_ALL] Searching for ALL GWP with playerName '\(claim.playerName)' from host...")
             
             let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
             // Найти все GWP где:
@@ -321,7 +321,7 @@ class PlayerClaimService {
             )
             
             let allMatchingGWP = try context.fetch(fetchRequest)
-            print("✅ [APPROVE_LINK_ALL] Found \(allMatchingGWP.count) GWP with playerName '\(claim.playerName)'")
+            debugLog("✅ [APPROVE_LINK_ALL] Found \(allMatchingGWP.count) GWP with playerName '\(claim.playerName)'")
             
             // Привязать каждый GWP к профилю
             for gwp in allMatchingGWP {
@@ -332,28 +332,28 @@ class PlayerClaimService {
                     linkedCount += 1
                     
                     if let game = gwp.game, let gameDate = game.timestamp {
-                        print("✅ [APPROVE_LINK_ALL] Linked GWP in game \(gameDate.formatted(date: .abbreviated, time: .omitted))")
+                        debugLog("✅ [APPROVE_LINK_ALL] Linked GWP in game \(gameDate.formatted(date: .abbreviated, time: .omitted))")
                     }
                 }
             }
             
-            print("✅ [APPROVE_LINK_ALL] Linked \(linkedCount) GWP to profile '\(profile.displayName)'")
+            debugLog("✅ [APPROVE_LINK_ALL] Linked \(linkedCount) GWP to profile '\(profile.displayName)'")
             
         } else {
             // ОБЫЧНОЕ ОДОБРЕНИЕ: Только для одной игры из заявки
-            print("🔍 [APPROVE_LINK_ALL] Linking only single game GWP...")
+            debugLog("🔍 [APPROVE_LINK_ALL] Linking only single game GWP...")
             
             let gameWithPlayer = findGameWithPlayer(gameId: claim.gameId, playerName: claim.playerName)
             
             guard let gameWithPlayer = gameWithPlayer else {
-                print("❌ [APPROVE_LINK_ALL] GameWithPlayer not found!")
+                debugLog("❌ [APPROVE_LINK_ALL] GameWithPlayer not found!")
                 throw ClaimError.gameWithPlayerNotFound
             }
             
             gameWithPlayer.playerProfile = profile
             gwpToSync.append(gameWithPlayer)
             linkedCount = 1
-            print("✅ [APPROVE_LINK_ALL] Linked single GWP")
+            debugLog("✅ [APPROVE_LINK_ALL] Linked single GWP")
         }
         
         // Обновить статистику профиля
@@ -368,34 +368,34 @@ class PlayerClaimService {
         
         try context.save()
         
-        print("☁️ [APPROVE_LINK_ALL] Syncing changes to CloudKit...")
+        debugLog("☁️ [APPROVE_LINK_ALL] Syncing changes to CloudKit...")
         
         // Синхронизируем изменения в CloudKit
         do {
             // 1. Синхронизируем PlayerClaim (обновленный статус)
             try await CloudKitSyncService.shared.syncPlayerClaims()
-            print("✅ [APPROVE_LINK_ALL] PlayerClaim synced")
+            debugLog("✅ [APPROVE_LINK_ALL] PlayerClaim synced")
             
             // 2. Синхронизируем все измененные GameWithPlayer
             if !gwpToSync.isEmpty {
                 await CloudKitSyncService.shared.quickSyncGameWithPlayers(gwpToSync)
-                print("✅ [APPROVE_LINK_ALL] \(gwpToSync.count) GameWithPlayer synced")
+                debugLog("✅ [APPROVE_LINK_ALL] \(gwpToSync.count) GameWithPlayer synced")
             }
             
             // 3. Синхронизируем PlayerProfile (обновленная статистика)
             await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
-            print("✅ [APPROVE_LINK_ALL] PlayerProfile synced")
+            debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile synced")
             
             // 4. Синхронизируем PlayerAliases
             try await CloudKitSyncService.shared.syncPlayerAliases()
-            print("✅ [APPROVE_LINK_ALL] PlayerAliases synced")
+            debugLog("✅ [APPROVE_LINK_ALL] PlayerAliases synced")
 
             // 5. Phase 2: Обновить materialized views для клаиманта
             try? await MaterializedViewsService.shared.updateUserStatisticsSummary(userId: claim.claimantUserId)
 
-            print("✅ [APPROVE_LINK_ALL] All changes synced to CloudKit")
+            debugLog("✅ [APPROVE_LINK_ALL] All changes synced to CloudKit")
         } catch {
-            print("⚠️ [APPROVE_LINK_ALL] Failed to sync to CloudKit: \(error)")
+            debugLog("⚠️ [APPROVE_LINK_ALL] Failed to sync to CloudKit: \(error)")
             // Не бросаем ошибку, т.к. локально все сохранено
         }
         
@@ -414,7 +414,7 @@ class PlayerClaimService {
                     claimantUserId: claimantUserIdString
                 )
             } catch {
-                print("Failed to send notification: \(error)")
+                debugLog("Failed to send notification: \(error)")
             }
         }
         
@@ -457,7 +457,7 @@ class PlayerClaimService {
             return 0
         }
         
-        print("📋 [APPROVE_ALL] Found \(claims.count) claims for player '\(playerName)' from user \(claimantUserId)")
+        debugLog("📋 [APPROVE_ALL] Found \(claims.count) claims for player '\(playerName)' from user \(claimantUserId)")
         
         var approvedCount = 0
         var errors: [Error] = []
@@ -465,21 +465,21 @@ class PlayerClaimService {
         // Одобряем каждую заявку
         for claim in claims {
             do {
-                print("🔄 [APPROVE_ALL] Approving claim \(claim.claimId)...")
+                debugLog("🔄 [APPROVE_ALL] Approving claim \(claim.claimId)...")
                 try await approveClaim(
                     claimId: claim.claimId,
                     resolverUserId: hostUserId,
                     notes: notes
                 )
                 approvedCount += 1
-                print("✅ [APPROVE_ALL] Approved claim \(claim.claimId)")
+                debugLog("✅ [APPROVE_ALL] Approved claim \(claim.claimId)")
             } catch {
-                print("❌ [APPROVE_ALL] Failed to approve claim \(claim.claimId): \(error)")
+                debugLog("❌ [APPROVE_ALL] Failed to approve claim \(claim.claimId): \(error)")
                 errors.append(error)
             }
         }
         
-        print("✅ [APPROVE_ALL] Completed: \(approvedCount)/\(claims.count) claims approved")
+        debugLog("✅ [APPROVE_ALL] Completed: \(approvedCount)/\(claims.count) claims approved")
         
         // Если есть ошибки, но хотя бы одна заявка одобрена - считаем успехом
         if approvedCount > 0 {
@@ -525,9 +525,9 @@ class PlayerClaimService {
         // Сразу пушим в CloudKit, иначе при следующей синхронизации статус перезапишется обратно на pending
         do {
             try await CloudKitSyncService.shared.syncPlayerClaims()
-            print("✅ [REJECT_CLAIM] Claim synced to CloudKit")
+            debugLog("✅ [REJECT_CLAIM] Claim synced to CloudKit")
         } catch {
-            print("❌ [REJECT_CLAIM] Failed to sync claim to CloudKit: \(error)")
+            debugLog("❌ [REJECT_CLAIM] Failed to sync claim to CloudKit: \(error)")
             PendingSyncTracker.shared.addPendingPlayerClaim(claimId)
         }
 
@@ -542,7 +542,7 @@ class PlayerClaimService {
                     claimantUserId: claim.claimantUserId.uuidString
                 )
             } catch {
-                print("Failed to send notification: \(error)")
+                debugLog("Failed to send notification: \(error)")
             }
         }
     }
@@ -561,7 +561,7 @@ class PlayerClaimService {
         do {
             return try context.existingObject(with: objectId) as? GameWithPlayer
         } catch {
-            print("Error finding GameWithPlayer: \(error)")
+            debugLog("Error finding GameWithPlayer: \(error)")
             return nil
         }
     }
@@ -581,11 +581,11 @@ class PlayerClaimService {
         do {
             let results = try context.fetch(gwpFetch)
             if results.count > 1 {
-                print("⚠️ Found multiple GameWithPlayer for gameId=\(gameId), playerName=\(playerName). Using first.")
+                debugLog("⚠️ Found multiple GameWithPlayer for gameId=\(gameId), playerName=\(playerName). Using first.")
             }
             return results.first
         } catch {
-            print("❌ Error finding GameWithPlayer: \(error)")
+            debugLog("❌ Error finding GameWithPlayer: \(error)")
             return nil
         }
     }

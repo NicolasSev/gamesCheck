@@ -5,7 +5,8 @@ struct SplashScreenView: View {
     @State private var currentSuitIndex = 0
     @State private var scale: CGFloat = 1.0
     @State private var opacity: Double = 1.0
-    
+    @State private var suitAnimationTimer: Timer?
+
     // Масти по кругу: club, heart, diamond, spade
     let suits = ["suit.club.fill", "suit.heart.fill", "suit.diamond.fill", "suit.spade.fill"]
     
@@ -86,17 +87,20 @@ struct SplashScreenView: View {
             isAnimating = true
             startSuitAnimation()
         }
+        .onDisappear {
+            suitAnimationTimer?.invalidate()
+            suitAnimationTimer = nil
+        }
     }
     
     // MARK: - Animation Logic
     
     private func startSuitAnimation() {
-        // Цикл анимации: 2.0 секунды на полный цикл (как удар сердца)
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+        suitAnimationTimer?.invalidate()
+        suitAnimationTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             animateSuitCycle()
         }
-        
-        // Запускаем первую анимацию сразу
+
         animateSuitCycle()
     }
     

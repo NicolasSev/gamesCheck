@@ -9,7 +9,7 @@ struct LoginView: View {
     @State private var showingError = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 Image(systemName: "suit.spade.fill")
                     .font(.system(size: 80))
@@ -30,9 +30,11 @@ struct LoginView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.emailAddress)
+                        .accessibilityIdentifier("login_email")
 
                     SecureField("Пароль", text: $password)
                         .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("login_password")
 
                     Button(action: login) {
                         if authViewModel.isLoading {
@@ -46,6 +48,7 @@ struct LoginView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(email.isEmpty || password.isEmpty || authViewModel.isLoading)
+                    .accessibilityIdentifier("login_button")
                 }
                 .padding(.horizontal, 30)
 

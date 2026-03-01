@@ -59,9 +59,9 @@ class NotificationService: NSObject, ObservableObject {
         
         if granted {
             await updateAuthorizationStatus()
-            print("✅ Push notifications authorized")
+            debugLog("✅ Push notifications authorized")
         } else {
-            print("❌ Push notifications denied")
+            debugLog("❌ Push notifications denied")
         }
     }
     
@@ -85,7 +85,7 @@ class NotificationService: NSObject, ObservableObject {
     func setDeviceToken(_ token: Data) {
         let tokenString = token.map { String(format: "%02.2hhx", $0) }.joined()
         deviceToken = tokenString
-        print("📱 Device Token: \(tokenString)")
+        debugLog("📱 Device Token: \(tokenString)")
         
         // Save token to UserDefaults for later use
         UserDefaults.standard.set(tokenString, forKey: "deviceToken")
@@ -188,7 +188,7 @@ class NotificationService: NSObject, ObservableObject {
         let keychain = KeychainService.shared
         guard let currentUserId = keychain.getUserId(),
               currentUserId == hostUserId else {
-            print("⚠️ Skipping notification: current user (\(keychain.getUserId() ?? "none")) is not host (\(hostUserId))")
+            debugLog("⚠️ Skipping notification: current user (\(keychain.getUserId() ?? "none")) is not host (\(hostUserId))")
             return
         }
         
@@ -217,7 +217,7 @@ class NotificationService: NSObject, ObservableObject {
         
         try await notificationCenter.add(request)
         saveNotificationToStore(title: "Новая заявка на игрока", body: "\(playerName) хочет присвоить себя в игре \(gameName)", type: "new_claim")
-        print("📬 Sent claim notification to host \(hostUserId): \(playerName)")
+        debugLog("📬 Sent claim notification to host \(hostUserId): \(playerName)")
     }
     
     func notifyClaimApproved(claimId: String, playerName: String, gameName: String, claimantUserId: String) async throws {
@@ -225,7 +225,7 @@ class NotificationService: NSObject, ObservableObject {
         let keychain = KeychainService.shared
         guard let currentUserId = keychain.getUserId(),
               currentUserId == claimantUserId else {
-            print("⚠️ Skipping approval notification: current user (\(keychain.getUserId() ?? "none")) is not claimant (\(claimantUserId))")
+            debugLog("⚠️ Skipping approval notification: current user (\(keychain.getUserId() ?? "none")) is not claimant (\(claimantUserId))")
             return
         }
         
@@ -251,7 +251,7 @@ class NotificationService: NSObject, ObservableObject {
         
         try await notificationCenter.add(request)
         saveNotificationToStore(title: "Заявка одобрена ✅", body: "Ваша заявка на \(playerName) в игре \(gameName) была одобрена", type: "claim_approved")
-        print("✅ Sent approval notification to claimant \(claimantUserId): \(playerName)")
+        debugLog("✅ Sent approval notification to claimant \(claimantUserId): \(playerName)")
     }
     
     func notifyClaimRejected(claimId: String, playerName: String, gameName: String, reason: String?, claimantUserId: String) async throws {
@@ -259,7 +259,7 @@ class NotificationService: NSObject, ObservableObject {
         let keychain = KeychainService.shared
         guard let currentUserId = keychain.getUserId(),
               currentUserId == claimantUserId else {
-            print("⚠️ Skipping rejection notification: current user (\(keychain.getUserId() ?? "none")) is not claimant (\(claimantUserId))")
+            debugLog("⚠️ Skipping rejection notification: current user (\(keychain.getUserId() ?? "none")) is not claimant (\(claimantUserId))")
             return
         }
         
@@ -289,7 +289,7 @@ class NotificationService: NSObject, ObservableObject {
         
         try await notificationCenter.add(request)
         saveNotificationToStore(title: "Заявка отклонена ❌", body: body, type: "claim_rejected")
-        print("❌ Sent rejection notification to claimant \(claimantUserId): \(playerName)")
+        debugLog("❌ Sent rejection notification to claimant \(claimantUserId): \(playerName)")
     }
     
     // MARK: - Badge Management
@@ -339,9 +339,9 @@ class NotificationService: NSObject, ObservableObject {
             subscription.notificationInfo = CKSubscription.NotificationInfo()
             subscription.notificationInfo?.shouldSendContentAvailable = true
             _ = try await CloudKitService.shared.saveSubscription(subscription: subscription, to: .publicDB)
-            print("✅ [PUSH] Game subscription registered")
+            debugLog("✅ [PUSH] Game subscription registered")
         } catch {
-            print("❌ [PUSH] Failed to setup game subscription: \(error)")
+            debugLog("❌ [PUSH] Failed to setup game subscription: \(error)")
         }
     }
 
@@ -358,9 +358,9 @@ class NotificationService: NSObject, ObservableObject {
         UserDefaults.standard.set(false, forKey: "gameSubscriptionEnabled")
         do {
             try await CloudKitService.shared.deleteSubscription(withID: gameSubscriptionID, from: .publicDB)
-            print("✅ [PUSH] Game subscription removed")
+            debugLog("✅ [PUSH] Game subscription removed")
         } catch {
-            print("❌ [PUSH] Failed to remove game subscription: \(error)")
+            debugLog("❌ [PUSH] Failed to remove game subscription: \(error)")
         }
     }
 
@@ -382,9 +382,9 @@ class NotificationService: NSObject, ObservableObject {
             subscription.notificationInfo = CKSubscription.NotificationInfo()
             subscription.notificationInfo?.shouldSendContentAvailable = true
             _ = try await CloudKitService.shared.saveSubscription(subscription: subscription, to: .publicDB)
-            print("✅ [PUSH] PlayerProfile subscription registered")
+            debugLog("✅ [PUSH] PlayerProfile subscription registered")
         } catch {
-            print("❌ [PUSH] Failed to setup PlayerProfile subscription: \(error)")
+            debugLog("❌ [PUSH] Failed to setup PlayerProfile subscription: \(error)")
         }
     }
 
@@ -401,7 +401,7 @@ class NotificationService: NSObject, ObservableObject {
                 userInfo: ["type": "profile_public"]
             )
         } catch {
-            print("❌ Failed to send profile public notification: \(error)")
+            debugLog("❌ Failed to send profile public notification: \(error)")
         }
     }
 
@@ -480,8 +480,8 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         let userInfo = response.notification.request.content.userInfo
         let actionIdentifier = response.actionIdentifier
         
-        print("📬 Notification action: \(actionIdentifier)")
-        print("📬 User info: \(userInfo)")
+        debugLog("📬 Notification action: \(actionIdentifier)")
+        debugLog("📬 User info: \(userInfo)")
         
         // Handle different actions
         if actionIdentifier == UNNotificationDefaultActionIdentifier {

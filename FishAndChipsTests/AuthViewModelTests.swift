@@ -12,10 +12,10 @@ import Testing
 struct AuthViewModelTests {
     @Test @MainActor func registration_createsUserAndAuthenticates() async throws {
         let persistence = PersistenceController(inMemory: true)
-        let defaults = UserDefaults(suiteName: "AuthViewModelTests.registration")!
-        defaults.removePersistentDomain(forName: "AuthViewModelTests.registration")
+        let keychain = MockKeychainService()
+        let cloudKitSync = MockAuthCloudKitSync()
 
-        let vm = AuthViewModel(persistence: persistence, userDefaults: defaults)
+        let vm = AuthViewModel(persistence: persistence, keychain: keychain, cloudKitSync: cloudKitSync)
 
         try await vm.register(
             username: "testuser",
@@ -31,28 +31,27 @@ struct AuthViewModelTests {
 
     @Test @MainActor func login_logout_flow() async throws {
         let persistence = PersistenceController(inMemory: true)
-        let defaults = UserDefaults(suiteName: "AuthViewModelTests.login")!
-        defaults.removePersistentDomain(forName: "AuthViewModelTests.login")
+        let keychain = MockKeychainService()
+        let cloudKitSync = MockAuthCloudKitSync()
 
-        // Подготовить пользователя напрямую
-        _ = persistence.createUser(username: "logintest", passwordHash: "irrelevant")
-        // Перезапишем корректным хешом через register (проверяет и создание профиля)
-        let vm = AuthViewModel(persistence: persistence, userDefaults: defaults)
+        let vm = AuthViewModel(persistence: persistence, keychain: keychain, cloudKitSync: cloudKitSync)
         try await vm.register(username: "logintest2", password: "password123", email: "logintest2@example.com")
 
         vm.logout()
         #expect(vm.isAuthenticated == false)
 
-        try await vm.login(username: "logintest2", password: "password123")
+        try await vm.login(email: "logintest2@example.com", password: "password123")
         #expect(vm.isAuthenticated == true)
     }
 
     @Test func passwordValidation_rules() async throws {
         let persistence = PersistenceController(inMemory: true)
-        let defaults = UserDefaults(suiteName: "AuthViewModelTests.password")!
-        defaults.removePersistentDomain(forName: "AuthViewModelTests.password")
+        let keychain = MockKeychainService()
+        let cloudKitSync = MockAuthCloudKitSync()
 
-        let vm = await MainActor.run { AuthViewModel(persistence: persistence, userDefaults: defaults) }
+        let vm = await MainActor.run {
+            AuthViewModel(persistence: persistence, keychain: keychain, cloudKitSync: cloudKitSync)
+        }
 
         let weak = await MainActor.run { vm.validatePassword("123") }
         #expect(weak.isValid == false)
@@ -64,4 +63,3 @@ struct AuthViewModelTests {
         #expect(valid.isValid == true)
     }
 }
-

@@ -1,0 +1,14 @@
+---
+description: Code style — логи, локализация, error handling
+globs: FishAndChips/**/*.swift
+alwaysApply: false
+---
+
+# Code Style
+
+- **Логи**: `debugLog()` (не `print`) — только в DEBUG, не логировать credentials
+- **Локализация**: `String(localized:)` или `LocalizedStringKey` для UI-строк
+- **Error handling**: пробрасывать типизированные ошибки, не глотать в `catch`
+- **Неиспользуемые переменные**: удалять или использовать
+- **#if DEBUG** для отладочного кода
+- **Язык**: русский для UI и комментариев

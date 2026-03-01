@@ -33,7 +33,7 @@ class VisionObjectRecognitionViewController_old: ViewController {
     private var requests = [VNRequest]()
     
     func stopCaptureSession() {
-            print("Stopping camera session from VisionObjectRecognitionViewController...")
+            debugLog("Stopping camera session from VisionObjectRecognitionViewController...")
             teardownAVCapture()
             session.stopRunning()
         }
@@ -44,10 +44,10 @@ class VisionObjectRecognitionViewController_old: ViewController {
         let error: NSError! = nil
         
         guard let modelURL = Bundle.main.url(forResource: "yolov8m_synthetic", withExtension: "mlmodelc") else {
-            print("🔴 yolov8m_synthetic.mlmodelc не найден в Bundle")
+            debugLog("🔴 yolov8m_synthetic.mlmodelc не найден в Bundle")
             return NSError(domain: "VisionObjectRecognitionViewController", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model file is missing"])
         }
-        print("🟢 Нашли yolov8m_synthetic.mlmodelc по пути: \(modelURL)")
+        debugLog("🟢 Нашли yolov8m_synthetic.mlmodelc по пути: \(modelURL)")
         do {
             let visionModel = try VNCoreMLModel(for: MLModel(contentsOf: modelURL))
             let objectRecognition = VNCoreMLRequest(model: visionModel, completionHandler: { (request, error) in
@@ -60,14 +60,14 @@ class VisionObjectRecognitionViewController_old: ViewController {
             })
             self.requests = [objectRecognition]
         } catch let error as NSError {
-            print("Model loading went wrong: \(error)")
+            debugLog("Model loading went wrong: \(error)")
         }
         
         return error
     }
     
     func drawVisionRequestResults(_ results: [Any]) {
-        print("🟢 drawVisionRequestResults вызван")
+        debugLog("🟢 drawVisionRequestResults вызван")
         CATransaction.begin()
         CATransaction.setValue(kCFBooleanTrue, forKey: kCATransactionDisableActions)
         detectionOverlay.sublayers = nil // remove all the old recognized objects
@@ -78,7 +78,7 @@ class VisionObjectRecognitionViewController_old: ViewController {
             // Select only the label with the highest confidence.
             let topLabelObservation = objectObservation.labels[0]
             let detectedCard = topLabelObservation.identifier
-            print("🎴 Обнаружена карта: \(detectedCard) с вероятностью \(topLabelObservation.confidence)")
+            debugLog("🎴 Обнаружена карта: \(detectedCard) с вероятностью \(topLabelObservation.confidence)")
             let objectBounds = VNImageRectForNormalizedRect(objectObservation.boundingBox, Int(bufferSize.width), Int(bufferSize.height))
             
             let shapeLayer = self.createRoundedRectLayerWithBounds(objectBounds)
@@ -94,10 +94,10 @@ class VisionObjectRecognitionViewController_old: ViewController {
     }
     
     override func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        print("🟢 Кадр с камеры получен")
+        debugLog("🟢 Кадр с камеры получен")
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-            print("🔴 Не удалось получить pixelBuffer")
+            debugLog("🔴 Не удалось получить pixelBuffer")
             return
         }
 
@@ -107,7 +107,7 @@ class VisionObjectRecognitionViewController_old: ViewController {
         do {
             try imageRequestHandler.perform(self.requests)
         } catch {
-            print("🔴 Ошибка Vision perform: \(error)")
+            debugLog("🔴 Ошибка Vision perform: \(error)")
         }
     }
     

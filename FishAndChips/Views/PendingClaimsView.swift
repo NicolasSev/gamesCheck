@@ -37,7 +37,7 @@ struct PendingClaimsView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if allClaims.isEmpty {
                     VStack(spacing: 16) {
@@ -216,7 +216,7 @@ struct ClaimDetailView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // Информация о заявке

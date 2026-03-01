@@ -55,7 +55,7 @@ class CloudKitService {
             let status = try await checkAccountStatus()
             return status == .available
         } catch {
-            print("CloudKit account status check failed: \(error)")
+            debugLog("CloudKit account status check failed: \(error)")
             return false
         }
     }
@@ -77,16 +77,16 @@ class CloudKitService {
             Array(records[$0..<min($0 + batchSize, records.count)])
         }
         
-        print("📦 Saving \(records.count) records in \(batches.count) batch(es)")
+        debugLog("📦 Saving \(records.count) records in \(batches.count) batch(es)")
         
         // Process each batch
         for (index, batch) in batches.enumerated() {
-            print("📤 Batch \(index + 1)/\(batches.count): \(batch.count) records")
+            debugLog("📤 Batch \(index + 1)/\(batches.count): \(batch.count) records")
             let savedBatch = try await saveBatch(batch, to: database)
             allSavedRecords.append(contentsOf: savedBatch)
         }
         
-        print("✅ Successfully saved \(allSavedRecords.count)/\(records.count) records")
+        debugLog("✅ Successfully saved \(allSavedRecords.count)/\(records.count) records")
         return allSavedRecords
     }
     
@@ -103,7 +103,7 @@ class CloudKitService {
                 case .success(let record):
                     savedRecords.append(record)
                 case .failure(let error):
-                    print("Failed to save record \(recordID): \(error)")
+                    debugLog("Failed to save record \(recordID): \(error)")
                 }
             }
             
@@ -147,7 +147,7 @@ class CloudKitService {
             case .success(let record):
                 records.append(record)
             case .failure(let error):
-                print("Failed to fetch record: \(error)")
+                debugLog("Failed to fetch record: \(error)")
             }
         }
         
@@ -170,15 +170,15 @@ class CloudKitService {
             Array(recordIDs[$0..<min($0 + batchSize, recordIDs.count)])
         }
         
-        print("🗑️ Deleting \(recordIDs.count) records in \(batches.count) batch(es)")
+        debugLog("🗑️ Deleting \(recordIDs.count) records in \(batches.count) batch(es)")
         
         // Process each batch
         for (index, batch) in batches.enumerated() {
-            print("🗑️ Batch \(index + 1)/\(batches.count): \(batch.count) records")
+            debugLog("🗑️ Batch \(index + 1)/\(batches.count): \(batch.count) records")
             try await deleteBatch(batch, from: database)
         }
         
-        print("✅ Successfully deleted \(recordIDs.count) records")
+        debugLog("✅ Successfully deleted \(recordIDs.count) records")
     }
     
     private func deleteBatch(_ recordIDs: [CKRecord.ID], from database: DatabaseType) async throws {
@@ -222,7 +222,7 @@ class CloudKitService {
             case .success(let record):
                 records.append(record)
             case .failure(let error):
-                print("Failed to fetch record: \(error)")
+                debugLog("Failed to fetch record: \(error)")
             }
         }
         
@@ -241,7 +241,7 @@ class CloudKitService {
         var currentCursor: CKQueryOperation.Cursor? = nil
         var batchNumber = 1
         
-        print("📥 [FETCH_ALL] Starting paginated fetch for \(type.rawValue)...")
+        debugLog("📥 [FETCH_ALL] Starting paginated fetch for \(type.rawValue)...")
         
         repeat {
             let db = database == .publicDB ? publicDatabase : privateDatabase
@@ -251,13 +251,13 @@ class CloudKitService {
             if let currentCursor = currentCursor {
                 // Продолжаем с cursor
                 (matchResults, cursor) = try await db.records(continuingMatchFrom: currentCursor, desiredKeys: nil, resultsLimit: batchSize)
-                print("📥 [FETCH_ALL] Batch #\(batchNumber) (cursor continuation)...")
+                debugLog("📥 [FETCH_ALL] Batch #\(batchNumber) (cursor continuation)...")
             } else {
                 // Первый запрос
                 let query = CKQuery(recordType: type.rawValue, predicate: predicate)
                 query.sortDescriptors = sortDescriptors
                 (matchResults, cursor) = try await db.records(matching: query, desiredKeys: nil, resultsLimit: batchSize)
-                print("📥 [FETCH_ALL] Batch #\(batchNumber) (initial query)...")
+                debugLog("📥 [FETCH_ALL] Batch #\(batchNumber) (initial query)...")
             }
             
             // Собираем успешные записи
@@ -267,25 +267,25 @@ class CloudKitService {
                 case .success(let record):
                     batchRecords.append(record)
                 case .failure(let error):
-                    print("⚠️ [FETCH_ALL] Failed to fetch record: \(error)")
+                    debugLog("⚠️ [FETCH_ALL] Failed to fetch record: \(error)")
                 }
             }
             
             allRecords.append(contentsOf: batchRecords)
-            print("✅ [FETCH_ALL] Batch #\(batchNumber): \(batchRecords.count) records (total: \(allRecords.count))")
+            debugLog("✅ [FETCH_ALL] Batch #\(batchNumber): \(batchRecords.count) records (total: \(allRecords.count))")
             
             currentCursor = cursor
             batchNumber += 1
             
             // Защита от бесконечного цикла
             if batchNumber > 50 {
-                print("⚠️ [FETCH_ALL] Safety limit reached (50 batches = 20,000 records)")
+                debugLog("⚠️ [FETCH_ALL] Safety limit reached (50 batches = 20,000 records)")
                 break
             }
             
         } while currentCursor != nil
         
-        print("✅ [FETCH_ALL] Completed! Total fetched: \(allRecords.count) \(type.rawValue) records")
+        debugLog("✅ [FETCH_ALL] Completed! Total fetched: \(allRecords.count) \(type.rawValue) records")
         return allRecords
     }
     

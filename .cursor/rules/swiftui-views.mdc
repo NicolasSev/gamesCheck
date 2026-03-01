@@ -1,0 +1,15 @@
+---
+description: SwiftUI Views — разбиение, accessibility, casino background
+globs: FishAndChips/Views/**/*.swift
+alwaysApply: false
+---
+
+# SwiftUI Views
+
+- **Разбивать на компоненты** при >200 строк: выносить subviews в отдельные файлы или приватные struct
+- **NavigationStack** (не NavigationView) для iOS 16+
+- **Casino background**: использовать общий modifier `CasinoBackgroundModifier` или `casinoBackground()`
+- **formatCurrency**: через `Double.formatCurrency` extension, не дублировать
+- **accessibility**: добавлять `.accessibilityLabel`, `.accessibilityHint`, `accessibilityIdentifier` для XCUITest
+- **Property wrappers**: `@StateObject` для владения, `@ObservedObject` для передачи, `@EnvironmentObject` для DI
+- **Timer/Combine**: invalidate в `onDisappear`, не оставлять подписки без отмены

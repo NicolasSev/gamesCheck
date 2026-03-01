@@ -19,28 +19,28 @@ class PendingSyncTracker {
         var pending = getPendingGames()
         pending.insert(gameId)
         savePendingGames(pending)
-        print("📌 [PENDING_SYNC] Added pending game: \(gameId)")
+        debugLog("📌 [PENDING_SYNC] Added pending game: \(gameId)")
     }
     
     func addPendingGameWithPlayer(_ gwpId: UUID) {
         var pending = getPendingGameWithPlayers()
         pending.insert(gwpId)
         savePendingGameWithPlayers(pending)
-        print("📌 [PENDING_SYNC] Added pending GameWithPlayer: \(gwpId)")
+        debugLog("📌 [PENDING_SYNC] Added pending GameWithPlayer: \(gwpId)")
     }
     
     func addPendingPlayerAlias(_ aliasId: UUID) {
         var pending = getPendingPlayerAliases()
         pending.insert(aliasId)
         savePendingPlayerAliases(pending)
-        print("📌 [PENDING_SYNC] Added pending PlayerAlias: \(aliasId)")
+        debugLog("📌 [PENDING_SYNC] Added pending PlayerAlias: \(aliasId)")
     }
     
     func addPendingPlayerClaim(_ claimId: UUID) {
         var pending = getPendingPlayerClaims()
         pending.insert(claimId)
         savePendingPlayerClaims(pending)
-        print("📌 [PENDING_SYNC] Added pending PlayerClaim: \(claimId)")
+        debugLog("📌 [PENDING_SYNC] Added pending PlayerClaim: \(claimId)")
     }
     
     // MARK: - Remove Pending Items (after successful sync)
@@ -49,28 +49,28 @@ class PendingSyncTracker {
         var pending = getPendingGames()
         pending.remove(gameId)
         savePendingGames(pending)
-        print("✅ [PENDING_SYNC] Removed pending game: \(gameId)")
+        debugLog("✅ [PENDING_SYNC] Removed pending game: \(gameId)")
     }
     
     func removePendingGameWithPlayer(_ gwpId: UUID) {
         var pending = getPendingGameWithPlayers()
         pending.remove(gwpId)
         savePendingGameWithPlayers(pending)
-        print("✅ [PENDING_SYNC] Removed pending GameWithPlayer: \(gwpId)")
+        debugLog("✅ [PENDING_SYNC] Removed pending GameWithPlayer: \(gwpId)")
     }
     
     func removePendingPlayerAlias(_ aliasId: UUID) {
         var pending = getPendingPlayerAliases()
         pending.remove(aliasId)
         savePendingPlayerAliases(pending)
-        print("✅ [PENDING_SYNC] Removed pending PlayerAlias: \(aliasId)")
+        debugLog("✅ [PENDING_SYNC] Removed pending PlayerAlias: \(aliasId)")
     }
     
     func removePendingPlayerClaim(_ claimId: UUID) {
         var pending = getPendingPlayerClaims()
         pending.remove(claimId)
         savePendingPlayerClaims(pending)
-        print("✅ [PENDING_SYNC] Removed pending PlayerClaim: \(claimId)")
+        debugLog("✅ [PENDING_SYNC] Removed pending PlayerClaim: \(claimId)")
     }
     
     // MARK: - Get Pending Items
@@ -168,6 +168,6 @@ class PendingSyncTracker {
         userDefaults.removeObject(forKey: Keys.pendingGameWithPlayers)
         userDefaults.removeObject(forKey: Keys.pendingPlayerAliases)
         userDefaults.removeObject(forKey: Keys.pendingPlayerClaims)
-        print("🗑️ [PENDING_SYNC] Cleared all pending data")
+        debugLog("🗑️ [PENDING_SYNC] Cleared all pending data")
     }
 }

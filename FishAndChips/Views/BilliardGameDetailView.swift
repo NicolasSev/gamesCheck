@@ -20,7 +20,7 @@ struct BilliardGameDetailView: View {
     @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 16) {
                     // Заголовок с информацией об игре
                     VStack(spacing: 8) {
@@ -151,7 +151,7 @@ struct BilliardGameDetailView: View {
         do {
             try viewContext.save()
         } catch {
-            print("Ошибка сохранения новой партии: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения новой партии: \(error.localizedDescription)")
         }
     }
     
@@ -166,7 +166,7 @@ struct BilliardGameDetailView: View {
         do {
             try viewContext.save()
         } catch {
-            print("Ошибка сохранения: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения: \(error.localizedDescription)")
         }
     }
 }

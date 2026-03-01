@@ -71,7 +71,7 @@ struct PlayerCardButton: View {
                 VStack(spacing: 2) {
                     Text(card.rank.rawValue)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(cardColor(card))
+                        .foregroundColor(card.displayColor)
                     Text(card.suit.symbol)
                         .font(.system(size: 14))
                 }
@@ -104,14 +104,6 @@ struct PlayerCardButton: View {
         }
     }
     
-    private func cardColor(_ card: Card) -> Color {
-        switch card.suit {
-        case .hearts, .diamonds:
-            return .red
-        case .spades, .clubs:
-            return .black
-        }
-    }
 }
 
 struct BoardCardButton: View {
@@ -132,7 +124,7 @@ struct BoardCardButton: View {
                     VStack(spacing: 2) {
                         Text(card.rank.rawValue)
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(cardColor(card))
+                            .foregroundColor(card.displayColor)
                         Text(card.suit.symbol)
                             .font(.system(size: 16))
                     }
@@ -175,15 +167,6 @@ struct BoardCardButton: View {
             }
         }
     }
-    
-    private func cardColor(_ card: Card) -> Color {
-        switch card.suit {
-        case .hearts, .diamonds:
-            return .red
-        case .spades, .clubs:
-            return .black
-        }
-    }
 }
 
 struct SimplePlayerPickerSheet: View {
@@ -192,7 +175,7 @@ struct SimplePlayerPickerSheet: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List(availablePlayers, id: \.self) { playerName in
                 Button(action: {
                     onSelect(playerName)
@@ -231,7 +214,7 @@ struct OddsResultView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(String(format: "%.1f%%", equity.equity))
                             .font(.headline)
-                            .foregroundColor(equityColor(equity.equity))
+                            .foregroundColor(equity.equity.equityDisplayColor)
                         Text("\(equity.wins)W / \(equity.ties)T / \(equity.losses)L")
                             .font(.caption2)
                             .foregroundColor(.gray)
@@ -252,15 +235,5 @@ struct OddsResultView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(UIColor.secondarySystemBackground))
         )
-    }
-    
-    private func equityColor(_ equity: Double) -> Color {
-        if equity > 60 {
-            return .green
-        } else if equity > 40 {
-            return .orange
-        } else {
-            return .red
-        }
     }
 }

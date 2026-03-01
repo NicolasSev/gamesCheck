@@ -8,8 +8,21 @@
 import Foundation
 import Security
 
+/// Protocol for secure storage — enables mocking in tests
+protocol KeychainServiceProtocol: AnyObject {
+    func saveUserId(_ userId: String) -> Bool
+    func getUserId() -> String?
+    func deleteUserId() -> Bool
+    func saveUsername(_ username: String) -> Bool
+    func getUsername() -> String?
+    func deleteUsername() -> Bool
+    func setBiometricEnabled(_ enabled: Bool) -> Bool
+    func isBiometricEnabled() -> Bool
+    func clearAll() -> Bool
+}
+
 /// Service for secure storage of sensitive data in iOS Keychain
-class KeychainService {
+class KeychainService: KeychainServiceProtocol {
     static let shared = KeychainService()
     
     private init() {}

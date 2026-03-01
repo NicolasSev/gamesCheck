@@ -1,0 +1,14 @@
+---
+description: CloudKit синхронизация — порядок, Dashboard, small diffs
+globs: FishAndChips/Services/CloudKit*.swift
+alwaysApply: false
+---
+
+# CloudKit Sync
+
+- **Порядок синхронизации** (критичен): PlayerProfile → Game → PlayerAlias → GameWithPlayer → PlayerClaim
+- **После изменения схемы** → CloudKit Dashboard → проверить record type / индекс
+- **После push** → Dashboard → найти запись
+- **Small diffs**: один метод/шаг за раз, не батчить изменения
+- **Обработка ошибок**: использовать `CloudKitService.handleCloudKitError`, retry для `isRetryable`
+- **Логи**: `debugLog()` (не `print`) — только в DEBUG

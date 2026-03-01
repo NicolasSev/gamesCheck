@@ -67,7 +67,7 @@ struct GameModelTests {
         legacy.timestamp = Date()
         legacy.gameType = "Poker"
         legacy.gameId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
-        legacy.isDeleted = false
+        legacy.softDeleted = false
         try context.save()
 
         persistence.migrateExistingGames()

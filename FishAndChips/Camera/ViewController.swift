@@ -63,7 +63,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         do {
             deviceInput = try AVCaptureDeviceInput(device: videoDevice!)
         } catch {
-            print("Could not create video device input: \(error)")
+            debugLog("Could not create video device input: \(error)")
             return
         }
         
@@ -72,7 +72,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         // Add a video input
         guard session.canAddInput(deviceInput) else {
-            print("Could not add video device input to the session")
+            debugLog("Could not add video device input to the session")
             session.commitConfiguration()
             return
         }
@@ -84,7 +84,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             videoDataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)]
             videoDataOutput.setSampleBufferDelegate(self, queue: videoDataOutputQueue)
         } else {
-            print("Could not add video data output to the session")
+            debugLog("Could not add video data output to the session")
             session.commitConfiguration()
             return
         }
@@ -98,7 +98,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             bufferSize.height = CGFloat(dimensions.height)
             videoDevice!.unlockForConfiguration()
         } catch {
-            print(error)
+            debugLog(error)
         }
         session.commitConfiguration()
         previewLayer = AVCaptureVideoPreviewLayer(session: session)

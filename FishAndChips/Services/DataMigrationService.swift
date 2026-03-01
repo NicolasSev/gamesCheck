@@ -22,7 +22,7 @@ class DataMigrationService {
 
     /// Одноразовая миграция: создать materialized views для всех пользователей и игр
     func generateMaterializedViews() async throws {
-        print("🔄 [MIGRATION] Generating materialized views...")
+        debugLog("🔄 [MIGRATION] Generating materialized views...")
 
         let context = persistence.container.viewContext
 
@@ -33,9 +33,9 @@ class DataMigrationService {
         for user in users {
             do {
                 try await materializedViews.updateUserStatisticsSummary(userId: user.userId)
-                print("  ✓ UserStatisticsSummary for \(user.username)")
+                debugLog("  ✓ UserStatisticsSummary for \(user.username)")
             } catch {
-                print("  ⚠️ Failed for user \(user.userId): \(error)")
+                debugLog("  ⚠️ Failed for user \(user.userId): \(error)")
             }
         }
 
@@ -45,10 +45,10 @@ class DataMigrationService {
             do {
                 try await materializedViews.updateGameSummary(gameId: game.gameId)
             } catch {
-                print("  ⚠️ Failed for game \(game.gameId): \(error)")
+                debugLog("  ⚠️ Failed for game \(game.gameId): \(error)")
             }
         }
 
-        print("✅ [MIGRATION] Materialized views generated: \(users.count) users, \(games.count) games")
+        debugLog("✅ [MIGRATION] Materialized views generated: \(users.count) users, \(games.count) games")
     }
 }

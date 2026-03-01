@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project FishAndChips.xcodeproj \
+            -scheme FishAndChips \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug
+
+      - name: Run Unit Tests
+        run: |
+          xcodebuild test \
+            -project FishAndChips.xcodeproj \
+            -scheme FishAndChips \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -only-testing:FishAndChipsTests

@@ -31,7 +31,7 @@ struct AddBilliardsGameSheet: View {
     @State private var batches: [BilliardBatchInput] = []
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Выберите игроков (2 игрока)")) {
                     Picker("Игрок 1", selection: $selectedPlayer1) {
@@ -95,7 +95,7 @@ struct AddBilliardsGameSheet: View {
         do {
             try viewContext.save()
         } catch {
-            print("Ошибка сохранения игры по бильярду: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения игры по бильярду: \(error.localizedDescription)")
         }
     }
 }

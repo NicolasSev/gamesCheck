@@ -109,7 +109,7 @@ class VisionObjectRecognitionViewController: ViewController {
     }
     
     @objc private func capturePhoto() {
-        print("📷 Захват фото для обработки")
+        debugLog("📷 Захват фото для обработки")
         
         // Обновляем текст индикатора
         if let label = objc_getAssociatedObject(self, "processingLabel") as? UILabel {
@@ -124,7 +124,7 @@ class VisionObjectRecognitionViewController: ViewController {
         if let sampleBuffer = lastSampleBuffer {
             processFrame(sampleBuffer: sampleBuffer)
         } else {
-            print("⚠️ Нет сохраненного кадра, ожидаем следующий...")
+            debugLog("⚠️ Нет сохраненного кадра, ожидаем следующий...")
             if let label = objc_getAssociatedObject(self, "processingLabel") as? UILabel {
                 label.text = "Ожидание кадра..."
             }
@@ -173,22 +173,22 @@ class VisionObjectRecognitionViewController: ViewController {
     }
 
     func stopCaptureSession() {
-        print("🛑 Останавливаем камеру")
+        debugLog("🛑 Останавливаем камеру")
         teardownAVCapture()
         session.stopRunning()
     }
 
     private func setupModel() {
         guard let modelURL = Bundle.main.url(forResource: "yolov8m_synthetic", withExtension: "mlmodelc") else {
-            print("❌ yolov8m_synthetic.mlmodelc не найден в Bundle")
+            debugLog("❌ yolov8m_synthetic.mlmodelc не найден в Bundle")
             return
         }
 
         do {
             model = try MLModel(contentsOf: modelURL)
-            print("✅ Модель успешно загружена")
+            debugLog("✅ Модель успешно загружена")
         } catch {
-            print("❌ Не удалось загрузить модель: \(error)")
+            debugLog("❌ Не удалось загрузить модель: \(error)")
         }
     }
 
@@ -210,7 +210,7 @@ class VisionObjectRecognitionViewController: ViewController {
     
     private func processFrame(sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-            print("❌ Нет pixelBuffer")
+            debugLog("❌ Нет pixelBuffer")
             return
         }
         
@@ -242,7 +242,7 @@ class VisionObjectRecognitionViewController: ViewController {
             let text = self.createTextSubLayerInBounds(card.rect, identifier: card.displayName, confidence: card.confidence)
             shape.addSublayer(text)
             detectionOverlay.addSublayer(shape)
-            print("🃏 \(card.displayName) conf=\(String(format: "%.2f", card.confidence))")
+            debugLog("🃏 \(card.displayName) conf=\(String(format: "%.2f", card.confidence))")
         }
         
         updateLayerGeometry()
@@ -267,12 +267,12 @@ class VisionObjectRecognitionViewController: ViewController {
         
         // Показываем сообщение о результате
         if aggregatedCards.isEmpty {
-            print("⚠️ Карты не распознаны. Попробуйте:")
-            print("   - Улучшить освещение")
-            print("   - Поднести карты ближе к камере")
-            print("   - Убедиться, что карты в фокусе")
+            debugLog("⚠️ Карты не распознаны. Попробуйте:")
+            debugLog("   - Улучшить освещение")
+            debugLog("   - Поднести карты ближе к камере")
+            debugLog("   - Убедиться, что карты в фокусе")
         } else {
-            print("✅ Распознано карт: \(aggregatedCards.count)")
+            debugLog("✅ Распознано карт: \(aggregatedCards.count)")
         }
     }
 
@@ -306,20 +306,20 @@ class VisionObjectRecognitionViewController: ViewController {
         
         // Проверяем структуру массивов
         guard confidenceArray.count > 0, coordinates.count > 0 else {
-            print("⚠️ Пустые массивы")
+            debugLog("⚠️ Пустые массивы")
             return []
         }
         
         // Выводим информацию о структуре для отладки (только первый раз)
         if !hasLoggedStructure {
-            print("📊 Confidence shape: \(confidenceArray.shape.map { $0.intValue }), count: \(confidenceArray.count)")
-            print("📊 Coordinates shape: \(coordinates.shape.map { $0.intValue }), count: \(coordinates.count)")
+            debugLog("📊 Confidence shape: \(confidenceArray.shape.map { $0.intValue }), count: \(confidenceArray.count)")
+            debugLog("📊 Coordinates shape: \(coordinates.shape.map { $0.intValue }), count: \(coordinates.count)")
             
             // Выводим первые несколько значений для отладки
             let confPtr = UnsafeMutablePointer<Float32>(OpaquePointer(confidenceArray.dataPointer))
             let coordPtr = UnsafeMutablePointer<Float32>(OpaquePointer(coordinates.dataPointer))
-            print("📊 Первые 10 значений confidence: \(Array(0..<min(10, confidenceArray.count)).map { confPtr[$0] })")
-            print("📊 Первые 10 значений coordinates: \(Array(0..<min(10, coordinates.count)).map { coordPtr[$0] })")
+            debugLog("📊 Первые 10 значений confidence: \(Array(0..<min(10, confidenceArray.count)).map { confPtr[$0] })")
+            debugLog("📊 Первые 10 значений coordinates: \(Array(0..<min(10, coordinates.count)).map { coordPtr[$0] })")
             hasLoggedStructure = true
         }
         
@@ -340,7 +340,7 @@ class VisionObjectRecognitionViewController: ViewController {
             numClasses = 13 // 13 классов для пик (можно расширить)
             numBoxes = confidenceArray.count / numClasses
         } else {
-            print("❌ Неподдерживаемая структура confidence: \(numDimensions) размерностей")
+            debugLog("❌ Неподдерживаемая структура confidence: \(numDimensions) размерностей")
             return []
         }
         
@@ -353,7 +353,7 @@ class VisionObjectRecognitionViewController: ViewController {
             coordStride = 4
             let coordNumBoxes = coordinates.shape[0].intValue
             if coordNumBoxes != numBoxes {
-                print("⚠️ Несоответствие количества boxes: confidence=\(numBoxes), coordinates=\(coordNumBoxes)")
+                debugLog("⚠️ Несоответствие количества boxes: confidence=\(numBoxes), coordinates=\(coordNumBoxes)")
                 numBoxes = min(numBoxes, coordNumBoxes)
             }
         } else if coordDimensions == 1 {
@@ -361,7 +361,7 @@ class VisionObjectRecognitionViewController: ViewController {
             coordStride = 4
             numBoxes = min(numBoxes, coordinates.count / coordStride)
         } else {
-            print("❌ Неподдерживаемая структура coordinates: \(coordDimensions) размерностей")
+            debugLog("❌ Неподдерживаемая структура coordinates: \(coordDimensions) размерностей")
             return []
         }
         
@@ -404,7 +404,7 @@ class VisionObjectRecognitionViewController: ViewController {
             }
             
             if i < 3 { // Логируем первые 3 box для отладки
-                print("📦 Box \(i): max overall=\(String(format: "%.3f", maxOverallScore)), best spade=\(String(format: "%.3f", bestScore))")
+                debugLog("📦 Box \(i): max overall=\(String(format: "%.3f", maxOverallScore)), best spade=\(String(format: "%.3f", bestScore))")
             }
             
             if bestScore < confidenceThreshold || bestSpadeIndex < 0 { continue }
@@ -443,7 +443,7 @@ class VisionObjectRecognitionViewController: ViewController {
             let rect = CGRect(x: originX, y: originY, width: rectWidth, height: rectHeight)
             let label = bestSpadeIndex < spadeLabels.count ? spadeLabels[bestSpadeIndex] : "Unknown"
             
-            print("✅ Найдена карта: \(label) с confidence=\(String(format: "%.3f", bestScore)) в rect=\(rect)")
+            debugLog("✅ Найдена карта: \(label) с confidence=\(String(format: "%.3f", bestScore)) в rect=\(rect)")
             predictions.append(YOLOPrediction(rect: rect, confidence: bestScore, label: label))
         }
         

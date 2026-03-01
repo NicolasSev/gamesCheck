@@ -17,7 +17,7 @@ struct AddGameSheet: View {
     @State private var gameType: GameType = .poker  // По умолчанию игра покер
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Тип игры")) {
                     Picker("Тип игры", selection: $gameType) {
@@ -26,11 +26,13 @@ struct AddGameSheet: View {
                         }
                     }
                     .pickerStyle(SegmentedPickerStyle())
+                    .accessibilityIdentifier("add_game_type_picker")
                 }
                 
                 Section(header: Text("Дата и время игры")) {
                     DatePicker("Дата и время игры", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
                         .datePickerStyle(GraphicalDatePickerStyle())
+                        .accessibilityIdentifier("add_game_date_picker")
                 }
             }
             .navigationTitle("Новая игра")
@@ -45,6 +47,7 @@ struct AddGameSheet: View {
                         createGame()
                         isPresented = false
                     }
+                    .accessibilityIdentifier("add_game_save_button")
                 }
             }
         }
@@ -70,7 +73,7 @@ struct AddGameSheet: View {
                 try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: newGame.gameId)
             }
         } catch {
-            print("Ошибка сохранения игры: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения игры: \(error.localizedDescription)")
         }
     }
 }

@@ -68,6 +68,9 @@ struct PlayersTabView: View {
         .listStyle(.insetGrouped)
         .searchable(text: $searchText, prompt: "Поиск игрока")
         .navigationTitle("Игроки")
+        .task {
+            try? await CloudKitSyncService.shared.fetchPlayerProfiles()
+        }
         .sheet(item: $selectedProfileWrapper) { wrapper in
             PlayerPublicProfileView(profile: wrapper.profile, isSuperAdmin: isSuperAdmin)
                 .environment(\.managedObjectContext, viewContext)
@@ -119,11 +122,12 @@ struct PlayerPublicProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var statistics: UserStatistics?
     @State private var games: [Game] = []
+    @State private var showSuperAdminInfo = false
 
     private let gameService = GameService()
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             OverviewTabView(
                 statistics: statistics,
                 games: games,
@@ -141,7 +145,16 @@ struct PlayerPublicProfileView: View {
                 }
                 if isSuperAdmin {
                     ToolbarItem(placement: .primaryAction) {
-                        SuperAdminProfileInfo(profile: profile)
+                        Button {
+                            showSuperAdminInfo = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .popover(isPresented: $showSuperAdminInfo) {
+                            SuperAdminProfileInfo(profile: profile)
+                                .padding()
+                                .frame(minWidth: 250, minHeight: 150)
+                        }
                     }
                 }
             }

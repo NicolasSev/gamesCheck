@@ -16,7 +16,7 @@ struct CardPickerView: View {
     private let suits: [CardSuit] = [.spades, .hearts, .diamonds, .clubs]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     ForEach(suits, id: \.self) { suit in

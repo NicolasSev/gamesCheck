@@ -1,0 +1,14 @@
+---
+description: Тесты — in-memory Core Data, моки, Swift Testing
+globs: FishAndChipsTests/**/*.swift
+alwaysApply: false
+---
+
+# Testing
+
+- **PersistenceController(inMemory: true)** для изолированных тестов
+- **Моки**: MockKeychainService, MockAuthCloudKitSync — не использовать .shared в тестах
+- **Swift Testing** (preferred): `@Test`, `#expect`, `@MainActor`
+- **XCTest**: `async throws` для async методов, `try await` для вызовов
+- **Naming**: `testMethodName_Scenario` или `methodName_scenario` (Swift Testing)
+- **Setup/Teardown**: очищать keychain, persistence в tearDown

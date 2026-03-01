@@ -17,7 +17,7 @@ struct JoinGameByCodeSheet: View {
     @State private var isLoading = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 // Иконка
                 Image(systemName: "link.circle.fill")
@@ -189,7 +189,7 @@ struct JoinGameByCodeSheet: View {
             return
         }
         
-        print("✅ JoinGameByCodeSheet: Found game \(gameId), opening via DeepLinkService")
+        debugLog("✅ JoinGameByCodeSheet: Found game \(gameId), opening via DeepLinkService")
         
         // Использовать DeepLinkService для открытия игры
         deepLinkService.activeDeepLink = .game(gameId)

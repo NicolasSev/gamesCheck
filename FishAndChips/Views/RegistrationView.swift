@@ -15,18 +15,20 @@ struct RegistrationView: View {
     @State private var showConfirmPassword = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Учетные данные") {
                     TextField("Имя пользователя", text: $username)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .accessibilityIdentifier("register_username")
 
                     HStack {
                         TextField("Email", text: $email)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.emailAddress)
+                            .accessibilityIdentifier("register_email")
                         
                         if !email.isEmpty {
                             Image(systemName: authViewModel.validateEmail(email) ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -53,6 +55,7 @@ struct RegistrationView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+                    .accessibilityIdentifier("register_password")
                     
                     HStack {
                         if showConfirmPassword {
@@ -65,6 +68,7 @@ struct RegistrationView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+                    .accessibilityIdentifier("register_confirm_password")
 
                     if !password.isEmpty {
                         let validation = authViewModel.validatePassword(password)
@@ -104,6 +108,7 @@ struct RegistrationView: View {
                         }
                     }
                     .disabled(!isValid || authViewModel.isLoading)
+                    .accessibilityIdentifier("register_button")
                 }
             }
             .navigationTitle("Регистрация")
@@ -156,9 +161,9 @@ struct RegistrationView: View {
                 }
             } catch {
                 // Логируем полную информацию об ошибке
-                print("❌ [REGISTRATION_VIEW] Unexpected error: \(error)")
-                print("❌ [REGISTRATION_VIEW] Error type: \(type(of: error))")
-                print("❌ [REGISTRATION_VIEW] Localized: \(error.localizedDescription)")
+                debugLog("❌ [REGISTRATION_VIEW] Unexpected error: \(error)")
+                debugLog("❌ [REGISTRATION_VIEW] Error type: \(type(of: error))")
+                debugLog("❌ [REGISTRATION_VIEW] Localized: \(error.localizedDescription)")
                 
                 // Показываем более информативное сообщение
                 await MainActor.run {

@@ -15,7 +15,7 @@ struct PlayerSelectionSheet: View {
     let onConfirm: () -> Void
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Инструкция
                 VStack(alignment: .leading, spacing: 8) {
@@ -109,7 +109,7 @@ struct PlayerSelectionSheet: View {
                 playerNames: ["Ник", "ник", "Алекс", "Борис", "Я", "я", "Вова"],
                 selectedPlayerNames: $selectedPlayers,
                 onConfirm: {
-                    print("Selected: \(selectedPlayers.joined(separator: ", "))")
+                    debugLog("Selected: \(selectedPlayers.joined(separator: ", "))")
                 }
             )
         }

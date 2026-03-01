@@ -21,7 +21,7 @@ struct StatisticsTabView: View {
                             .font(.headline)
                             .foregroundColor(.white)
                         
-                        BuyinsChartView(data: chartData, formatCurrency: formatCurrency)
+                        BuyinsChartView(data: chartData, formatCurrency: { $0.formatCurrency() })
                             .padding(.bottom, 8)
                     }
                     
@@ -39,7 +39,7 @@ struct StatisticsTabView: View {
                                         icon: "arrow.up.circle.fill",
                                         color: .green,
                                         record: biggestWin,
-                                        formatValue: formatCurrency,
+                                        formatValue: { $0.formatCurrency() },
                                         onTap: {
                                             if let gameId = biggestWin.gameId {
                                                 selectedGame = persistence.fetchGame(byId: gameId)
@@ -55,7 +55,7 @@ struct StatisticsTabView: View {
                                         icon: "arrow.down.circle.fill",
                                         color: .red,
                                         record: biggestLoss,
-                                        formatValue: formatCurrency,
+                                        formatValue: { $0.formatCurrency() },
                                         onTap: {
                                             if let gameId = biggestLoss.gameId {
                                                 selectedGame = persistence.fetchGame(byId: gameId)
@@ -71,7 +71,7 @@ struct StatisticsTabView: View {
                                         icon: "creditcard.fill",
                                         color: .blue,
                                         record: maxBuyins,
-                                        formatValue: formatCurrency,
+                                        formatValue: { $0.formatCurrency() },
                                         onTap: {
                                             if let gameId = maxBuyins.gameId {
                                                 selectedGame = persistence.fetchGame(byId: gameId)
@@ -87,7 +87,7 @@ struct StatisticsTabView: View {
                                         icon: "banknote.fill",
                                         color: .orange,
                                         record: mostExpensiveGame,
-                                        formatValue: formatCurrency,
+                                        formatValue: { $0.formatCurrency() },
                                         onTap: {
                                             if let gameId = mostExpensiveGame.gameId {
                                                 selectedGame = persistence.fetchGame(byId: gameId)
@@ -172,16 +172,6 @@ struct StatisticsTabView: View {
         }
     }
 
-    private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "₸"
-        formatter.currencyCode = "KZT"
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "₸0"
-    }
-    
     private func findGameForStreak(_ streak: StreakRecord) -> Game? {
         // Ищем игру по дате (используем startDate) и имени игрока
         let calendar = Calendar.current

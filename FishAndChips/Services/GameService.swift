@@ -35,7 +35,7 @@ final class GameService {
                 .filter { !$0.softDeleted }
                 .sorted { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }
         } catch {
-            print("Error fetching participated games: \(error)")
+            debugLog("Error fetching participated games: \(error)")
             return []
         }
     }
@@ -87,7 +87,7 @@ final class GameService {
         do {
             return try context.fetch(request)
         } catch {
-            print("Error fetching all games: \(error)")
+            debugLog("Error fetching all games: \(error)")
             return []
         }
     }

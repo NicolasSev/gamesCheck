@@ -1,0 +1,20 @@
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+
+# Build
+build/
+*.moved-aside
+*.pbxuser
+*.mode1v3
+*.mode2v3
+
+# Archives, large binaries
+*.xcarchive
+*.ipa
+*.dSYM.zip
+
+# Archived docs (legacy)
+docs/archive/

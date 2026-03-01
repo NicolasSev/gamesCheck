@@ -19,7 +19,7 @@ struct DebugView: View {
     @State private var gamesRefreshSuccess = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("User Info") {
                     Text(userInfo)

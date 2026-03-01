@@ -214,7 +214,7 @@ class DataImportService {
     /// Обновляет creatorUserId для всех игр текущего пользователя, у которых он не установлен
     func updateCreatorUserIdForAllGames() throws {
         guard let userId = self.userId else {
-            print("⚠️ No userId provided, skipping creatorUserId migration")
+            debugLog("⚠️ No userId provided, skipping creatorUserId migration")
             return
         }
         
@@ -229,9 +229,9 @@ class DataImportService {
         
         if !games.isEmpty {
             try viewContext.save()
-            print("✅ Updated creatorUserId for \(games.count) games")
+            debugLog("✅ Updated creatorUserId for \(games.count) games")
         } else {
-            print("✅ No games need creatorUserId migration")
+            debugLog("✅ No games need creatorUserId migration")
         }
     }
     
@@ -362,7 +362,7 @@ class DataImportService {
                         }
                     }
                 } catch {
-                    print("⚠️ [MaterializedViews] Failed to update: \(error)")
+                    debugLog("⚠️ [MaterializedViews] Failed to update: \(error)")
                 }
             }
         }

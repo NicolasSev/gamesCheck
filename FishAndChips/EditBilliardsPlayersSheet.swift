@@ -23,7 +23,7 @@ struct EditBilliardsPlayersSheet: View {
     @State private var selectedPlayer2: Player?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Выберите игроков (2 игрока)")) {
                     Picker("Игрок 1", selection: $selectedPlayer1) {
@@ -68,7 +68,7 @@ struct EditBilliardsPlayersSheet: View {
         do {
             try viewContext.save()
         } catch {
-            print("Ошибка сохранения игроков: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения игроков: \(error.localizedDescription)")
         }
     }
 }

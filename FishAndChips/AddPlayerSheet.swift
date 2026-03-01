@@ -12,7 +12,7 @@ struct AddPlayerSheet: View {
     @State private var refreshId = UUID()  // Новый идентификатор для форсирования обновления
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Text("Добавить игрока")
                     .font(.headline)
@@ -72,7 +72,7 @@ struct AddPlayerSheet: View {
             // Обновляем идентификатор, чтобы List перерисовался
             refreshId = UUID()
         } catch {
-            print("Ошибка сохранения: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения: \(error.localizedDescription)")
         }
     }
 }

@@ -1,0 +1,14 @@
+---
+description: Core Data — threading, save patterns, fetch limits
+globs: FishAndChips/**/*.swift
+alwaysApply: false
+---
+
+# Core Data
+
+- **viewContext** только на MainActor
+- **Save**: проверять `context.hasChanges` перед `try context.save()`
+- **Fetch limits**: использовать `fetchLimit` для больших наборов, пагинация при >400 записей
+- **UUID**: использовать `gameId`, `userId`, `profileId` — не objectID для cross-device
+- **Lightweight migration**: `NSMigratePersistentStoresAutomaticallyOption`, `NSInferMappingModelAutomaticallyOption`
+- **При изменении модели** → обновить `docs/DATA_DIAGRAM.md`

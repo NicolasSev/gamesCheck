@@ -119,6 +119,6 @@ class MaterializedViewsService {
         for game in games {
             try? await updateGameSummary(gameId: game.gameId)
         }
-        print("📊 [MaterializedViews] Rebuilt \(games.count) GameSummary records")
+        debugLog("📊 [MaterializedViews] Rebuilt \(games.count) GameSummary records")
     }
 }

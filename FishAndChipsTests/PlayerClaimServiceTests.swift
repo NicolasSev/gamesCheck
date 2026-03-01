@@ -167,13 +167,13 @@ final class PlayerClaimServiceTests: XCTestCase {
     
     // MARK: - Approve Claim Tests
     
-    func testApproveClaim_Success() throws {
+    func testApproveClaim_Success() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        try sut.approveClaim(
+        try await sut.approveClaim(
             claimId: claim.claimId,
             resolverUserId: hostUser.userId,
             notes: "Approved"
@@ -186,55 +186,54 @@ final class PlayerClaimServiceTests: XCTestCase {
         XCTAssertEqual(updatedClaim?.notes, "Approved")
     }
     
-    func testApproveClaim_Unauthorized() throws {
+    func testApproveClaim_Unauthorized() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        // Try to approve with wrong user
-        XCTAssertThrowsError(
-            try sut.approveClaim(
+        do {
+            try await sut.approveClaim(
                 claimId: claim.claimId,
                 resolverUserId: testUser.userId // Not the host
             )
-        ) { error in
-            XCTAssertEqual(error as? ClaimError, ClaimError.unauthorized)
+            XCTFail("Should throw unauthorized")
+        } catch let error as ClaimError {
+            XCTAssertEqual(error, ClaimError.unauthorized)
         }
     }
     
-    func testApproveClaim_AlreadyResolved() throws {
+    func testApproveClaim_AlreadyResolved() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        // Approve once
-        try sut.approveClaim(
+        try await sut.approveClaim(
             claimId: claim.claimId,
             resolverUserId: hostUser.userId
         )
         
-        // Try to approve again
-        XCTAssertThrowsError(
-            try sut.approveClaim(
+        do {
+            try await sut.approveClaim(
                 claimId: claim.claimId,
                 resolverUserId: hostUser.userId
             )
-        ) { error in
-            XCTAssertEqual(error as? ClaimError, ClaimError.claimAlreadyResolved)
+            XCTFail("Should throw claimAlreadyResolved")
+        } catch let error as ClaimError {
+            XCTAssertEqual(error, ClaimError.claimAlreadyResolved)
         }
     }
     
     // MARK: - Reject Claim Tests
     
-    func testRejectClaim_Success() throws {
+    func testRejectClaim_Success() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        try sut.rejectClaim(
+        try await sut.rejectClaim(
             claimId: claim.claimId,
             resolverUserId: hostUser.userId,
             notes: "Not valid"
@@ -246,31 +245,32 @@ final class PlayerClaimServiceTests: XCTestCase {
         XCTAssertEqual(updatedClaim?.notes, "Not valid")
     }
     
-    func testRejectClaim_Unauthorized() throws {
+    func testRejectClaim_Unauthorized() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        XCTAssertThrowsError(
-            try sut.rejectClaim(
+        do {
+            try await sut.rejectClaim(
                 claimId: claim.claimId,
                 resolverUserId: testUser.userId // Not the host
             )
-        ) { error in
-            XCTAssertEqual(error as? ClaimError, ClaimError.unauthorized)
+            XCTFail("Should throw unauthorized")
+        } catch let error as ClaimError {
+            XCTAssertEqual(error, ClaimError.unauthorized)
         }
     }
     
     // MARK: - PlayerProfile Integration Tests
     
-    func testApproveClaim_CreatesPlayerProfile() throws {
+    func testApproveClaim_CreatesPlayerProfile() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        try sut.approveClaim(
+        try await sut.approveClaim(
             claimId: claim.claimId,
             resolverUserId: hostUser.userId
         )
@@ -282,13 +282,13 @@ final class PlayerClaimServiceTests: XCTestCase {
         XCTAssertEqual(profile?.displayName, testUser.username)
     }
     
-    func testApproveClaim_LinksGameWithPlayerToProfile() throws {
+    func testApproveClaim_LinksGameWithPlayerToProfile() async throws {
         let claim = try sut.submitClaim(
             gameWithPlayer: testGameWithPlayer,
             claimantUserId: testUser.userId
         )
         
-        try sut.approveClaim(
+        try await sut.approveClaim(
             claimId: claim.claimId,
             resolverUserId: hostUser.userId
         )

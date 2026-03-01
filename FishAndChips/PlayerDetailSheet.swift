@@ -24,7 +24,7 @@ struct PlayerDetailSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List(filteredGameWithPlayers) { gwp in
                 VStack(alignment: .leading, spacing: 4) {
                     if let timestamp = gwp.game?.timestamp {

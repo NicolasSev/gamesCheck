@@ -14,7 +14,6 @@ struct OverviewTabView: View {
     @Environment(\.managedObjectContext) private var viewContext
     private let persistence = PersistenceController.shared
     @State private var animationId = UUID() // Идентификатор для перезапуска анимации
-    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     @State private var expandedYears: Set<Int> = [] // Отслеживаем раскрытые годы
     @State private var expandedMonths: Set<String> = [] // Отслеживаем раскрытые месяцы
     
@@ -38,6 +37,7 @@ struct OverviewTabView: View {
             VStack(spacing: 20) {
                 if let stats = statistics {
                     BalanceCardView(balance: stats.currentBalance, isPositive: stats.isPositive, animationId: animationId)
+                        .accessibilityIdentifier("overview_balance_card")
 
                     LazyVGrid(columns: [GridItem(), GridItem()], spacing: 15) {
                         // Первая строка: Всего игр / MVP раз
@@ -92,7 +92,7 @@ struct OverviewTabView: View {
                         // Третья строка: Лучшая сессия / Средний профит
                         StatCardView(
                             title: "Лучшая сессия",
-                            value: formatCurrency(stats.bestSession),
+                            value: stats.bestSession.formatCurrency(),
                             icon: "star.fill",
                             color: .yellow,
                             numericValue: Double(truncating: NSDecimalNumber(decimal: stats.bestSession)),
@@ -103,7 +103,7 @@ struct OverviewTabView: View {
 
                         StatCardView(
                             title: "Средний профит",
-                            value: formatCurrency(stats.averageProfit),
+                            value: stats.averageProfit.formatCurrency(),
                             icon: "tengesign.circle.fill",
                             color: .purple,
                             numericValue: Double(truncating: NSDecimalNumber(decimal: stats.averageProfit)),
@@ -126,6 +126,15 @@ struct OverviewTabView: View {
                                     try? viewContext.save()
                                     Task {
                                         try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+                                        if newValue {
+                                            Task { @MainActor in
+                                                NotificationService.shared.saveNotificationToStore(
+                                                    title: "Профиль публичный",
+                                                    body: "Ваш профиль теперь виден всем игрокам",
+                                                    type: "profile_public_self"
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             ))
@@ -134,7 +143,16 @@ struct OverviewTabView: View {
                                 if !profile.isPublic {
                                     profile.isPublic = true
                                     try? viewContext.save()
-                                    Task { try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile) }
+                                    Task {
+                                        try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+                                        await MainActor.run {
+                                            NotificationService.shared.saveNotificationToStore(
+                                                title: "Профиль публичный",
+                                                body: "Ваш профиль теперь виден всем игрокам",
+                                                type: "profile_public_self"
+                                            )
+                                        }
+                                    }
                                 }
                                 let url = URL(string: "fishchips://profile/\(profile.profileId.uuidString)")!
                                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
@@ -199,7 +217,7 @@ struct OverviewTabView: View {
                                         }
                                     },
                                     persistence: persistence,
-                                    formatCurrency: formatCurrency,
+                                    formatCurrency: { $0.formatCurrency() },
                                     targetUserId: targetUserId,
                                     targetPlayerName: selectedPlayerNameForStats
                                 )
@@ -219,46 +237,15 @@ struct OverviewTabView: View {
             .padding(.vertical)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("overview_content")
         .scrollContentBackground(.hidden)
         .refreshable {
             animationId = UUID()
             onRefresh?()
         }
-        .background(
-            Group {
-                if let image = backgroundImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .ignoresSafeArea()
-                        .overlay(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.4),
-                                    Color.black.opacity(0.6)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .ignoresSafeArea()
-                        )
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
-            }
-        )
+        .casinoBackground()
     }
 
-    private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "₸"
-        formatter.currencyCode = "KZT"
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "₸0"
-    }
-    
     // Группировка игр по годам и месяцам
     private var gamesByYear: [YearGameData] {
         let calendar = Calendar.current
@@ -386,216 +373,6 @@ struct OverviewTabView: View {
         components.month = month
         components.day = 1
         return Calendar.current.date(from: components)
-    }
-}
-
-// Структура для данных месяца
-struct MonthGameData {
-    let monthKey: String
-    let monthName: String
-    var games: [Game]
-    var totalProfit: Decimal
-    var totalBuyins: Decimal
-    var totalCashouts: Decimal
-    var gamesCount: Int
-}
-
-// Структура для данных года
-struct YearGameData {
-    let year: Int
-    let months: [MonthGameData]
-    let totalProfit: Decimal
-    let totalGames: Int
-}
-
-// Компонент аккордеона для года
-struct YearAccordionView: View {
-    let yearData: YearGameData
-    let isYearExpanded: Bool
-    @Binding var expandedMonths: Set<String>
-    let onYearToggle: () -> Void
-    let persistence: PersistenceController
-    let formatCurrency: (Decimal) -> String
-    let targetUserId: UUID?
-    let targetPlayerName: String?
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Заголовок года (кликабельный)
-            Button(action: {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    onYearToggle()
-                }
-            }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(yearData.year)")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        HStack(spacing: 12) {
-                            Text("\(yearData.totalGames) игр")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
-                            
-                            Text("Профит: \(formatCurrency(yearData.totalProfit))")
-                                .font(.caption)
-                                .foregroundColor(yearData.totalProfit >= 0 ? .green : .red)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: isYearExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                        .rotationEffect(.degrees(isYearExpanded ? 0 : -90))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isYearExpanded)
-                }
-                .padding()
-                .liquidGlass(cornerRadius: 12)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            // Раскрытый контент с месяцами
-            if isYearExpanded {
-                VStack(spacing: 8) {
-                    ForEach(yearData.months, id: \.monthKey) { monthData in
-                        MonthAccordionView(
-                            monthData: monthData,
-                            isExpanded: expandedMonths.contains(monthData.monthKey),
-                            onToggle: {
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                    if expandedMonths.contains(monthData.monthKey) {
-                                        expandedMonths.remove(monthData.monthKey)
-                                    } else {
-                                        expandedMonths.insert(monthData.monthKey)
-                                    }
-                                }
-                            },
-                            persistence: persistence,
-                            formatCurrency: formatCurrency,
-                            targetUserId: targetUserId,
-                            targetPlayerName: targetPlayerName
-                        )
-                        .padding(.leading, 16) // Отступ слева для вложенных месяцев
-                    }
-                }
-                .padding(.top, 8)
-                .transition(.asymmetric(
-                    insertion: .scale(scale: 0.95, anchor: .top).combined(with: .opacity),
-                    removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
-                ))
-            }
-        }
-    }
-}
-
-// Компонент аккордеона для месяца
-struct MonthAccordionView: View {
-    let monthData: MonthGameData
-    let isExpanded: Bool
-    let onToggle: () -> Void
-    let persistence: PersistenceController
-    let formatCurrency: (Decimal) -> String
-    let targetUserId: UUID?
-    let targetPlayerName: String?
-    
-    private func gameProfit(for game: Game) -> Decimal? {
-        
-        let profile: PlayerProfile? = {
-            if let userId = targetUserId {
-                return persistence.fetchPlayerProfile(byUserId: userId)
-            }
-            return nil
-        }()
-        
-        let participations = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
-        
-        // Ищем участие: сначала по профилю, затем по имени (без учета регистра)
-        let myParticipation: GameWithPlayer? = {
-            if let profile = profile {
-                return participations.first(where: { $0.playerProfile == profile })
-            } else if let targetName = targetPlayerName {
-                return participations.first { gwp in
-                    guard let player = gwp.player, let playerName = player.name else { return false }
-                    return playerName.lowercased() == targetName.lowercased()
-                }
-            }
-            return nil
-        }()
-        
-        guard let myParticipation = myParticipation else {
-            return nil // Пользователь не участвовал
-        }
-        
-        let buyin = Decimal(Int(myParticipation.buyin))
-        let cashout = Decimal(Int(myParticipation.cashout))
-        return cashout - (buyin * 2000)
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Заголовок месяца (кликабельный)
-            Button(action: {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    onToggle()
-                }
-            }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(monthData.monthName)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        HStack(spacing: 12) {
-                            Text("\(monthData.gamesCount) игр")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
-                            
-                            Text("Профит: \(formatCurrency(monthData.totalProfit))")
-                                .font(.caption)
-                                .foregroundColor(monthData.totalProfit >= 0 ? .green : .red)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isExpanded)
-                }
-                .padding()
-                .liquidGlass(cornerRadius: 12)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            // Раскрытый контент с играми
-            if isExpanded {
-                VStack(spacing: 8) {
-                    ForEach(monthData.games.sorted(by: { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }), id: \.gameId) { game in
-                        NavigationLink {
-                            if let gameType = game.gameType, gameType == "Бильярд" {
-                                BilliardGameDetailView(game: game)
-                            } else {
-                                GameDetailView(game: game)
-                            }
-                        } label: {
-                            GameRowView(game: game, userProfit: gameProfit(for: game))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.leading, 16) // Отступ слева для вложенных игр
-                    }
-                }
-                .padding(.top, 8)
-                .transition(.asymmetric(
-                    insertion: .scale(scale: 0.95, anchor: .top).combined(with: .opacity),
-                    removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
-                ))
-            }
-        }
     }
 }
 

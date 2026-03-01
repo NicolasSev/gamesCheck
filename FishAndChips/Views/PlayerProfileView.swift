@@ -38,7 +38,7 @@ struct PlayerProfileView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if let selectedName = selectedPlayerName {
                     OverviewTabView(
@@ -181,7 +181,7 @@ struct PlayerProfileView: View {
             }
             playerNames = Array(uniqueNames).sorted()
         } catch {
-            print("❌ [PlayerProfileView] Error loading player names: \(error)")
+            debugLog("❌ [PlayerProfileView] Error loading player names: \(error)")
             playerNames = []
         }
         isLoading = false
@@ -211,7 +211,7 @@ struct PlayerProfileView: View {
 
             statistics = calculatePlayerStatistics(playerNames: playerNames, games: games)
         } catch {
-            print("❌ Error loading games: \(error)")
+            debugLog("❌ Error loading games: \(error)")
         }
     }
     
@@ -309,7 +309,7 @@ struct PlayerProfileSelectionSheet: View {
     @State private var isLoading = true
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if isLoading {
                     ProgressView("Загрузка...")
@@ -369,7 +369,7 @@ struct PlayerProfileSelectionSheet: View {
             
             playerNames = Array(uniqueNames).sorted()
         } catch {
-            print("❌ [PlayerProfileSelectionSheet] Error loading player names: \(error)")
+            debugLog("❌ [PlayerProfileSelectionSheet] Error loading player names: \(error)")
             playerNames = []
         }
         isLoading = false

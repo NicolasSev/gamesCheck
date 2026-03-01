@@ -15,7 +15,7 @@ struct AddPlayerToGameSheet: View {
     @State private var selectedPlayers: Set<Player> = []
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 ForEach(players, id: \.self) { player in
                     Button(action: {
@@ -94,7 +94,7 @@ struct AddPlayerToGameSheet: View {
                 }
             }
         } catch {
-            print("Ошибка сохранения игроков в игру: \(error.localizedDescription)")
+            debugLog("Ошибка сохранения игроков в игру: \(error.localizedDescription)")
         }
 
         selectedPlayers.removeAll()

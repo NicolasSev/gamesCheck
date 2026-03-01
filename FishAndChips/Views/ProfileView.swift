@@ -5,7 +5,6 @@ struct ProfileView: View {
     @EnvironmentObject var notificationService: NotificationService
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) var dismiss
-    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     @State private var showingPendingClaims = false
     @State private var showingMyClaims = false
     @State private var showingEditUsername = false
@@ -34,7 +33,7 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                     VStack(spacing: 16) {
                         // Версия и номер сборки
@@ -241,6 +240,7 @@ struct ProfileView: View {
                                 .padding(.vertical, 8)
                             }
                             .disabled(syncService.isSyncing)
+                            .accessibilityIdentifier("profile_sync_button")
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(syncButtonColor.opacity(0.3))
@@ -273,7 +273,7 @@ struct ProfileView: View {
                                         do {
                                             try await syncService.pushPendingData()
                                         } catch {
-                                            print("❌ Failed to push pending data: \(error)")
+                                            debugLog("❌ Failed to push pending data: \(error)")
                                         }
                                     }
                                 }) {
@@ -317,11 +317,11 @@ struct ProfileView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        print("🧹 Starting cleanup of invalid claims...")
+                                        debugLog("🧹 Starting cleanup of invalid claims...")
                                         try await CloudKitSyncService.shared.cleanupInvalidClaims()
-                                        print("✅ Cleanup completed")
+                                        debugLog("✅ Cleanup completed")
                                     } catch {
-                                        print("❌ Cleanup failed: \(error)")
+                                        debugLog("❌ Cleanup failed: \(error)")
                                     }
                                 }
                             }) {
@@ -375,40 +375,20 @@ struct ProfileView: View {
                                 .padding()
                                 .liquidGlass(cornerRadius: 15)
                         }
+                        .accessibilityIdentifier("profile_logout_button")
                         .padding(.horizontal)
                     }
                     .padding(.horizontal, 32)
                     .padding(.vertical)
             }
-            .background(
-                Group {
-                    if let image = backgroundImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .ignoresSafeArea()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.4),
-                                        Color.black.opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                            )
-                    } else {
-                        Color.black.ignoresSafeArea()
-                    }
-                }
-            )
+            .casinoBackground()
             .navigationTitle("Профиль")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }
                         .foregroundColor(.white)
+                        .accessibilityIdentifier("profile_button")
                 }
             }
             .sheet(isPresented: $showingPendingClaims) {
@@ -427,6 +407,7 @@ struct ProfileView: View {
                 TextField("Новое имя", text: $newUsername)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .accessibilityIdentifier("profile_username_field")
                 
                 Button("Отмена", role: .cancel) {
                     newUsername = ""
@@ -483,7 +464,7 @@ struct ProfileView: View {
                 syncErrorText = error.localizedDescription
             }
             
-            print("❌ [SYNC] Error: \(error.localizedDescription)")
+            debugLog("❌ [SYNC] Error: \(error.localizedDescription)")
             
             // Возврат к синему через 2 секунды
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек

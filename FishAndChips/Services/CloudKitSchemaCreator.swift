@@ -26,17 +26,17 @@ class CloudKitSchemaCreator {
     /// Creates sample records to automatically generate schema in Development mode
     /// CloudKit will infer the schema from these records
     func createDevelopmentSchema() async throws {
-        print("🔧 Creating CloudKit schema in Development mode...")
-        print("")
-        print("📋 PRIVATE DATABASE (личные данные пользователя):")
+        debugLog("🔧 Creating CloudKit schema in Development mode...")
+        debugLog("")
+        debugLog("📋 PRIVATE DATABASE (личные данные пользователя):")
         
         // Private Database records
         try await createSampleUserRecord()
         try await createSamplePlayerProfileRecord()
         try await createSamplePlayerClaimRecord()
         
-        print("")
-        print("🌍 PUBLIC DATABASE (публичные игры и псевдонимы):")
+        debugLog("")
+        debugLog("🌍 PUBLIC DATABASE (публичные игры и псевдонимы):")
         
         // Public Database records
         try await createSampleGameRecord()
@@ -48,17 +48,17 @@ class CloudKitSchemaCreator {
         try await createSampleGameSummaryRecord()
         try await createSampleUserGameIndexRecord()
         
-        print("")
-        print("✅ Development schema created successfully!")
-        print("")
-        print("⚠️ Now go to CloudKit Dashboard and:")
-        print("   1. Select 'Development' environment")
-        print("   2. Check Private Database → Record Types:")
-        print("      - User, PlayerProfile, PlayerClaim")
-        print("   3. Check Public Database → Record Types:")
-        print("      - Game, GameWithPlayer, PlayerAlias")
-        print("   4. Add indexes if needed")
-        print("   5. Deploy to Production")
+        debugLog("")
+        debugLog("✅ Development schema created successfully!")
+        debugLog("")
+        debugLog("⚠️ Now go to CloudKit Dashboard and:")
+        debugLog("   1. Select 'Development' environment")
+        debugLog("   2. Check Private Database → Record Types:")
+        debugLog("      - User, PlayerProfile, PlayerClaim")
+        debugLog("   3. Check Public Database → Record Types:")
+        debugLog("      - Game, GameWithPlayer, PlayerAlias")
+        debugLog("   4. Add indexes if needed")
+        debugLog("   5. Deploy to Production")
     }
     
     // MARK: - Sample Record Creation - PRIVATE DATABASE
@@ -75,7 +75,7 @@ class CloudKitSchemaCreator {
         record["subscriptionExpiresAt"] = Date() as CKRecordValue
         
         try await privateDB.save(record)
-        print("  ✓ User (Private)")
+        debugLog("  ✓ User (Private)")
     }
     
     private func createSamplePlayerProfileRecord() async throws {
@@ -88,7 +88,7 @@ class CloudKitSchemaCreator {
         record["totalCashouts"] = 0.0 as CKRecordValue
         
         try await privateDB.save(record)
-        print("  ✓ PlayerProfile (Private)")
+        debugLog("  ✓ PlayerProfile (Private)")
     }
     
     private func createSamplePlayerClaimRecord() async throws {
@@ -101,7 +101,7 @@ class CloudKitSchemaCreator {
         record["notes"] = "" as CKRecordValue
         
         try await privateDB.save(record)
-        print("  ✓ PlayerClaim (Private)")
+        debugLog("  ✓ PlayerClaim (Private)")
     }
     
     // MARK: - Sample Record Creation - PUBLIC DATABASE
@@ -117,7 +117,7 @@ class CloudKitSchemaCreator {
         // Reference will be nil for sample
         
         try await publicDB.save(record)
-        print("  ✓ Game (Public)")
+        debugLog("  ✓ Game (Public)")
     }
     
     private func createSampleGameWithPlayerRecord() async throws {
@@ -128,7 +128,7 @@ class CloudKitSchemaCreator {
         record["profitLoss"] = 50.0 as CKRecordValue
         
         try await publicDB.save(record)
-        print("  ✓ GameWithPlayer (Public)")
+        debugLog("  ✓ GameWithPlayer (Public)")
     }
     
     private func createSamplePlayerAliasRecord() async throws {
@@ -138,7 +138,7 @@ class CloudKitSchemaCreator {
         record["gamesCount"] = 0 as CKRecordValue
         
         try await publicDB.save(record)
-        print("  ✓ PlayerAlias (Public)")
+        debugLog("  ✓ PlayerAlias (Public)")
     }
 
     // MARK: - Phase 2: Materialized Views (Public DB)
@@ -155,7 +155,7 @@ class CloudKitSchemaCreator {
         record["lastUpdated"] = Date() as CKRecordValue
 
         try await publicDB.save(record)
-        print("  ✓ UserStatisticsSummary (Public)")
+        debugLog("  ✓ UserStatisticsSummary (Public)")
     }
 
     private func createSampleGameSummaryRecord() async throws {
@@ -169,7 +169,7 @@ class CloudKitSchemaCreator {
         record["lastModified"] = Date() as CKRecordValue
 
         try await publicDB.save(record)
-        print("  ✓ GameSummary (Public)")
+        debugLog("  ✓ GameSummary (Public)")
     }
 
     private func createSampleUserGameIndexRecord() async throws {
@@ -183,7 +183,7 @@ class CloudKitSchemaCreator {
         record["isHost"] = 0 as CKRecordValue
 
         try await publicDB.save(record)
-        print("  ✓ UserGameIndex (Public)")
+        debugLog("  ✓ UserGameIndex (Public)")
     }
 }
 
@@ -204,7 +204,7 @@ class CloudKitSchemaCreator {
             do {
                 try await CloudKitSchemaCreator().createDevelopmentSchema()
             } catch {
-                print("❌ Schema creation failed: \(error)")
+                debugLog("❌ Schema creation failed: \(error)")
             }
         }
         #endif

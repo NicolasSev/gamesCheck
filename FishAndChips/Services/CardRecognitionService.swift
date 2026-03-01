@@ -20,7 +20,7 @@ class CardRecognitionService {
         // 1. Находим прямоугольные области (карты) используя детекцию прямоугольников
         group.enter()
         detectCardRectangles(in: image) { rectangles in
-            print("📦 Найдено прямоугольных областей: \(rectangles.count)")
+            debugLog("📦 Найдено прямоугольных областей: \(rectangles.count)")
             
             // 2. Для каждой области распознаем текст и определяем карту
             for (index, rect) in rectangles.enumerated() {
@@ -28,7 +28,7 @@ class CardRecognitionService {
                 recognizeCardInRegion(image: image, region: rect) { card in
                     if let card = card {
                         detectedCards.append(card)
-                        print("✅ Распознана карта: \(card.displayName)")
+                        debugLog("✅ Распознана карта: \(card.displayName)")
                     }
                     group.leave()
                 }
@@ -82,7 +82,7 @@ class CardRecognitionService {
         do {
             try handler.perform([request])
         } catch {
-            print("❌ Ошибка детекции прямоугольников: \(error)")
+            debugLog("❌ Ошибка детекции прямоугольников: \(error)")
             completion([])
         }
     }
@@ -113,7 +113,7 @@ class CardRecognitionService {
                 recognizedText += topCandidate.string + " "
             }
             
-            print("📝 Распознанный текст: '\(recognizedText)'")
+            debugLog("📝 Распознанный текст: '\(recognizedText)'")
             
             // Парсим карту из текста
             if let card = parseCardFromText(recognizedText) {
@@ -132,7 +132,7 @@ class CardRecognitionService {
         do {
             try handler.perform([request])
         } catch {
-            print("❌ Ошибка OCR: \(error)")
+            debugLog("❌ Ошибка OCR: \(error)")
             completion(nil)
         }
     }

@@ -24,7 +24,7 @@ struct CardRecognitionView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 // Информация о распознавании
                 if detectedCards.isEmpty {
@@ -239,7 +239,7 @@ struct ManualCardInputView: View {
     @State private var selectedSuit: CardSuit = .spades
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Достоинство")) {
                     Picker("Достоинство", selection: $selectedRank) {

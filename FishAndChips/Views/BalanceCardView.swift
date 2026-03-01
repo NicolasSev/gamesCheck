@@ -20,7 +20,7 @@ struct BalanceCardView: View {
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.8))
 
-            Text(formatCurrency(Decimal(displayedBalance)))
+            Text(Decimal(displayedBalance).formatCurrency())
                 .font(.system(size: 48, weight: .bold, design: .rounded))
                 .foregroundStyle(
                     .linearGradient(
@@ -89,14 +89,5 @@ struct BalanceCardView: View {
         currentAnimationTask = task
     }
 
-    private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "₸"
-        formatter.currencyCode = "KZT"
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "₸0"
-    }
 }
 

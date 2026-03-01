@@ -25,7 +25,7 @@ struct MainView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             TabView(selection: $selectedTab) {
                 OverviewTabView(
                     statistics: viewModel.statistics,
@@ -46,6 +46,7 @@ struct MainView: View {
                 )
                     .tabItem { Label("Обзор", systemImage: "chart.bar.fill") }
                     .tag(MainTab.overview)
+                    .accessibilityIdentifier("tab_overview")
 
                 GamesListTabView(
                     games: viewModel.filteredGames,
@@ -56,6 +57,7 @@ struct MainView: View {
                 )
                 .tabItem { Label("Игры", systemImage: "list.bullet") }
                 .tag(MainTab.games)
+                .accessibilityIdentifier("tab_games")
 
                 StatisticsTabView(
                     statistics: viewModel.statistics,
@@ -65,12 +67,14 @@ struct MainView: View {
                 )
                 .tabItem { Label("Статистика", systemImage: "chart.pie.fill") }
                 .tag(MainTab.statistics)
+                .accessibilityIdentifier("tab_statistics")
 
                 PlayersTabView()
                     .environmentObject(authViewModel)
                     .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                     .tabItem { Label("Игроки", systemImage: "person.2.fill") }
                     .tag(MainTab.players)
+                    .accessibilityIdentifier("tab_players")
             }
             .navigationTitle(titleForTab(selectedTab))
             .navigationBarTitleDisplayMode(.inline)
@@ -98,6 +102,7 @@ struct MainView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("main_profile_button")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -112,12 +117,14 @@ struct MainView: View {
                         } label: {
                             Label("Создать игру", systemImage: "plus.circle")
                         }
+                        .accessibilityIdentifier("main_add_game_button")
                         
                         Button {
                             showingImportGames = true
                         } label: {
                             Label("Импортировать игры", systemImage: "square.and.arrow.down")
                         }
+                        .accessibilityIdentifier("main_import_button")
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
@@ -143,7 +150,7 @@ struct MainView: View {
                     .onDisappear { viewModel.refresh() }
             }
             .sheet(item: $deepLinkGame) { game in
-                NavigationView {
+                NavigationStack {
                     if let type = game.gameType, type == "Бильярд" {
                         BilliardGameDetailView(game: game)
                     } else {
@@ -246,15 +253,15 @@ struct MainView: View {
     private func handleDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
         case .game(let gameId):
-            print("🔗 MainView: Opening game \(gameId)")
+            debugLog("🔗 MainView: Opening game \(gameId)")
             
             // Fetch game from CoreData (уже должна быть загружена DeepLinkService)
             if let game = PersistenceController.shared.fetchGame(byId: gameId) {
-                print("✅ MainView: Found game, showing detail view")
+                debugLog("✅ MainView: Found game, showing detail view")
                 deepLinkGame = game
                 deepLinkService.clearDeepLink()
             } else {
-                print("⚠️ MainView: Game not found locally, DeepLinkService should be loading it...")
+                debugLog("⚠️ MainView: Game not found locally, DeepLinkService should be loading it...")
                 // DeepLinkService уже обрабатывает загрузку из CloudKit
             }
             
