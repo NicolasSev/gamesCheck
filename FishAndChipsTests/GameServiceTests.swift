@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import FishAndChips
 
+@MainActor
 struct GameServiceTests {
     @Test func getGamesCreatedByUser_returnsOnlyCreatorsGames() async throws {
         let persistence = PersistenceController(inMemory: true)

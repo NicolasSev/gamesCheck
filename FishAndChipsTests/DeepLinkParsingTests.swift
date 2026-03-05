@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import FishAndChips
 
+@MainActor
 struct DeepLinkParsingTests {
 
     // MARK: - Valid game URL

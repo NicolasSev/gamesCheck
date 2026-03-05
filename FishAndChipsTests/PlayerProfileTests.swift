@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import FishAndChips
 
+@MainActor
 struct PlayerProfileTests {
     @Test func createAnonymousProfile_setsDefaults() async throws {
         let persistence = PersistenceController(inMemory: true)

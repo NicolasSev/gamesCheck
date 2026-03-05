@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import FishAndChips
 
+@MainActor
 struct AuthViewModelTests {
     @Test @MainActor func registration_createsUserAndAuthenticates() async throws {
         let persistence = PersistenceController(inMemory: true)

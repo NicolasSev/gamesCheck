@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import FishAndChips
 
+@MainActor
 struct UserModelTests {
     @Test func createUser_setsDefaultValues() async throws {
         let persistence = PersistenceController(inMemory: true)
