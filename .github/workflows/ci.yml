@@ -17,7 +17,7 @@ jobs:
           xcodebuild build \
             -project FishAndChips.xcodeproj \
             -scheme FishAndChips \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -configuration Debug
 
       - name: Run Unit Tests
