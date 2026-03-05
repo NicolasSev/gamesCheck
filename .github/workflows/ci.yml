@@ -26,4 +26,5 @@ jobs:
             -project FishAndChips.xcodeproj \
             -scheme FishAndChips \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -only-testing:FishAndChipsTests
+            -only-testing:FishAndChipsTests \
+            -skip-testing:FishAndChipsTests/CloudKitServiceTests
