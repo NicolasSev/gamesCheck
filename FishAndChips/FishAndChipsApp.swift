@@ -92,15 +92,6 @@ struct AppBodyView: View {
                                 notificationService.registerForRemoteNotifications()
                             }
                         }
-                        
-                        // CloudKit Game subscription для push о новых/изменённых играх
-                        Task {
-                            await notificationService.setupGameSubscription()
-                        }
-                        // CloudKit PlayerProfile subscription для push при публикации профиля
-                        Task {
-                            await notificationService.setupPlayerProfileSubscription()
-                        }
 
                         // Test CloudKit connection
                         Task {
@@ -180,6 +171,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             UNUserNotificationCenter.current().delegate = NotificationService.shared
         }
+        // CloudKit subscriptions — ранняя регистрация при запуске (до ContentView)
+        Task {
+            guard await CloudKitService.shared.isCloudKitAvailable() else { return }
+            await NotificationService.shared.setupGameSubscription()
+            await NotificationService.shared.setupPlayerProfileSubscription()
+        }
         // Phase 2: Включить Background Fetch (каждые 15 мин)
         application.setMinimumBackgroundFetchInterval(15 * 60)
         return true
@@ -220,7 +217,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                     try await CloudKitSyncService.shared.performIncrementalSync()
                     await MainActor.run {
                         Task {
-                            try? await NotificationService.shared.notifyGameUpdated(gameName: "Есть обновления")
+                            try? await NotificationService.shared.notifyGameUpdated(gameName: "Новая игра")
                         }
                     }
                 }

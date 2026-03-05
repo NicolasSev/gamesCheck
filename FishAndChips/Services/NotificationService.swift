@@ -338,6 +338,7 @@ class NotificationService: NSObject, ObservableObject {
             )
             subscription.notificationInfo = CKSubscription.NotificationInfo()
             subscription.notificationInfo?.shouldSendContentAvailable = true
+            subscription.notificationInfo?.alertBody = "Новая игра"
             _ = try await CloudKitService.shared.saveSubscription(subscription: subscription, to: .publicDB)
             debugLog("✅ [PUSH] Game subscription registered")
         } catch {
@@ -381,6 +382,7 @@ class NotificationService: NSObject, ObservableObject {
             )
             subscription.notificationInfo = CKSubscription.NotificationInfo()
             subscription.notificationInfo?.shouldSendContentAvailable = true
+            subscription.notificationInfo?.alertBody = "Новый публичный игрок"
             _ = try await CloudKitService.shared.saveSubscription(subscription: subscription, to: .publicDB)
             debugLog("✅ [PUSH] PlayerProfile subscription registered")
         } catch {

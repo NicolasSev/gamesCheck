@@ -2,7 +2,7 @@
 
 > **Единый источник правды для агентов.** Всегда читай перед задачей.
 
-**Обновление:** 2026-03-01 | [DATA_DIAGRAM](DATA_DIAGRAM.md) | [QUICK_REF](QUICK_REF.md)
+**Обновление:** 2026-03-05 | [DATA_DIAGRAM](DATA_DIAGRAM.md) | [QUICK_REF](QUICK_REF.md)
 
 ---
 
@@ -26,6 +26,8 @@
 ---
 
 ## Текущий статус
+
+**Push fix ✅** (2026-03-05): alertBody в CKSubscription (Game, PlayerProfile) — push доходит до всех пользователей; ранняя регистрация подписок в AppDelegate; текст уведомления «Новая игра».
 
 **Рефакторинг ✅** (2026-03-01): print→debugLog (240+ замен), Persistence.swift разбит на 5 extension-файлов, крупные Views разбиты на компоненты (12 новых файлов), accessibility identifiers (32 штуки), Page Objects (5 страниц), unit-тесты (PendingSyncTracker, DeepLink, DataImportService), XCUITest сценарии, CI/CD (GitHub Actions), Cursor rules (5 файлов).
 
