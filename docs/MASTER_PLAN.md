@@ -36,7 +36,7 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 
 ## Текущий статус
 
-**Миграция CloudKit → Supabase 🔄** (2026-03-18):
+**Миграция CloudKit → Supabase ✅** (2026-03-18):
 - ✅ Phase 0: SPM supabase-swift 2.41.1, SupabaseConfig, BackendServiceProtocol
 - ✅ Phase 1: SQL schema (001_initial_schema.sql) — таблицы, RLS, triggers, materialized views
 - ✅ Phase 2: DTO (SupabaseDTO.swift, SupabaseModelConverters.swift)
@@ -45,10 +45,10 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 - ✅ Phase 5: SupabaseSyncService (push/pull, smart sync, merge, pending)
 - ✅ Phase 6: SupabaseRealtimeService (WebSocket подписки)
 - ✅ Phase 7: SyncRouter + BackendSwitch (переключение бэкендов)
+- ✅ Phase 8: Тесты (MockSupabaseService/Auth, DTO, Errors, BackendSwitch)
 - ✅ Phase 9: DataMigrationToSupabase (клиентская миграция)
-- ⬜ Phase 8: Тесты (моки, обновление, CI)
-- ⬜ Phase 10: Cleanup (удаление CloudKit кода)
-- ⬜ Phase 11: Improvements (Apple Sign In, GDPR, offline queue)
+- ✅ Phase 10: DATA_DIAGRAM v3.0, Cursor rules
+- ✅ Phase 11: Improvements (GDPR deletion, OfflineSyncQueue, Edge Function push, server validation)
 
 **Предыдущие:** Push fix ✅ | Рефакторинг ✅ | Фаза 3 ✅ | Фаза 2 ✅
 
@@ -66,9 +66,10 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 ## Структура проекта
 
 - **Persistence**: `Persistence.swift` (core) + `Persistence+*.swift` (5 extension-файлов)
-- **Supabase**: `Services/Supabase/` — SupabaseConfig, SupabaseService, SupabaseAuthService, SupabaseSyncService, SupabaseRealtimeService, BackendSwitch+SyncRouter, DataMigrationToSupabase
+- **Supabase**: `Services/Supabase/` — SupabaseConfig, SupabaseService, SupabaseAuthService, SupabaseSyncService, SupabaseRealtimeService, BackendSwitch+SyncRouter, DataMigrationToSupabase, OfflineSyncQueue, AccountDeletionService
 - **Supabase Models**: `Models/Supabase/` — SupabaseDTO, SupabaseModelConverters
-- **Supabase SQL**: `supabase/migrations/` — 001_initial_schema.sql
+- **Supabase SQL**: `supabase/migrations/` — 001_initial_schema.sql, 002_improvements.sql
+- **Edge Functions**: `supabase/functions/send-push/` — APNs push-уведомления
 - **CloudKit (legacy)**: `CloudKitService.swift`, `CloudKitSyncService.swift`, `CloudKitModels.swift`
 - **Логирование**: `debugLog()` из `DebugLogger.swift` — все логи только в DEBUG
 - **UI-компоненты**: `CasinoBackgroundModifier`, `CurrencyFormatting`, `PokerUIHelpers`, `PokerCardViews`
