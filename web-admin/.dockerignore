@@ -1,8 +1,0 @@
-node_modules
-.next
-.env*.local
-Dockerfile
-docker-compose.yml
-nginx.conf
-ssl/
-*.md
