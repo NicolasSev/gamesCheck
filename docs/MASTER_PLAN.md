@@ -2,66 +2,86 @@
 
 > **Единый источник правды для агентов.** Всегда читай перед задачей.
 
-**Обновление:** 2026-03-05 | [DATA_DIAGRAM](DATA_DIAGRAM.md) | [QUICK_REF](QUICK_REF.md)
+**Обновление:** 2026-03-18 | [DATA_DIAGRAM](DATA_DIAGRAM.md) | [QUICK_REF](QUICK_REF.md)
 
 ---
 
 ## ⛔ Правила (ОБЯЗАТЕЛЬНО)
 
 1. **Читай MASTER_PLAN.md** в начале каждого запроса
-2. **При изменении данных** — обновляй `docs/DATA_DIAGRAM.md` (entity, атрибуты, CloudKit, flow)
+2. **При изменении данных** — обновляй `docs/DATA_DIAGRAM.md` (entity, атрибуты, schema, flow)
 3. **При завершении задач** — обновляй этот файл (статус, дата)
 4. **Не создавай новые .md** без явного разрешения. Обновляй существующие.
-5. **CloudKit:** Small diffs → компиляция → проверка в Dashboard → следующий шаг
+5. **Supabase:** Small diffs → компиляция → проверка в Dashboard → следующий шаг
 
 ---
 
 ## Архитектура
 
-**CloudKit = Source of Truth.** Core Data = локальный кэш. Pull из CloudKit полностью перезаписывает локальное.
+**МИГРАЦИЯ: CloudKit → Supabase (в процессе)**
 
-**Public DB:** Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User  
-**Private DB:** (PlayerProfile — частично Public после миграции)
+**Supabase = Source of Truth (целевое).** Core Data = локальный кэш.  
+**BackendSwitch** — feature flag для переключения CloudKit/Supabase.  
+**SyncRouter** — единая точка доступа к sync (маршрутизирует вызовы в активный бэкенд).
+
+**Supabase таблицы:** profiles (User+PlayerProfile), games, game_players, player_aliases, player_claims, billiard_batches, device_tokens  
+**Materialized views (PostgreSQL):** game_summaries, user_statistics  
+**RLS:** Row Level Security на всех таблицах  
+**Realtime:** WebSocket подписки на games, claims, profiles
+
+**CloudKit (legacy, до удаления):**  
+Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 
 ---
 
 ## Текущий статус
 
-**Push fix ✅** (2026-03-05): alertBody в CKSubscription (Game, PlayerProfile) — push доходит до всех пользователей; ранняя регистрация подписок в AppDelegate; текст уведомления «Новая игра».
+**Миграция CloudKit → Supabase 🔄** (2026-03-18):
+- ✅ Phase 0: SPM supabase-swift 2.41.1, SupabaseConfig, BackendServiceProtocol
+- ✅ Phase 1: SQL schema (001_initial_schema.sql) — таблицы, RLS, triggers, materialized views
+- ✅ Phase 2: DTO (SupabaseDTO.swift, SupabaseModelConverters.swift)
+- ✅ Phase 3: SupabaseAuthService (Supabase Auth, bcrypt)
+- ✅ Phase 4: SupabaseService (CRUD обёртка, retry, ошибки)
+- ✅ Phase 5: SupabaseSyncService (push/pull, smart sync, merge, pending)
+- ✅ Phase 6: SupabaseRealtimeService (WebSocket подписки)
+- ✅ Phase 7: SyncRouter + BackendSwitch (переключение бэкендов)
+- ✅ Phase 9: DataMigrationToSupabase (клиентская миграция)
+- ⬜ Phase 8: Тесты (моки, обновление, CI)
+- ⬜ Phase 10: Cleanup (удаление CloudKit кода)
+- ⬜ Phase 11: Improvements (Apple Sign In, GDPR, offline queue)
 
-**Рефакторинг ✅** (2026-03-01): print→debugLog (240+ замен), Persistence.swift разбит на 5 extension-файлов, крупные Views разбиты на компоненты (12 новых файлов), accessibility identifiers (32 штуки), Page Objects (5 страниц), unit-тесты (PendingSyncTracker, DeepLink, DataImportService), XCUITest сценарии, CI/CD (GitHub Actions), Cursor rules (5 файлов).
-
-**Фаза 3 ✅** (2026-02-22): Витрины (smartSync, checksum), Push (CKSubscription), Игроки (isPublic, PlayersTabView), SuperAdmin (PlayerPublicProfileView), AppNotification, rebuildAllGameSummaries, pending claims fix.
-
-**История:** Фаза 2 (Materialized Views, пагинация, Background Fetch) ✅ | PlayerProfile в Public DB ✅ | CloudKit Source of Truth ✅
+**Предыдущие:** Push fix ✅ | Рефакторинг ✅ | Фаза 3 ✅ | Фаза 2 ✅
 
 ---
 
-## Правила при работе с CloudKit
+## Правила при работе с Supabase
 
-- После изменения схемы → Dashboard → проверить record type / индекс
-- После push → Dashboard → найти запись
-- После pull → проверить Core Data (Debug или логи)
-- Один метод/шаг за раз, не батчить изменения
+- После изменения схемы → SQL migration файл → `supabase db push`
+- Проверять RLS-политики после изменения таблиц
+- Small diffs: один сервис/метод за раз, не батчить
+- BackendSwitch.isSupabase — проверять перед sync вызовами
 
 ---
 
 ## Структура проекта
 
-- **Persistence**: `Persistence.swift` (core) + `Persistence+User.swift`, `Persistence+Game.swift`, `Persistence+PlayerProfile.swift`, `Persistence+PlayerAlias.swift`, `Persistence+PlayerClaim.swift`
+- **Persistence**: `Persistence.swift` (core) + `Persistence+*.swift` (5 extension-файлов)
+- **Supabase**: `Services/Supabase/` — SupabaseConfig, SupabaseService, SupabaseAuthService, SupabaseSyncService, SupabaseRealtimeService, BackendSwitch+SyncRouter, DataMigrationToSupabase
+- **Supabase Models**: `Models/Supabase/` — SupabaseDTO, SupabaseModelConverters
+- **Supabase SQL**: `supabase/migrations/` — 001_initial_schema.sql
+- **CloudKit (legacy)**: `CloudKitService.swift`, `CloudKitSyncService.swift`, `CloudKitModels.swift`
 - **Логирование**: `debugLog()` из `DebugLogger.swift` — все логи только в DEBUG
 - **UI-компоненты**: `CasinoBackgroundModifier`, `CurrencyFormatting`, `PokerUIHelpers`, `PokerCardViews`
-- **Тесты**: Swift Testing (unit) + XCTest (UI), моки в `FishAndChipsTests/Mocks/`, Page Objects в `FishAndChipsUITests/Pages/`
+- **Тесты**: Swift Testing (unit) + XCTest (UI), моки в `FishAndChipsTests/Mocks/`
 - **CI/CD**: `.github/workflows/ci.yml`
-- **Cursor rules**: `.cursor/rules/` (5 файлов: swiftui-views, cloudkit-sync, core-data, testing, code-style)
 
 ---
 
 ## Ссылки
 
-- CloudKit: `CloudKitService.swift`, `CloudKitSyncService.swift`
-- Витрины: `MaterializedViewsService.swift`, `CloudKitMaterializedViews.swift`
-- [DATA_DIAGRAM.md](DATA_DIAGRAM.md) | [CloudKit Dashboard](https://icloud.developer.apple.com/dashboard)
+- Supabase: `SupabaseService.swift`, `SupabaseSyncService.swift`, `SupabaseAuthService.swift`
+- CloudKit (legacy): `CloudKitService.swift`, `CloudKitSyncService.swift`
+- [DATA_DIAGRAM.md](DATA_DIAGRAM.md) | [Supabase Dashboard](https://supabase.com/dashboard)
 
 ---
 
@@ -70,4 +90,5 @@
 - [ ] Прочитал MASTER_PLAN.md
 - [ ] Не создаю MD без разрешения
 - [ ] Обновляю DATA_DIAGRAM при изменении данных
-- [ ] Small diffs + проверка CloudKit
+- [ ] Small diffs + проверка в Supabase Dashboard
+- [ ] Проверяю BackendSwitch при изменении sync-логики
