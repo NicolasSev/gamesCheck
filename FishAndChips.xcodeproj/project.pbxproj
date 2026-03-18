@@ -141,6 +141,7 @@
 			);
 			name = FishAndChips;
 			packageProductDependencies = (
+				17F000022E09000200000002 /* Supabase */,
 			);
 			productName = FishAndChips;
 			productReference = 179341002D91874300CDBF18 /* FishAndChips.app */;
@@ -225,6 +226,9 @@
 			mainGroup = 179340F72D91874300CDBF18;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			packageReferences = (
+				17F000012E09000100000001 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			productRefGroup = 179341012D91874300CDBF18 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -625,6 +629,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		17F000012E09000100000001 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.41.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		17F000022E09000200000002 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 17F000012E09000100000001 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 179340F82D91874300CDBF18 /* Project object */;
 }
