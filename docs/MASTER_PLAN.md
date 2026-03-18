@@ -36,6 +36,12 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 
 ## Текущий статус
 
+**Реструктуризация монорепо → 3 репозитория ✅** (2026-03-18):
+- ✅ iOS остался в `gamesCheck/` (текущий git)
+- ✅ Web Admin → `../fishchips-web/` (новый git, `main` ветка)
+- ✅ Supabase → `../fishchips-supabase/` (новый git, `main` ветка)
+- ✅ `.gitignore` в iOS репозитории обновлён
+
 **Миграция CloudKit → Supabase ✅** (2026-03-18):
 - ✅ Phase 0: SPM supabase-swift 2.41.1, SupabaseConfig, BackendServiceProtocol
 - ✅ Phase 1: SQL schema (001_initial_schema.sql) — таблицы, RLS, triggers, materialized views
@@ -56,7 +62,7 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 
 ## Правила при работе с Supabase
 
-- После изменения схемы → SQL migration файл → `supabase db push`
+- После изменения схемы → SQL migration файл в **`../fishchips-supabase/migrations/`** → `supabase db push`
 - Проверять RLS-политики после изменения таблиц
 - Small diffs: один сервис/метод за раз, не батчить
 - BackendSwitch.isSupabase — проверять перед sync вызовами
@@ -65,24 +71,35 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 
 ## Структура проекта
 
+### iOS (текущий репозиторий — `gamesCheck/`)
 - **Persistence**: `Persistence.swift` (core) + `Persistence+*.swift` (5 extension-файлов)
 - **Supabase**: `Services/Supabase/` — SupabaseConfig, SupabaseService, SupabaseAuthService, SupabaseSyncService, SupabaseRealtimeService, BackendSwitch+SyncRouter, DataMigrationToSupabase, OfflineSyncQueue, AccountDeletionService
 - **Supabase Models**: `Models/Supabase/` — SupabaseDTO, SupabaseModelConverters
-- **Supabase SQL**: `supabase/migrations/` — 001_initial_schema.sql, 002_improvements.sql
-- **Edge Functions**: `supabase/functions/send-push/` — APNs push-уведомления
 - **CloudKit (legacy)**: `CloudKitService.swift`, `CloudKitSyncService.swift`, `CloudKitModels.swift`
 - **Логирование**: `debugLog()` из `DebugLogger.swift` — все логи только в DEBUG
 - **UI-компоненты**: `CasinoBackgroundModifier`, `CurrencyFormatting`, `PokerUIHelpers`, `PokerCardViews`
 - **Тесты**: Swift Testing (unit) + XCTest (UI), моки в `FishAndChipsTests/Mocks/`
 - **CI/CD**: `.github/workflows/ci.yml`
 
+### Web Admin (отдельный репозиторий — `../fishchips-web/`)
+- Next.js 15 + Tailwind CSS + shadcn/ui
+- Страницы: Dashboard, Users, Games, Claims, Analytics, Push Notifications
+- Тесты: Jest + React Testing Library
+- Деплой: Docker + nginx
+
+### Supabase (отдельный репозиторий — `../fishchips-supabase/`)
+- **SQL миграции**: `migrations/` — 001_initial_schema.sql, 002_improvements.sql, 003_admin_views.sql
+- **Edge Functions**: `functions/send-push/` — APNs push-уведомления
+
 ---
 
 ## Ссылки
 
-- Supabase: `SupabaseService.swift`, `SupabaseSyncService.swift`, `SupabaseAuthService.swift`
+- Supabase SDK (iOS): `SupabaseService.swift`, `SupabaseSyncService.swift`, `SupabaseAuthService.swift`
 - CloudKit (legacy): `CloudKitService.swift`, `CloudKitSyncService.swift`
 - [DATA_DIAGRAM.md](DATA_DIAGRAM.md) | [Supabase Dashboard](https://supabase.com/dashboard)
+- **fishchips-web**: `../fishchips-web/` — веб-админка (отдельный репозиторий)
+- **fishchips-supabase**: `../fishchips-supabase/` — SQL миграции и Edge Functions (отдельный репозиторий)
 
 ---
 

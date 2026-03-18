@@ -1,6 +1,6 @@
 ---
 description: Supabase синхронизация — REST API, RLS, DTO, small diffs
-globs: FishAndChips/Services/Supabase/*.swift,FishAndChips/Models/Supabase/*.swift,supabase/**
+globs: FishAndChips/Services/Supabase/*.swift,FishAndChips/Models/Supabase/*.swift
 alwaysApply: false
 ---
 
@@ -11,7 +11,7 @@ alwaysApply: false
 - **BackendSwitch** — проверять `BackendSwitch.isSupabase` при изменении sync-логики.
 - **SyncRouter** — единая точка доступа для Views. Не вызывать `SupabaseSyncService` / `CloudKitSyncService` напрямую из Views.
 - **RLS** — при добавлении таблиц: `ENABLE ROW LEVEL SECURITY` + политики. Тестировать через Dashboard.
-- **SQL миграции** — новый файл в `supabase/migrations/` с порядковым номером.
+- **SQL миграции** — новый файл в **`../fishchips-supabase/migrations/`** с порядковым номером. Supabase — отдельный репозиторий.
 - **Small diffs**: один метод/шаг за раз, компиляция после каждого изменения.
 - **Обработка ошибок**: `SupabaseServiceError`, `isRetryable`, `mapError()`.
 - **Логи**: `debugLog()` (не `print`) — только в DEBUG.
