@@ -18,16 +18,20 @@ struct AuthViewModelTests {
 
         let vm = AuthViewModel(persistence: persistence, keychain: keychain, cloudKitSync: cloudKitSync)
 
+        // Уникальный username для изоляции при параллельном запуске
+        let username = "reg_\(UUID().uuidString.prefix(8))"
+        let email = "\(username)@example.com"
+
         try await vm.register(
-            username: "testuser",
+            username: username,
             password: "password123",
-            email: "test@example.com"
+            email: email
         )
 
         #expect(vm.currentUser != nil)
-        #expect(vm.currentUser?.username == "testuser")
+        #expect(vm.currentUser?.username == username)
         #expect(vm.isAuthenticated == true)
-        #expect(persistence.fetchUser(byUsername: "testuser") != nil)
+        #expect(persistence.fetchUser(byUsername: username) != nil)
     }
 
     @Test @MainActor func login_logout_flow() async throws {
