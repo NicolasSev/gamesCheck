@@ -18,7 +18,7 @@ protocol AuthCloudKitSyncProtocol: AnyObject {
 }
 
 /// Service to synchronize CoreData with CloudKit
-class CloudKitSyncService: ObservableObject, AuthCloudKitSyncProtocol {
+class CloudKitSyncService: ObservableObject, AuthCloudKitSyncProtocol, SyncServiceProtocol {
     static let shared = CloudKitSyncService()
     
     @Published var isSyncing = false

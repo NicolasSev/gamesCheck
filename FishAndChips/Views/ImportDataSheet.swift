@@ -276,7 +276,7 @@ struct ImportDataSheet: View {
             Task {
                 do {
                     debugLog("☁️ [IMPORT] Pushing imported games to CloudKit...")
-                    try await CloudKitSyncService.shared.sync()
+                    try await SyncCoordinator.shared.sync()
                     debugLog("✅ [IMPORT] Successfully synced to CloudKit")
                     // Push уведомление загрузившему (потом уберём)
                     let hostName = authViewModel.currentUsername
@@ -376,7 +376,7 @@ struct ImportDataSheet: View {
             Task {
                 do {
                     debugLog("☁️ [IMPORT] Pushing imported games to CloudKit...")
-                    try await CloudKitSyncService.shared.sync()
+                    try await SyncCoordinator.shared.sync()
                     debugLog("✅ [IMPORT] Successfully synced to CloudKit")
                     // Push уведомление загрузившему (потом уберём)
                     let hostName = authViewModel.currentUsername

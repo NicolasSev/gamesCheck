@@ -123,7 +123,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         if userInfo["ck"] != nil {
             // CloudKit notification
             do {
-                try await CloudKitSyncService.shared.sync()
+                try await SyncCoordinator.shared.sync()
                 return .newData
             } catch {
                 print("❌ Sync failed: \(error)")

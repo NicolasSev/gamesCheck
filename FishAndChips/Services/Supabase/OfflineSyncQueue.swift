@@ -8,9 +8,11 @@ final class OfflineSyncQueue: ObservableObject {
     static let shared = OfflineSyncQueue()
 
     @Published private(set) var pendingCount: Int = 0
+    @Published private(set) var isProcessing: Bool = false
 
     private let key = "offlineSyncQueue"
     private let lock = NSLock()
+    private let maxRetries = 8
 
     struct QueuedOperation: Codable, Identifiable {
         let id: UUID
@@ -57,10 +59,19 @@ final class OfflineSyncQueue: ObservableObject {
         let queue = lock.withLock { loadQueue() }
         guard !queue.isEmpty else { return }
 
+        isProcessing = true
+        defer { isProcessing = false }
+
         var remaining: [QueuedOperation] = []
         let service = SupabaseService.shared
 
         for var op in queue {
+            // Exponential backoff: wait 2^retryCount seconds before retrying
+            if op.retryCount > 0 {
+                let delay = min(pow(2.0, Double(op.retryCount)), 60.0)
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+
             do {
                 switch op.operation {
                 case .upsert:
@@ -68,12 +79,15 @@ final class OfflineSyncQueue: ObservableObject {
                 case .delete:
                     try await processDelete(service: service, operation: op)
                 }
+                debugLog("OfflineSyncQueue: processed \(op.table) \(op.operation.rawValue)")
             } catch {
                 op.retryCount += 1
-                if op.retryCount < 5 {
+                if op.retryCount < maxRetries {
                     remaining.append(op)
+                } else {
+                    debugLog("OfflineSyncQueue: dropped \(op.table) after \(maxRetries) retries")
                 }
-                debugLog("OfflineSyncQueue: retry \(op.retryCount) for \(op.table): \(error)")
+                debugLog("OfflineSyncQueue: retry \(op.retryCount)/\(maxRetries) for \(op.table): \(error)")
             }
         }
 
@@ -81,6 +95,19 @@ final class OfflineSyncQueue: ObservableObject {
         saveQueue(remaining)
         pendingCount = remaining.count
         lock.unlock()
+    }
+
+    /// Mark that a full Supabase sync is needed when connectivity is restored
+    func enqueueFullSync() {
+        UserDefaults.standard.set(true, forKey: "offlineSyncNeedsFullSync")
+        debugLog("OfflineSyncQueue: full sync enqueued for reconnect")
+    }
+
+    /// Check and clear the full-sync marker
+    var needsFullSync: Bool {
+        let needs = UserDefaults.standard.bool(forKey: "offlineSyncNeedsFullSync")
+        if needs { UserDefaults.standard.set(false, forKey: "offlineSyncNeedsFullSync") }
+        return needs
     }
 
     func clearAll() {

@@ -57,6 +57,9 @@ final class AuthViewModel: ObservableObject {
     private let persistence: PersistenceController
     private let keychain: KeychainServiceProtocol
     private let cloudKitSync: AuthCloudKitSyncProtocol
+    private let syncCoordinator: SyncCoordinator
+    private let supabaseAuth: SupabaseAuthService
+    private let networkMonitor: NetworkMonitor
 
     // MARK: - UserDefaults Keys (Legacy - migrating to Keychain)
     private let currentUserIdKey = "currentUserId"
@@ -65,11 +68,17 @@ final class AuthViewModel: ObservableObject {
     init(
         persistence: PersistenceController = .shared,
         keychain: KeychainServiceProtocol = KeychainService.shared,
-        cloudKitSync: AuthCloudKitSyncProtocol? = nil
+        cloudKitSync: AuthCloudKitSyncProtocol? = nil,
+        syncCoordinator: SyncCoordinator? = nil,
+        supabaseAuth: SupabaseAuthService? = nil,
+        networkMonitor: NetworkMonitor? = nil
     ) {
         self.persistence = persistence
         self.keychain = keychain
         self.cloudKitSync = cloudKitSync ?? CloudKitSyncService.shared
+        self.syncCoordinator = syncCoordinator ?? SyncCoordinator.shared
+        self.supabaseAuth = supabaseAuth ?? SupabaseAuthService.shared
+        self.networkMonitor = networkMonitor ?? NetworkMonitor.shared
         
         // Migrate from UserDefaults to Keychain if needed
         migrateToKeychain()
@@ -196,28 +205,27 @@ final class AuthViewModel: ObservableObject {
         }
         debugLog("✅ [REGISTER] Email is available")
 
-        // Проверка CloudKit (Public DB) - ОБЯЗАТЕЛЬНАЯ проверка уникальности email
-        debugLog("☁️ [REGISTER] Checking email availability in CloudKit Public Database...")
-        do {
-            if let cloudUser = try await cloudKitSync.fetchUser(byEmail: email) {
-                debugLog("❌ [REGISTER] FAILED: Email exists in CloudKit (userId: \(cloudUser.userId), username: \(cloudUser.username))")
+        // Check email uniqueness — Supabase (online) or CloudKit (offline)
+        if networkMonitor.isOnline {
+            debugLog("☁️ [REGISTER] Checking email via Supabase Auth...")
+            // Supabase Auth will reject duplicate emails during signUp — no pre-check needed
+        } else {
+            debugLog("☁️ [REGISTER] Offline — checking email in CloudKit Public DB...")
+            do {
+                if let cloudUser = try await cloudKitSync.fetchUser(byEmail: email) {
+                    debugLog("❌ [REGISTER] FAILED: Email exists in CloudKit (userId: \(cloudUser.userId))")
+                    isLoading = false
+                    authState = .error("Пользователь с такой почтой уже существует")
+                    throw AuthenticationError.emailAlreadyExists
+                }
+                debugLog("✅ [REGISTER] Email not found in CloudKit - OK to register")
+            } catch {
+                if let authError = error as? AuthenticationError { throw authError }
+                debugLog("❌ [REGISTER] CloudKit check failed: \(error)")
                 isLoading = false
-                authState = .error("Пользователь с такой почтой уже существует")
-                throw AuthenticationError.emailAlreadyExists
+                authState = .error("Ошибка проверки: \(error.localizedDescription)")
+                throw AuthenticationError.unknown
             }
-            debugLog("✅ [REGISTER] Email not found in CloudKit - OK to register")
-        } catch {
-            // Если это AuthenticationError - пробрасываем
-            if let authError = error as? AuthenticationError {
-                throw authError
-            }
-            // CloudKit ошибка - показываем детали
-            debugLog("❌ [REGISTER] CloudKit check failed: \(error)")
-            debugLog("❌ [REGISTER] Error type: \(type(of: error))")
-            debugLog("❌ [REGISTER] Localized: \(error.localizedDescription)")
-            isLoading = false
-            authState = .error("Ошибка CloudKit: \(error.localizedDescription)")
-            throw AuthenticationError.unknown
         }
         
         // NOTE: Локальная проверка username убрана
@@ -251,36 +259,25 @@ final class AuthViewModel: ObservableObject {
         let profile = persistence.createPlayerProfile(displayName: username, userId: user.userId)
         debugLog("✅ [REGISTER] PlayerProfile created")
 
-        // Синхронизация User и PlayerProfile в CloudKit
-        debugLog("☁️ [REGISTER] ========================================")
-        debugLog("☁️ [REGISTER] Starting CloudKit sync...")
-        debugLog("☁️ [REGISTER] User details:")
-        debugLog("   - userId: \(user.userId)")
-        debugLog("   - username: \(user.username)")
-        debugLog("   - email: \(user.email ?? "nil")")
-        
-        // Проверяем CloudKit доступность
-        let ckAvailable = await CloudKitService.shared.isCloudKitAvailable()
-        debugLog("☁️ [REGISTER] CloudKit availability check: \(ckAvailable ? "✅ AVAILABLE" : "❌ NOT AVAILABLE")")
-        
-        if ckAvailable {
+        // Sync user and profile via SyncCoordinator (Supabase primary / CloudKit fallback)
+        debugLog("☁️ [REGISTER] Syncing via SyncCoordinator...")
+
+        if networkMonitor.isOnline {
             do {
-                let accountStatus = try await CloudKitService.shared.checkAccountStatus()
-                debugLog("☁️ [REGISTER] CloudKit account status: \(accountStatus.rawValue)")
+                let _ = try await supabaseAuth.signUp(
+                    email: email,
+                    password: password,
+                    username: username,
+                    displayName: username
+                )
+                debugLog("☁️ [REGISTER] Supabase Auth signUp succeeded")
             } catch {
-                debugLog("⚠️ [REGISTER] Could not check account status: \(error)")
+                debugLog("⚠️ [REGISTER] Supabase signUp error: \(error) — continuing with local user")
             }
         }
-        debugLog("☁️ [REGISTER] ========================================")
-        
-        debugLog("☁️ [REGISTER] Step 1: Syncing User to CloudKit Private Database...")
-        await cloudKitSync.quickSyncUser(user)
-        debugLog("☁️ [REGISTER] Step 1 completed")
-        
-        debugLog("☁️ [REGISTER] Step 2: Syncing PlayerProfile to CloudKit...")
-        await cloudKitSync.quickSyncPlayerProfile(profile)
-        debugLog("☁️ [REGISTER] Step 2 completed")
-        debugLog("☁️ [REGISTER] ========================================")
+
+        await syncCoordinator.quickSyncPlayerProfile(profile)
+        debugLog("☁️ [REGISTER] Profile sync completed")
 
         debugLog("🔑 [REGISTER] Auto-login after registration...")
         try await login(email: email, password: password)
@@ -317,19 +314,30 @@ final class AuthViewModel: ObservableObject {
             debugLog("⚠️ [LOGIN] User NOT found locally")
         }
         
-        // Попытка 2: Если не найден локально - попробовать загрузить из CloudKit
+        // Попытка 2: Если не найден локально — Supabase (online) или CloudKit (offline)
         if user == nil {
-            debugLog("🔍 [LOGIN] Attempt 2: Trying to fetch from CloudKit...")
-            do {
-                user = try await cloudKitSync.fetchUser(byEmail: email)
-                if let cloudUser = user {
-                    debugLog("✅ [LOGIN] User restored from CloudKit:")
-                    debugLog("   - Username: \(cloudUser.username)")
-                    debugLog("   - Email: \(cloudUser.email ?? "nil")")
-                    debugLog("   - UserId: \(cloudUser.userId)")
+            if networkMonitor.isOnline {
+                debugLog("🔍 [LOGIN] Attempt 2: Trying Supabase Auth signIn...")
+                do {
+                    let _ = try await supabaseAuth.signIn(email: email, password: password)
+                    debugLog("✅ [LOGIN] Supabase Auth signIn succeeded — pulling profile...")
+                    try? await syncCoordinator.smartSync()
+                    user = persistence.fetchUser(byEmail: email)
+                } catch {
+                    debugLog("⚠️ [LOGIN] Supabase signIn failed: \(error)")
                 }
-            } catch {
-                debugLog("❌ [LOGIN] Failed to fetch user from CloudKit: \(error)")
+            }
+
+            if user == nil {
+                debugLog("🔍 [LOGIN] Attempt 3: Trying to fetch from CloudKit...")
+                do {
+                    user = try await cloudKitSync.fetchUser(byEmail: email)
+                    if let cloudUser = user {
+                        debugLog("✅ [LOGIN] User restored from CloudKit: \(cloudUser.username)")
+                    }
+                } catch {
+                    debugLog("❌ [LOGIN] Failed to fetch user from CloudKit: \(error)")
+                }
             }
         }
         

@@ -84,7 +84,7 @@ class DeepLinkService: ObservableObject {
         }
         
         do {
-            if let fetchedGame = try await CloudKitSyncService.shared.fetchGame(byId: gameId) {
+            if let fetchedGame = try await SyncCoordinator.shared.fetchGame(byId: gameId) {
                 let playerCount = (fetchedGame.gameWithPlayers as? Set<GameWithPlayer>)?.count ?? 0
                 debugLog("✅ [DEEPLINK] Game \(gameId) fetched from CloudKit with \(playerCount) players")
                 

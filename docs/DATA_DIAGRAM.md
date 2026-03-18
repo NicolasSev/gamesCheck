@@ -1,6 +1,6 @@
 # Диаграмма данных — Fish & Chips
 
-**Обновление:** 2026-03-18 | v3.0 (Supabase Migration)
+**Обновление:** 2026-03-18 | v4.0 (Hybrid Supabase + CloudKit)
 
 ---
 
@@ -68,6 +68,8 @@ erDiagram
 | update_updated_at() | Trigger helper |
 | recalculate_profile_stats() | Trigger helper |
 | handle_new_user() | Trigger: создание профиля |
+| upsert_with_conflict(table, id, data, client_updated_at) | Server-wins conflict resolution для offline queue replay |
+| check_conflicts(table, items) | Batch: возвращает UUID[] строк, где сервер новее клиента |
 
 ---
 
@@ -88,13 +90,32 @@ Core Data остаётся как **локальный кэш**. Supabase = Sour
 
 ---
 
-## Синхронизация
+## Синхронизация (Hybrid Architecture)
+
+```mermaid
+graph TB
+    subgraph iOS
+        Views --> SyncCoordinator
+        SyncCoordinator --> NetworkMonitor
+        SyncCoordinator -->|online| Supabase
+        SyncCoordinator -->|offline| CloudKit
+        SyncCoordinator --> OfflineSyncQueue
+        OfflineSyncQueue -->|reconnect| Supabase
+    end
+    WebAdmin -->|service_role| Supabase
+```
+
+**Online:** Write → Supabase (primary) + CloudKit (fire-and-forget mirror). Web admin видит данные сразу.
+
+**Offline:** Write → Core Data + CloudKit. Операции → OfflineSyncQueue. При reconnect → replay queue + pull.
 
 **Smart Sync:** performMinimalSync (profile + 20 games + pending claims) → checkServerChecksums → при расхождении performBackgroundSync.
 
 **Инкрементальная:** fetchSince(updated_at > lastSyncDate) — загружаются только изменённые.
 
 **Push:** upsert через REST API. Batch для game_players, aliases, claims.
+
+**Conflict resolution:** Server wins. `upsert_with_conflict()` на стороне PostgreSQL сравнивает `updated_at`.
 
 ---
 
@@ -125,8 +146,11 @@ Core Data остаётся как **локальный кэш**. Supabase = Sour
 
 ---
 
-## SQL Миграция
+## SQL Миграции (отдельный репозиторий: `../fishchips-supabase/`)
 
-Файл: `supabase/migrations/001_initial_schema.sql`
-
-Включает: CREATE TABLE, индексы, RLS-политики, triggers, materialized views, functions.
+| Файл | Содержание |
+|------|-----------|
+| `migrations/001_initial_schema.sql` | CREATE TABLE, индексы, RLS-политики, triggers, materialized views, functions |
+| `migrations/002_improvements.sql` | GDPR deletion, server-side validation, webhooks |
+| `migrations/003_admin_views.sql` | Admin views, dashboard RPC functions |
+| `migrations/004_conflict_resolution.sql` | `upsert_with_conflict()`, `check_conflicts()` для гибридной архитектуры |

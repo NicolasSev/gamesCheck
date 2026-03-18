@@ -11,8 +11,13 @@ struct DebugView: View {
     @State private var userInfo = ""
     @State private var gamesInfo = ""
     @State private var cloudKitStatus = ""
+    @StateObject private var syncCoordinator = SyncCoordinator.shared
+    @StateObject private var networkMonitor = NetworkMonitor.shared
+    @StateObject private var offlineQueue = OfflineSyncQueue.shared
     @State private var isCreatingSchema = false
     @State private var isSyncing = false
+    @State private var isForcingSupabase = false
+    @State private var isForcingCloudKit = false
     @State private var isRefreshingUser = false
     @State private var isRefreshingGames = false
     @State private var userRefreshSuccess = false
@@ -77,6 +82,60 @@ struct DebugView: View {
                     .tint(gamesRefreshSuccess ? .green : .blue)
                 }
                 
+                Section("Backend Status") {
+                    HStack {
+                        Circle()
+                            .fill(networkMonitor.isOnline ? Color.green : Color.red)
+                            .frame(width: 10, height: 10)
+                        Text("Network: \(networkMonitor.isOnline ? "Online" : "Offline") (\(networkMonitor.connectionType.rawValue))")
+                    }
+
+                    HStack {
+                        Circle()
+                            .fill(syncCoordinator.isSyncing ? Color.orange : Color.green)
+                            .frame(width: 10, height: 10)
+                        Text("Sync: \(syncCoordinator.syncStatusText)")
+                    }
+
+                    HStack {
+                        Circle()
+                            .fill(offlineQueue.pendingCount > 0 ? Color.yellow : Color.green)
+                            .frame(width: 10, height: 10)
+                        Text("Offline Queue: \(offlineQueue.pendingCount) pending\(offlineQueue.isProcessing ? " (processing...)" : "")")
+                    }
+
+                    Text("Backend: \(BackendSwitch.isSupabase ? "Supabase" : "CloudKit")")
+                        .font(.system(.caption, design: .monospaced))
+
+                    Button("Force Supabase Sync") {
+                        Task {
+                            isForcingSupabase = true
+                            defer { isForcingSupabase = false }
+                            do { try await SupabaseSyncService.shared.performFullSync() }
+                            catch { debugLog("Force Supabase sync error: \(error)") }
+                        }
+                    }
+                    .disabled(isForcingSupabase)
+                    .foregroundColor(.purple)
+
+                    Button("Force CloudKit Sync") {
+                        Task {
+                            isForcingCloudKit = true
+                            defer { isForcingCloudKit = false }
+                            do { try await CloudKitSyncService.shared.performFullSync() }
+                            catch { debugLog("Force CloudKit sync error: \(error)") }
+                        }
+                    }
+                    .disabled(isForcingCloudKit)
+                    .foregroundColor(.blue)
+
+                    Button("Process Offline Queue") {
+                        Task { await offlineQueue.processQueue() }
+                    }
+                    .disabled(offlineQueue.pendingCount == 0 || offlineQueue.isProcessing)
+                    .foregroundColor(.orange)
+                }
+
                 Section("CloudKit") {
                     Text(cloudKitStatus)
                         .font(.system(.caption, design: .monospaced))
@@ -283,7 +342,7 @@ struct DebugView: View {
         cloudKitStatus = "🔄 Syncing with CloudKit..."
         
         do {
-            try await CloudKitSyncService.shared.performFullSync()
+            try await SyncCoordinator.shared.performFullSync()
             cloudKitStatus = """
             ✅ CloudKit sync completed!
             

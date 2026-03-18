@@ -5,7 +5,7 @@ import Combine
 /// Сервис синхронизации Core Data <-> Supabase
 /// Замена CloudKitSyncService (~2165 строк) на Supabase REST API
 @MainActor
-class SupabaseSyncService: ObservableObject {
+class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
     static let shared = SupabaseSyncService()
 
     @Published var isSyncing = false
@@ -290,6 +290,57 @@ class SupabaseSyncService: ObservableObject {
         debugLog("Push pending data completed")
     }
 
+    // MARK: - SyncServiceProtocol conformance wrappers
+
+    func quickSyncGame(_ game: Game) async {
+        do { try await pushGame(game) }
+        catch { debugLog("SupabaseSyncService: quickSyncGame failed: \(error)") }
+    }
+
+    func quickSyncGameWithPlayers(_ gwp: [GameWithPlayer]) async {
+        do { try await pushGamePlayers(gwp) }
+        catch { debugLog("SupabaseSyncService: quickSyncGameWithPlayers failed: \(error)") }
+    }
+
+    func quickSyncPlayerProfile(_ profile: PlayerProfile) async {
+        do { try await pushProfile(profile) }
+        catch { debugLog("SupabaseSyncService: quickSyncPlayerProfile failed: \(error)") }
+    }
+
+    func syncPlayerClaims() async throws {
+        let context = persistence.container.viewContext
+        let request = PlayerClaim.fetchRequest()
+        guard let claims = try? context.fetch(request) as? [PlayerClaim] else { return }
+        try await pushClaims(claims)
+    }
+
+    func syncPlayerAliases() async throws {
+        let context = persistence.container.viewContext
+        let request = PlayerAlias.fetchRequest()
+        guard let aliases = try? context.fetch(request) as? [PlayerAlias] else { return }
+        try await pushAliases(aliases)
+    }
+
+    func fetchGameWithPlayers(forGameId gameId: UUID) async throws {
+        let players = try await pullGamePlayers(forGameId: gameId)
+        await mergeGamePlayers(players, forGameId: gameId)
+    }
+
+    func fetchPlayerProfiles(notifyOnNewPublic: Bool = false) async throws {
+        let profiles = try await pullProfiles()
+        for p in profiles { await mergeProfile(p) }
+    }
+
+    func fetchGame(byId gameId: UUID) async throws -> Game? {
+        guard let dto = try await pullGame(byId: gameId) else { return nil }
+        await mergeGames([dto])
+        return persistence.fetchGame(byId: gameId)
+    }
+
+    func cleanupInvalidClaims() async throws {
+        debugLog("SupabaseSyncService: cleanup not needed (DB constraints handle this)")
+    }
+
     // MARK: - Checksums (Smart Sync)
 
     private func checkServerChecksums() async throws -> Bool {
@@ -324,7 +375,11 @@ class SupabaseSyncService: ObservableObject {
         return false
     }
 
-    // MARK: - Merge Logic (Server Wins)
+    // MARK: - Merge Logic (Server Wins on pull — authoritative source)
+    //
+    // On pull, Supabase is the source of truth. We always overwrite local data
+    // with server data. For push conflicts (offline queue replay), the server-side
+    // function `upsert_with_conflict` compares `updated_at` timestamps.
 
     private func mergeProfile(_ dto: ProfileDTO) async {
         let context = persistence.container.viewContext

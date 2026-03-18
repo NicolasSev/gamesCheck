@@ -77,7 +77,7 @@ class PlayerClaimService {
         Task {
             do {
                 debugLog("☁️ [SUBMIT_CLAIM] Pushing claim to CloudKit...")
-                try await CloudKitSyncService.shared.syncPlayerClaims()
+                try await SyncCoordinator.shared.syncPlayerClaims()
                 debugLog("✅ [SUBMIT_CLAIM] Claim synced to CloudKit")
             } catch {
                 debugLog("❌ [SUBMIT_CLAIM] Failed to sync claim to CloudKit: \(error)")
@@ -373,21 +373,21 @@ class PlayerClaimService {
         // Синхронизируем изменения в CloudKit
         do {
             // 1. Синхронизируем PlayerClaim (обновленный статус)
-            try await CloudKitSyncService.shared.syncPlayerClaims()
+            try await SyncCoordinator.shared.syncPlayerClaims()
             debugLog("✅ [APPROVE_LINK_ALL] PlayerClaim synced")
             
             // 2. Синхронизируем все измененные GameWithPlayer
             if !gwpToSync.isEmpty {
-                await CloudKitSyncService.shared.quickSyncGameWithPlayers(gwpToSync)
+                await SyncCoordinator.shared.quickSyncGameWithPlayers(gwpToSync)
                 debugLog("✅ [APPROVE_LINK_ALL] \(gwpToSync.count) GameWithPlayer synced")
             }
             
             // 3. Синхронизируем PlayerProfile (обновленная статистика)
-            await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+            await SyncCoordinator.shared.quickSyncPlayerProfile(profile)
             debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile synced")
             
             // 4. Синхронизируем PlayerAliases
-            try await CloudKitSyncService.shared.syncPlayerAliases()
+            try await SyncCoordinator.shared.syncPlayerAliases()
             debugLog("✅ [APPROVE_LINK_ALL] PlayerAliases synced")
 
             // 5. Phase 2: Обновить materialized views для клаиманта
@@ -524,7 +524,7 @@ class PlayerClaimService {
 
         // Сразу пушим в CloudKit, иначе при следующей синхронизации статус перезапишется обратно на pending
         do {
-            try await CloudKitSyncService.shared.syncPlayerClaims()
+            try await SyncCoordinator.shared.syncPlayerClaims()
             debugLog("✅ [REJECT_CLAIM] Claim synced to CloudKit")
         } catch {
             debugLog("❌ [REJECT_CLAIM] Failed to sync claim to CloudKit: \(error)")

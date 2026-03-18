@@ -255,7 +255,7 @@ struct GameDetailView: View {
 
             do {
                 debugLog("📥 [GameDetail] Loading players for game \(game.gameId) (lazy load)")
-                try await CloudKitSyncService.shared.fetchGameWithPlayers(forGameId: game.gameId)
+                try await SyncCoordinator.shared.fetchGameWithPlayers(forGameId: game.gameId)
                 debugLog("✅ [GameDetail] Players loaded")
             } catch {
                 debugLog("❌ [GameDetail] Failed to load players: \(error)")

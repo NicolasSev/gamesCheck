@@ -250,12 +250,12 @@ final class LocalRepository: Repository {
 
 final class SyncRepository: Repository {
     private let localRepository: LocalRepository
-    private let syncService: CloudKitSyncService
+    private let syncService: SyncCoordinator
     
     @MainActor
     init(
         localRepository: LocalRepository? = nil,
-        syncService: CloudKitSyncService = .shared
+        syncService: SyncCoordinator = .shared
     ) {
         self.localRepository = localRepository ?? LocalRepository()
         self.syncService = syncService

@@ -27,9 +27,9 @@ Pods/
 .env
 .env.local
 
-# Separated repositories (live in their own repos)
-web-admin/
-supabase/
+# Separated repositories (live in their own repos as top-level dirs)
+/web-admin/
+/supabase/
 
 # Cursor
 .cursor/chat/

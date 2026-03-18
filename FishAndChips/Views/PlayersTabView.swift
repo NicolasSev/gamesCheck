@@ -69,7 +69,7 @@ struct PlayersTabView: View {
         .searchable(text: $searchText, prompt: "Поиск игрока")
         .navigationTitle("Игроки")
         .task {
-            try? await CloudKitSyncService.shared.fetchPlayerProfiles()
+            try? await SyncCoordinator.shared.fetchPlayerProfiles()
         }
         .sheet(item: $selectedProfileWrapper) { wrapper in
             PlayerPublicProfileView(profile: wrapper.profile, isSuperAdmin: isSuperAdmin)

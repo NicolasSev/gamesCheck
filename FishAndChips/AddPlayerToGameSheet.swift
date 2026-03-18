@@ -89,7 +89,7 @@ struct AddPlayerToGameSheet: View {
             // Автоматическая синхронизация в CloudKit
             if !addedGameWithPlayers.isEmpty {
                 Task {
-                    await CloudKitSyncService.shared.quickSyncGameWithPlayers(addedGameWithPlayers)
+                    await SyncCoordinator.shared.quickSyncGameWithPlayers(addedGameWithPlayers)
                     try? await MaterializedViewsService.shared.updateGameSummary(gameId: game.gameId)
                 }
             }

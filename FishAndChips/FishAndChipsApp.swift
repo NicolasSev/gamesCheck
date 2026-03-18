@@ -14,7 +14,7 @@ struct FishAndChipsApp: App {
     
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var deepLinkService = DeepLinkService()
-    @StateObject private var syncService = CloudKitSyncService.shared
+    @StateObject private var syncCoordinator = SyncCoordinator.shared
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     @State private var isInitialSyncComplete = false
@@ -57,7 +57,7 @@ struct FishAndChipsApp: App {
                 persistenceController: persistenceController,
                 notificationService: notificationService,
                 deepLinkService: deepLinkService,
-                syncService: syncService
+                syncCoordinator: syncCoordinator
             )
         }
     }
@@ -68,7 +68,7 @@ struct AppBodyView: View {
     let persistenceController: PersistenceController
     @ObservedObject var notificationService: NotificationService
     @ObservedObject var deepLinkService: DeepLinkService
-    @ObservedObject var syncService: CloudKitSyncService
+    @ObservedObject var syncCoordinator: SyncCoordinator
     
     @Environment(\.scenePhase) private var scenePhase
     
@@ -79,7 +79,7 @@ struct AppBodyView: View {
                     .environment(\.managedObjectContext, persistenceController.container.viewContext)
                     .environmentObject(notificationService)
                     .environmentObject(deepLinkService)
-                    .environmentObject(syncService)
+                    .environmentObject(syncCoordinator)
                     .onOpenURL { url in
                         debugLog("🔗 App received URL: \(url)")
                         deepLinkService.handleURL(url)
@@ -127,7 +127,7 @@ struct AppBodyView: View {
                 // Phase 1: Минимальная загрузка для быстрого показа UI
                 // Phase 2 (в фоне): Проверка витрин, при расхождении — полная синхронизация
                 debugLog("🚀 Starting smart sync...")
-                try await syncService.smartSync()
+                try await syncCoordinator.smartSync()
                 isInitialSyncComplete = true
                 debugLog("✅ Smart sync Phase 1 completed - UI ready")
 
@@ -150,7 +150,7 @@ struct AppBodyView: View {
                 Task {
                     do {
                         // Используем incremental sync если возможно
-                        try await syncService.performIncrementalSync()
+                        try await syncCoordinator.performIncrementalSync()
                         debugLog("✅ Background sync completed")
                     } catch {
                         debugLog("❌ Background sync error: \(error)")
@@ -212,9 +212,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                     .flatMap { $0["sid"] as? String }
 
                 if subscriptionID == "profile-public" {
-                    try await CloudKitSyncService.shared.fetchPlayerProfiles(notifyOnNewPublic: true)
+                    try await SyncCoordinator.shared.fetchPlayerProfiles(notifyOnNewPublic: true)
                 } else {
-                    try await CloudKitSyncService.shared.performIncrementalSync()
+                    try await SyncCoordinator.shared.performIncrementalSync()
                     await MainActor.run {
                         Task {
                             try? await NotificationService.shared.notifyGameUpdated(gameName: "Новая игра")
@@ -239,7 +239,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         debugLog("🔄 Background fetch triggered")
         Task {
             do {
-                try await CloudKitSyncService.shared.performIncrementalSync()
+                try await SyncCoordinator.shared.performIncrementalSync()
                 completionHandler(.newData)
             } catch {
                 debugLog("❌ Background fetch error: \(error)")

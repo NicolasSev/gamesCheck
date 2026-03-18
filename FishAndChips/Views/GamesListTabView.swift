@@ -7,7 +7,7 @@ struct GamesListTabView: View {
     let onFilterChange: (GameFilter) -> Void
     var onLoadMore: (() -> Void)? = nil
     
-    @StateObject private var syncService = CloudKitSyncService.shared
+    @EnvironmentObject var syncCoordinator: SyncCoordinator
     @State private var searchText = ""
     @State private var selectedDate: Date? = nil
     @State private var periodStart: Date? = nil
@@ -412,7 +412,7 @@ struct GamesListTabView: View {
             await refreshGames()
         }
         .overlay {
-            if syncService.isSyncing {
+            if syncCoordinator.isSyncing {
                 VStack {
                     ProgressView()
                         .scaleEffect(1.2)
@@ -431,7 +431,7 @@ struct GamesListTabView: View {
     private func refreshGames() async {
         debugLog("🔄 Pull-to-refresh triggered in GamesListTabView")
         do {
-            try await syncService.performIncrementalSync()
+            try await syncCoordinator.performIncrementalSync()
             debugLog("✅ Pull-to-refresh completed")
         } catch {
             debugLog("❌ Pull-to-refresh error: \(error)")

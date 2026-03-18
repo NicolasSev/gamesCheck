@@ -125,7 +125,7 @@ struct OverviewTabView: View {
                                     profile.isPublic = newValue
                                     try? viewContext.save()
                                     Task {
-                                        try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+                                        try? await SyncCoordinator.shared.quickSyncPlayerProfile(profile)
                                         if newValue {
                                             Task { @MainActor in
                                                 NotificationService.shared.saveNotificationToStore(
@@ -144,7 +144,7 @@ struct OverviewTabView: View {
                                     profile.isPublic = true
                                     try? viewContext.save()
                                     Task {
-                                        try? await CloudKitSyncService.shared.quickSyncPlayerProfile(profile)
+                                        try? await SyncCoordinator.shared.quickSyncPlayerProfile(profile)
                                         await MainActor.run {
                                             NotificationService.shared.saveNotificationToStore(
                                                 title: "Профиль публичный",

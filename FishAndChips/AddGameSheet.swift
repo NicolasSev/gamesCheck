@@ -65,7 +65,7 @@ struct AddGameSheet: View {
             
             // Автоматическая синхронизация в CloudKit
             Task {
-                await CloudKitSyncService.shared.quickSyncGame(newGame)
+                await SyncCoordinator.shared.quickSyncGame(newGame)
                 try? await MaterializedViewsService.shared.updateGameSummary(gameId: newGame.gameId)
                 // Push уведомление создавшему (потом уберём)
                 let gameName = newGame.gameType ?? "Покер"

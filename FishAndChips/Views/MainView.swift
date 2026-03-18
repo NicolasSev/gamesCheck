@@ -5,7 +5,7 @@ struct MainView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
     @EnvironmentObject var deepLinkService: DeepLinkService
-    @EnvironmentObject var syncService: CloudKitSyncService
+    @EnvironmentObject var syncCoordinator: SyncCoordinator
     @StateObject private var viewModel = MainViewModel()
 
     @State private var selectedTab: MainTab = .overview
@@ -107,7 +107,7 @@ struct MainView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 8) {
-                        if syncService.isBackgroundSyncing {
+                        if syncCoordinator.isBackgroundSyncing {
                             ProgressView()
                                 .scaleEffect(0.8)
                         }
@@ -194,7 +194,7 @@ struct MainView: View {
             .onChange(of: deepLinkService.activeDeepLink) { newDeepLink in
                 handleDeepLink(newDeepLink)
             }
-            .onChange(of: syncService.isBackgroundSyncing) { _, isSyncing in
+            .onChange(of: syncCoordinator.isBackgroundSyncing) { _, isSyncing in
                 // При завершении фоновой синхронизации обновить данные
                 if !isSyncing {
                     viewModel.refresh()

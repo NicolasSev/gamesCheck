@@ -20,9 +20,10 @@
 
 **МИГРАЦИЯ: CloudKit → Supabase (в процессе)**
 
-**Supabase = Source of Truth (целевое).** Core Data = локальный кэш.  
-**BackendSwitch** — feature flag для переключения CloudKit/Supabase.  
-**SyncRouter** — единая точка доступа к sync (маршрутизирует вызовы в активный бэкенд).
+**Гибридная архитектура: Supabase (primary) + CloudKit (offline fallback)**  
+**Supabase = Source of Truth.** Core Data = локальный кэш. CloudKit = offline device-to-device sync + Apple push.  
+**SyncCoordinator** — центральный координатор (заменяет SyncRouter). Online → Supabase, Offline → CloudKit + OfflineSyncQueue.  
+**NetworkMonitor** — отслеживает состояние сети, при reconnect автоматически обрабатывает очередь.
 
 **Supabase таблицы:** profiles (User+PlayerProfile), games, game_players, player_aliases, player_claims, billiard_batches, device_tokens  
 **Materialized views (PostgreSQL):** game_summaries, user_statistics  
@@ -35,6 +36,17 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 ---
 
 ## Текущий статус
+
+**Гибридная архитектура Supabase + CloudKit ✅** (2026-03-18):
+- ✅ Phase 1: NetworkMonitor (NWPathMonitor) + SyncServiceProtocol
+- ✅ Phase 2: SyncCoordinator (заменяет SyncRouter) — online/offline routing
+- ✅ Phase 3: Rewire 15+ Views/Services на SyncCoordinator
+- ✅ Phase 4: AuthViewModel dual-auth (Supabase online + CloudKit fallback)
+- ✅ Phase 5: OfflineSyncQueue — auto-reconnect, exponential backoff
+- ✅ Phase 6: Conflict resolution (SQL 004 + server-wins strategy)
+- ✅ Phase 7: Web-admin safety (83/83 tests pass, build OK)
+- ✅ Phase 8: iOS tests pass (pre-existing failures only)
+- ✅ Phase 9: DebugView Backend Status + docs update
 
 **Реструктуризация монорепо → 3 репозитория ✅** (2026-03-18):
 - ✅ iOS остался в `gamesCheck/` (текущий git)
@@ -73,7 +85,8 @@ Public DB: Game, GameWithPlayer, PlayerAlias, PlayerProfile, PlayerClaim, User
 
 ### iOS (текущий репозиторий — `gamesCheck/`)
 - **Persistence**: `Persistence.swift` (core) + `Persistence+*.swift` (5 extension-файлов)
-- **Supabase**: `Services/Supabase/` — SupabaseConfig, SupabaseService, SupabaseAuthService, SupabaseSyncService, SupabaseRealtimeService, BackendSwitch+SyncRouter, DataMigrationToSupabase, OfflineSyncQueue, AccountDeletionService
+- **Supabase**: `Services/Supabase/` — SupabaseConfig, SupabaseService, SupabaseAuthService, SupabaseSyncService, SupabaseRealtimeService, SyncCoordinator, BackendSwitch+SyncRouter (legacy), DataMigrationToSupabase, OfflineSyncQueue, AccountDeletionService
+- **Network**: `Services/NetworkMonitor.swift` — NWPathMonitor wrapper, auto-reconnect trigger
 - **Supabase Models**: `Models/Supabase/` — SupabaseDTO, SupabaseModelConverters
 - **CloudKit (legacy)**: `CloudKitService.swift`, `CloudKitSyncService.swift`, `CloudKitModels.swift`
 - **Логирование**: `debugLog()` из `DebugLogger.swift` — все логи только в DEBUG

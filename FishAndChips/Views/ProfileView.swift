@@ -20,7 +20,7 @@ struct ProfileView: View {
     @State private var syncErrorText: String? = nil
     
     private let claimService = PlayerClaimService()
-    @StateObject private var syncService = CloudKitSyncService.shared
+    @EnvironmentObject var syncCoordinator: SyncCoordinator
     
     private var pendingClaimsCount: Int {
         guard let userId = authViewModel.currentUserId else { return 0 }
@@ -205,13 +205,13 @@ struct ProfileView: View {
                                 HStack {
                                     Image(systemName: "circle.fill")
                                         .font(.caption2)
-                                        .foregroundColor(syncService.isSyncing ? .orange : (syncService.syncError != nil ? .red : .green))
-                                    Text(syncService.syncStatusText)
+                                        .foregroundColor(syncCoordinator.isSyncing ? .orange : (syncCoordinator.syncError != nil ? .red : .green))
+                                    Text(syncCoordinator.syncStatusText)
                                         .font(.caption)
                                         .foregroundColor(.white.opacity(0.7))
                                 }
                                 
-                                if let error = syncService.syncError {
+                                if let error = syncCoordinator.syncError {
                                     Text(error)
                                         .font(.caption2)
                                         .foregroundColor(.red.opacity(0.8))
@@ -225,7 +225,7 @@ struct ProfileView: View {
                                 }
                             }) {
                                 HStack {
-                                    if syncService.isSyncing {
+                                    if syncCoordinator.isSyncing {
                                         Image(systemName: "arrow.triangle.2.circlepath")
                                             .rotationEffect(.degrees(isSyncRotating ? 360 : 0))
                                             .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: isSyncRotating)
@@ -239,7 +239,7 @@ struct ProfileView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
                             }
-                            .disabled(syncService.isSyncing)
+                            .disabled(syncCoordinator.isSyncing)
                             .accessibilityIdentifier("profile_sync_button")
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
@@ -271,14 +271,14 @@ struct ProfileView: View {
                                 Button(action: {
                                     Task {
                                         do {
-                                            try await syncService.pushPendingData()
+                                            try await syncCoordinator.pushPendingData()
                                         } catch {
                                             debugLog("❌ Failed to push pending data: \(error)")
                                         }
                                     }
                                 }) {
                                     HStack {
-                                        if syncService.isSyncing {
+                                        if syncCoordinator.isSyncing {
                                             ProgressView()
                                                 .progressViewStyle(.circular)
                                                 .tint(.white)
@@ -293,10 +293,10 @@ struct ProfileView: View {
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 8)
                                 }
-                                .disabled(syncService.isSyncing)
+                                .disabled(syncCoordinator.isSyncing)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(syncService.isSyncing ? Color.gray.opacity(0.3) : Color.orange.opacity(0.3))
+                                        .fill(syncCoordinator.isSyncing ? Color.gray.opacity(0.3) : Color.orange.opacity(0.3))
                                 )
                             } else {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -318,7 +318,7 @@ struct ProfileView: View {
                                 Task {
                                     do {
                                         debugLog("🧹 Starting cleanup of invalid claims...")
-                                        try await CloudKitSyncService.shared.cleanupInvalidClaims()
+                                        try await SyncCoordinator.shared.cleanupInvalidClaims()
                                         debugLog("✅ Cleanup completed")
                                     } catch {
                                         debugLog("❌ Cleanup failed: \(error)")
@@ -442,7 +442,7 @@ struct ProfileView: View {
         }
         
         do {
-            try await syncService.performFullSync()
+            try await syncCoordinator.performFullSync()
             
             // Успех - зеленая кнопка на 2 секунды
             withAnimation {
