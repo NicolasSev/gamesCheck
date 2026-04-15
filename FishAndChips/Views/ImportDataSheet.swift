@@ -39,6 +39,7 @@ struct ImportDataSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Формат данных:")
                             .font(.headline)
+                            .foregroundColor(.white)
                         
                         Text("""
                         DD.MM.YYYY
@@ -46,10 +47,11 @@ struct ImportDataSheet: View {
                         Имя Количество
                         """)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.65))
                         
                         Text("Пример:")
                             .font(.headline)
+                            .foregroundColor(.white)
                             .padding(.top, 8)
                         
                         Text("""
@@ -61,29 +63,33 @@ struct ImportDataSheet: View {
                         Я 10(22,000)
                         """)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.65))
                     }
+                    .listRowBackground(Color.white.opacity(0.06))
                 }
                 
                 Section {
                     SimpleTextEditor(text: $inputText)
                         .frame(minHeight: 200)
                 }
+                .listRowBackground(Color.white.opacity(0.06))
                 
                 if let error = errorMessage {
                     Section {
                         Text(error)
-                            .foregroundColor(.red)
+                            .foregroundColor(.red.opacity(0.95))
                             .font(.caption)
                     }
+                    .listRowBackground(Color.white.opacity(0.06))
                 }
                 
                 if let success = successMessage {
                     Section {
                         Text(success)
-                            .foregroundColor(.green)
+                            .foregroundColor(Color.casinoAccentGreen)
                             .font(.caption)
                     }
+                    .listRowBackground(Color.white.opacity(0.06))
                 }
                 
                 if !conflictData.isEmpty {
@@ -117,17 +123,27 @@ struct ImportDataSheet: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.casinoAccentGreen)
+                    .accessibilityIdentifier("import_validate_button")
                     .disabled(isImporting || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                .listRowBackground(Color.clear)
             }
+            .scrollContentBackground(.hidden)
+            .accessibilityIdentifier("import_data_root")
             .navigationTitle("Импорт данных")
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") {
                         isPresented = false
                     }
+                    .foregroundColor(.white)
                 }
             }
+            .casinoBackground()
+            .preferredColorScheme(.dark)
             .sheet(isPresented: $showPlayerSelection) {
                 PlayerSelectionSheet(
                     playerNames: uniquePlayerNames,
@@ -137,7 +153,16 @@ struct ImportDataSheet: View {
                     }
                 )
             }
+            .onAppear(perform: loadUITestImportFixtureIfNeeded)
         }
+    }
+
+    /// UITest: `--uitesting-import-file` + `UITEST_IMPORT_FILE_PATH` → подставить текст из файла (как ручной ввод).
+    private func loadUITestImportFixtureIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("--uitesting-import-file") else { return }
+        guard let path = ProcessInfo.processInfo.environment["UITEST_IMPORT_FILE_PATH"], !path.isEmpty else { return }
+        guard let s = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { return }
+        inputText = s
     }
     
     private func importData() {
@@ -247,57 +272,45 @@ struct ImportDataSheet: View {
             return
         }
         
-        // Импортируем все игры
-        var importedCount = 0
-        var totalPlayers = 0
-        var errors: [String] = []
+        // Импортируем все игры одной транзакцией (один save в Core Data)
+        let importedCount: Int
+        let totalPlayers: Int
+        do {
+            try service.importGames(validatedGames, selectedPlayerNames: selectedPlayerNames, replaceExisting: false)
+            importedCount = validatedGames.count
+            totalPlayers = validatedGames.reduce(0) { $0 + $1.players.count }
+        } catch {
+            let detail = Self.coreDataErrorDescription(error)
+            errorMessage = "Ошибка импорта: \(detail)"
+            debugLog("Import failed: \(error)")
+            isImporting = false
+            return
+        }
         
-        for parsedGame in validatedGames {
+        let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
+        let message = "Успешно импортировано:\n• Игр: \(importedCount)\n• Игроков: \(totalPlayers)\n• Вы выбраны как: \(selectedNamesStr)"
+        
+        Task {
             do {
-                try service.importGames([parsedGame], selectedPlayerNames: selectedPlayerNames, replaceExisting: false)
-                importedCount += 1
-                totalPlayers += parsedGame.players.count
+                debugLog("☁️ [IMPORT] Sync после импорта (Supabase / офлайн-очередь)...")
+                try await SyncCoordinator.shared.sync()
+                debugLog("✅ [IMPORT] Синхронизация после импорта завершена")
+                let hostName = authViewModel.currentUsername
+                let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
+                try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
             } catch {
-                let errorMsg = "Ошибка импорта игры за \(dateFormatter.string(from: parsedGame.date)): \(error.localizedDescription)"
-                errors.append(errorMsg)
-                debugLog(errorMsg)
+                debugLog("⚠️ [IMPORT] Синхронизация после импорта: \(error)")
             }
         }
         
-        // Формируем сообщение
-        if !errors.isEmpty {
-            errorMessage = errors.joined(separator: "\n")
-            isImporting = false
-        } else {
-            let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
-            var message = "Успешно импортировано:\n• Игр: \(importedCount)\n• Игроков: \(totalPlayers)\n• Вы выбраны как: \(selectedNamesStr)"
-            
-            // Синхронизируем импортированные игры с CloudKit
-            Task {
-                do {
-                    debugLog("☁️ [IMPORT] Pushing imported games to CloudKit...")
-                    try await SyncCoordinator.shared.sync()
-                    debugLog("✅ [IMPORT] Successfully synced to CloudKit")
-                    // Push уведомление загрузившему (потом уберём)
-                    let hostName = authViewModel.currentUsername
-                    let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
-                    try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
-                } catch {
-                    debugLog("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
-                    // Не блокируем UI при ошибке синхронизации
-                }
-            }
-            
-            successMessage = message
-            validatedGames = []
-            uniquePlayerNames = []
-            selectedPlayerNames = []
-            
-            // Очищаем поле ввода через небольшую задержку
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                inputText = ""
-                isPresented = false
-            }
+        successMessage = message
+        validatedGames = []
+        uniquePlayerNames = []
+        selectedPlayerNames = []
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            inputText = ""
+            isPresented = false
         }
         
         isImporting = false
@@ -327,82 +340,79 @@ struct ImportDataSheet: View {
         let parsedGames = validatedGames.isEmpty ? service.parseText(inputText) : validatedGames
         let calendar = Calendar.current
         
-        // Импортируем игры с учетом пропущенных дат
-        var importedCount = 0
-        var skippedCount = 0
-        var totalPlayers = 0
-        var errors: [String] = []
+        let gamesToImport = parsedGames.filter { !skippedDates.contains(calendar.startOfDay(for: $0.date)) }
+        let skippedCount = parsedGames.count - gamesToImport.count
         
-        for parsedGame in parsedGames {
-            let gameDate = calendar.startOfDay(for: parsedGame.date)
-            
-            // Если дата была пропущена - не импортируем
-            if skippedDates.contains(gameDate) {
-                skippedCount += 1
-                continue
-            }
-            
-            // Определяем, нужно ли заменять (если есть конфликт и не пропущено - заменяем)
-            let hasConflict = conflictData.contains(where: { calendar.startOfDay(for: $0.date) == gameDate })
-            let shouldReplace = hasConflict
-            
+        do {
+            try service.importGames(
+                gamesToImport,
+                selectedPlayerNames: selectedPlayerNames,
+                replaceExisting: false,
+                replaceExistingForDate: { date in
+                    let d = calendar.startOfDay(for: date)
+                    return conflictData.contains { calendar.startOfDay(for: $0.date) == d }
+                }
+            )
+        } catch {
+            errorMessage = "Ошибка импорта: \(Self.coreDataErrorDescription(error))"
+            debugLog("Import failed: \(error)")
+            isImporting = false
+            return
+        }
+        
+        let importedCount = gamesToImport.count
+        let totalPlayers = gamesToImport.reduce(0) { $0 + $1.players.count }
+        
+        var message = "Успешно импортировано:\n• Игр: \(importedCount)"
+        if skippedCount > 0 {
+            message += "\n• Пропущено: \(skippedCount)"
+        }
+        message += "\n• Игроков: \(totalPlayers)"
+        if !selectedPlayerNames.isEmpty {
+            let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
+            message += "\n• Вы выбраны как: \(selectedNamesStr)"
+        }
+        
+        Task {
             do {
-                try service.importGames([parsedGame], selectedPlayerNames: selectedPlayerNames, replaceExisting: shouldReplace)
-                importedCount += 1
-                totalPlayers += parsedGame.players.count
+                debugLog("☁️ [IMPORT] Sync после импорта (Supabase / офлайн-очередь)...")
+                try await SyncCoordinator.shared.sync()
+                debugLog("✅ [IMPORT] Синхронизация после импорта завершена")
+                let hostName = authViewModel.currentUsername
+                let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
+                try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
             } catch {
-                let errorMsg = "Ошибка импорта игры за \(dateFormatter.string(from: parsedGame.date)): \(error.localizedDescription)"
-                errors.append(errorMsg)
-                debugLog(errorMsg)
+                debugLog("⚠️ [IMPORT] Синхронизация после импорта: \(error)")
             }
         }
         
-        // Формируем сообщение
-        if !errors.isEmpty {
-            errorMessage = errors.joined(separator: "\n")
-            isImporting = false
-        } else {
-            var message = "Успешно импортировано:\n• Игр: \(importedCount)"
-            if skippedCount > 0 {
-                message += "\n• Пропущено: \(skippedCount)"
-            }
-            message += "\n• Игроков: \(totalPlayers)"
-            if !selectedPlayerNames.isEmpty {
-                let selectedNamesStr = selectedPlayerNames.sorted().joined(separator: ", ")
-                message += "\n• Вы выбраны как: \(selectedNamesStr)"
-            }
-            
-            // Синхронизируем импортированные игры с CloudKit
-            Task {
-                do {
-                    debugLog("☁️ [IMPORT] Pushing imported games to CloudKit...")
-                    try await SyncCoordinator.shared.sync()
-                    debugLog("✅ [IMPORT] Successfully synced to CloudKit")
-                    // Push уведомление загрузившему (потом уберём)
-                    let hostName = authViewModel.currentUsername
-                    let gameName = importedCount == 1 ? "1 импортированная игра" : "\(importedCount) импортированных игр"
-                    try? await NotificationService.shared.notifyNewGame(gameName: gameName, hostName: hostName, gameId: nil)
-                } catch {
-                    debugLog("⚠️ [IMPORT] Failed to sync to CloudKit: \(error)")
-                    // Не блокируем UI при ошибке синхронизации
-                }
-            }
-            
-            successMessage = message
-            conflictData = []
-            skippedDates = []
-            validatedGames = []
-            uniquePlayerNames = []
-            selectedPlayerNames = []
-            
-            // Очищаем поле ввода через небольшую задержку
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                inputText = ""
-                isPresented = false
-            }
+        successMessage = message
+        conflictData = []
+        skippedDates = []
+        validatedGames = []
+        uniquePlayerNames = []
+        selectedPlayerNames = []
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            inputText = ""
+            isPresented = false
         }
         
         isImporting = false
+    }
+    
+    /// Разворачивает вложенные NSError Core Data (Multiple validation errors) для UI.
+    private static func coreDataErrorDescription(_ error: Error) -> String {
+        let ns = error as NSError
+        if let detailed = ns.userInfo[NSDetailedErrorsKey] as? [NSError], !detailed.isEmpty {
+            return detailed.map { err in
+                if let reason = err.userInfo[NSLocalizedFailureReasonErrorKey] as? String, !reason.isEmpty {
+                    return "\(err.localizedDescription): \(reason)"
+                }
+                return err.localizedDescription
+            }.joined(separator: "\n")
+        }
+        return ns.localizedDescription
     }
     
     private var dateFormatter: DateFormatter {

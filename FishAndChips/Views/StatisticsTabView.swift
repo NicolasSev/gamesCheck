@@ -7,7 +7,6 @@ struct StatisticsTabView: View {
     let topAnalytics: TopAnalytics?
     let chartData: [(date: Date, buyin: Decimal, gameId: UUID)]
     
-    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     @State private var selectedGame: Game?
     @Environment(\.managedObjectContext) private var viewContext
     private let persistence = PersistenceController.shared
@@ -132,29 +131,7 @@ struct StatisticsTabView: View {
                 .padding(.vertical)
             }
             .scrollContentBackground(.hidden)
-            .background(
-            Group {
-                if let image = backgroundImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .ignoresSafeArea()
-                        .overlay(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.4),
-                                    Color.black.opacity(0.6)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .ignoresSafeArea()
-                        )
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
-            }
-        )
+            .casinoBackground()
         .sheet(item: Binding(
             get: { selectedGame },
             set: { selectedGame = $0 }

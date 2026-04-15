@@ -10,14 +10,10 @@ struct DebugView: View {
     @State private var migrationStatus = ""
     @State private var userInfo = ""
     @State private var gamesInfo = ""
-    @State private var cloudKitStatus = ""
     @StateObject private var syncCoordinator = SyncCoordinator.shared
     @StateObject private var networkMonitor = NetworkMonitor.shared
     @StateObject private var offlineQueue = OfflineSyncQueue.shared
-    @State private var isCreatingSchema = false
-    @State private var isSyncing = false
     @State private var isForcingSupabase = false
-    @State private var isForcingCloudKit = false
     @State private var isRefreshingUser = false
     @State private var isRefreshingGames = false
     @State private var userRefreshSuccess = false
@@ -26,7 +22,7 @@ struct DebugView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("User Info") {
+                Section {
                     Text(userInfo)
                         .font(.system(.caption, design: .monospaced))
                     
@@ -51,10 +47,13 @@ struct DebugView: View {
                     }
                     .disabled(isRefreshingUser)
                     .buttonStyle(.borderedProminent)
-                    .tint(userRefreshSuccess ? .green : .blue)
+                    .tint(userRefreshSuccess ? .green : Color.casinoAccentGreen)
+                } header: {
+                    Text("User Info")
+                        .foregroundColor(.white.opacity(0.85))
                 }
                 
-                Section("Games Info") {
+                Section {
                     Text(gamesInfo)
                         .font(.system(.caption, design: .monospaced))
                     
@@ -79,10 +78,13 @@ struct DebugView: View {
                     }
                     .disabled(isRefreshingGames)
                     .buttonStyle(.borderedProminent)
-                    .tint(gamesRefreshSuccess ? .green : .blue)
+                    .tint(gamesRefreshSuccess ? .green : Color.casinoAccentGreen)
+                } header: {
+                    Text("Games Info")
+                        .foregroundColor(.white.opacity(0.85))
                 }
                 
-                Section("Backend Status") {
+                Section {
                     HStack {
                         Circle()
                             .fill(networkMonitor.isOnline ? Color.green : Color.red)
@@ -118,66 +120,17 @@ struct DebugView: View {
                     .disabled(isForcingSupabase)
                     .foregroundColor(.purple)
 
-                    Button("Force CloudKit Sync") {
-                        Task {
-                            isForcingCloudKit = true
-                            defer { isForcingCloudKit = false }
-                            do { try await CloudKitSyncService.shared.performFullSync() }
-                            catch { debugLog("Force CloudKit sync error: \(error)") }
-                        }
-                    }
-                    .disabled(isForcingCloudKit)
-                    .foregroundColor(.blue)
-
                     Button("Process Offline Queue") {
                         Task { await offlineQueue.processQueue() }
                     }
                     .disabled(offlineQueue.pendingCount == 0 || offlineQueue.isProcessing)
                     .foregroundColor(.orange)
+                } header: {
+                    Text("Backend Status")
+                        .foregroundColor(.white.opacity(0.85))
                 }
 
-                Section("CloudKit") {
-                    Text(cloudKitStatus)
-                        .font(.system(.caption, design: .monospaced))
-                    
-                    Button(action: {
-                        Task {
-                            await createCloudKitSchema()
-                        }
-                    }) {
-                        if isCreatingSchema {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Creating Schema...")
-                            }
-                        } else {
-                            Text("Create CloudKit Schema")
-                        }
-                    }
-                    .disabled(isCreatingSchema)
-                    .foregroundColor(.orange)
-                    
-                    Button(action: {
-                        Task {
-                            await manualSync()
-                        }
-                    }) {
-                        if isSyncing {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Syncing...")
-                            }
-                        } else {
-                            Text("Manual CloudKit Sync")
-                        }
-                    }
-                    .disabled(isSyncing)
-                    .foregroundColor(.blue)
-                }
-                
-                Section("Migration") {
+                Section {
                     Text(migrationStatus)
                         .font(.system(.caption, design: .monospaced))
                     
@@ -188,17 +141,30 @@ struct DebugView: View {
                     Button("Run Migration Now") {
                         runMigration()
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.casinoAccentGreen)
+                } header: {
+                    Text("Migration")
+                        .foregroundColor(.white.opacity(0.85))
                 }
                 
-                Section("Actions") {
+                Section {
                     Button("Clear All UserDefaults") {
                         clearUserDefaults()
                     }
                     .foregroundColor(.red)
+                } header: {
+                    Text("Actions")
+                        .foregroundColor(.white.opacity(0.85))
                 }
             }
+            .scrollContentBackground(.hidden)
+            .listStyle(.insetGrouped)
+            .listRowBackground(Color.white.opacity(0.08))
+            .accessibilityIdentifier("debug_view_root")
             .navigationTitle("Debug")
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .casinoBackground()
+            .preferredColorScheme(.dark)
             .onAppear {
                 loadUserInfo()
                 loadGamesInfo()
@@ -308,56 +274,6 @@ struct DebugView: View {
         loadUserInfo()
     }
     
-    private func createCloudKitSchema() async {
-        isCreatingSchema = true
-        cloudKitStatus = "🔄 Creating CloudKit schema..."
-        
-        do {
-            try await CloudKitSchemaCreator().createDevelopmentSchema()
-            cloudKitStatus = """
-            ✅ CloudKit schema created successfully!
-            
-            Next steps:
-            1. Open CloudKit Dashboard
-            2. Check Development → Public Database:
-               - Game ✓
-               - GameWithPlayer ✓
-               - PlayerAlias ✓
-            3. Check Development → Private Database:
-               - User ✓
-               - PlayerProfile ✓
-               - PlayerClaim ✓
-            4. Deploy schema to Production
-            5. Run Manual CloudKit Sync
-            """
-        } catch {
-            cloudKitStatus = "❌ Failed to create schema: \(error.localizedDescription)"
-        }
-        
-        isCreatingSchema = false
-    }
-    
-    private func manualSync() async {
-        isSyncing = true
-        cloudKitStatus = "🔄 Syncing with CloudKit..."
-        
-        do {
-            try await SyncCoordinator.shared.performFullSync()
-            cloudKitStatus = """
-            ✅ CloudKit sync completed!
-            
-            Check CloudKit Dashboard to verify:
-            - Games synced to Public DB
-            - GameWithPlayer records synced
-            - Users synced to Private DB
-            """
-            loadGamesInfo()
-        } catch {
-            cloudKitStatus = "❌ Sync failed: \(error.localizedDescription)"
-        }
-        
-        isSyncing = false
-    }
 }
 
 #Preview {

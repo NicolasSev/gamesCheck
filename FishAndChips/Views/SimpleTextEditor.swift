@@ -17,6 +17,7 @@ struct SimpleTextEditor: UIViewRepresentable {
         textView.smartDashesType = .no
         textView.smartQuotesType = .no
         textView.smartInsertDeleteType = .no
+        textView.accessibilityIdentifier = "import_text_editor"
         return textView
     }
     
@@ -24,6 +25,7 @@ struct SimpleTextEditor: UIViewRepresentable {
         if uiView.text != text {
             uiView.text = text
         }
+        uiView.textColor = UIColor.label
         uiView.textContentType = nil
         uiView.isSecureTextEntry = false
     }

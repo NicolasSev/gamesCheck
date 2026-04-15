@@ -1,0 +1,22 @@
+{
+  "splash": "5:2",
+  "login": "5:12",
+  "registration": "5:32",
+  "bio": "5:53",
+  "overview": "8:2",
+  "games_list": "8:51",
+  "statistics": "8:123",
+  "players": "9:2",
+  "game_detail": "9:50",
+  "billiard": "9:102",
+  "profile": "10:2",
+  "add_game": "10:35",
+  "notifications": "10:63",
+  "pending_claims": "10:94",
+  "my_claims": "10:122",
+  "player_profile": "11:2",
+  "hand_add": "11:33",
+  "debug": "11:65",
+  "import_data": "11:94",
+  "join_code": "11:108"
+}

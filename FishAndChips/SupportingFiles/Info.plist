@@ -36,6 +36,10 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>SUPABASE_URL</key>
+	<string>https://uffgwdmwufqududpyhbg.supabase.co</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmZmd3ZG13dWZxdWR1ZHB5aGJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MDI3NDAsImV4cCI6MjA5MDA3ODc0MH0.l5I7c52Ia0pganssZU2jSg_Ps0FOfW0pb5jfDlHYsDI</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

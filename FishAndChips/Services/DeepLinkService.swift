@@ -50,7 +50,7 @@ class DeepLinkService: ObservableObject {
         debugLog("🔗 DeepLinkService: Handling URL: \(url)")
         let deepLink = DeepLink.parse(from: url)
         
-        // Если это ссылка на игру, проверяем её наличие и загружаем из CloudKit при необходимости
+        // Ссылка на игру: локальный кэш или pull с Supabase через SyncCoordinator
         if case .game(let gameId) = deepLink {
             Task {
                 await handleGameDeepLink(gameId: gameId)
@@ -76,8 +76,7 @@ class DeepLinkService: ObservableObject {
             return
         }
         
-        // Игры нет локально - загружаем из CloudKit
-        debugLog("🔄 [DEEPLINK] Game \(gameId) not found locally, fetching from CloudKit...")
+        debugLog("🔄 [DEEPLINK] Game \(gameId) not found locally, fetching from Supabase...")
         await MainActor.run {
             isLoadingGame = true
             loadError = nil
@@ -86,7 +85,7 @@ class DeepLinkService: ObservableObject {
         do {
             if let fetchedGame = try await SyncCoordinator.shared.fetchGame(byId: gameId) {
                 let playerCount = (fetchedGame.gameWithPlayers as? Set<GameWithPlayer>)?.count ?? 0
-                debugLog("✅ [DEEPLINK] Game \(gameId) fetched from CloudKit with \(playerCount) players")
+                debugLog("✅ [DEEPLINK] Game \(gameId) fetched with \(playerCount) players")
                 
                 await MainActor.run {
                     isLoadingGame = false
@@ -94,32 +93,20 @@ class DeepLinkService: ObservableObject {
                 }
                 
                 if playerCount == 0 {
-                    debugLog("⚠️ [DEEPLINK] WARNING: Game has NO players! Check CloudKit sync.")
+                    debugLog("⚠️ [DEEPLINK] WARNING: Game has NO players after fetch.")
                 }
             } else {
                 await MainActor.run {
                     isLoadingGame = false
                     loadError = "Игра не найдена. Возможно, она была удалена или ссылка устарела."
                 }
-                debugLog("❌ [DEEPLINK] Game \(gameId) not found in CloudKit")
+                debugLog("❌ [DEEPLINK] Game \(gameId) not found on server")
             }
         } catch {
             await MainActor.run {
                 isLoadingGame = false
                 
-                // Специальная обработка для разных типов ошибок
-                if let syncError = error as? CloudKitSyncError {
-                    switch syncError {
-                    case .gameNotPublic:
-                        loadError = "Игра недоступна. Создатель ещё не сделал её публичной. Попросите создателя сделать игру публичной и отправить ссылку снова."
-                    case .gameNotFound:
-                        loadError = "Игра не найдена. Возможно, она была удалена или ссылка устарела."
-                    default:
-                        loadError = error.localizedDescription
-                    }
-                } else {
-                    loadError = "Ошибка загрузки игры. Проверьте подключение к интернету."
-                }
+                loadError = "Ошибка загрузки игры. Проверьте подключение к интернету и что игра публична или вы участник."
             }
             debugLog("❌ [DEEPLINK] Error fetching game \(gameId): \(error)")
             debugLog("❌ [DEEPLINK] Error details: \(error.localizedDescription)")

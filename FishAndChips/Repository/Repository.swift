@@ -246,7 +246,7 @@ final class LocalRepository: Repository {
     }
 }
 
-// MARK: - Sync Repository (CoreData + CloudKit)
+// MARK: - Sync Repository (Core Data + Supabase через координатор)
 
 final class SyncRepository: Repository {
     private let localRepository: LocalRepository

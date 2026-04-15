@@ -72,6 +72,7 @@ struct PlayerSelectionSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .accessibilityIdentifier("player_pick_\(playerName)")
                     }
                 }
                 .listStyle(PlainListStyle())
@@ -90,6 +91,7 @@ struct PlayerSelectionSheet: View {
                         onConfirm()
                         dismiss()
                     }
+                    .accessibilityIdentifier("import_player_confirm_button")
                     .disabled(selectedPlayerNames.isEmpty)
                     .font(.headline)
                 }

@@ -3,7 +3,7 @@ import CoreData
 import Combine
 
 /// Сервис синхронизации Core Data <-> Supabase
-/// Замена CloudKitSyncService (~2165 строк) на Supabase REST API
+/// Синхронизация с Supabase REST API + Core Data
 @MainActor
 class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
     static let shared = SupabaseSyncService()
@@ -62,6 +62,23 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
     /// Phase 1: быстрая загрузка профиля и последних игр
     /// Phase 2 (фон): проверка checksums, при расхождении — полная загрузка
     func smartSync() async throws {
+        // Ждём восстановления Supabase-сессии (auth).
+        // Без userId sync бессмыслен — guard в performFullSync/performMinimalSync
+        // вернёт nil и мы получим 0 данных.
+        let userId = await waitForAuth(timeout: 10)
+        if userId == nil {
+            debugLog("⚠️ smartSync: auth timeout — sync skipped, will retry on next active")
+            return
+        }
+
+        // Если Core Data пуст — сразу делаем full sync вместо minimal + checksum
+        let localGames = persistence.fetchAllActiveGames()
+        if localGames.isEmpty {
+            debugLog("Core Data empty — performing full sync instead of smart sync")
+            try await performFullSync()
+            return
+        }
+
         try await performMinimalSync()
 
         Task.detached { [weak self] in
@@ -91,14 +108,50 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
             await mergeProfile(profile)
         }
 
-        let recentGames: [GameDTO] = try await supabase.fetchByFilter(table: "games") { query in
+        // 1. Игры, созданные пользователем
+        let createdGames: [GameDTO] = try await supabase.fetchByFilter(table: "games") { query in
             query
                 .eq("creator_id", value: userId)
                 .eq("soft_deleted", value: false)
                 .order("timestamp", ascending: false)
                 .limit(20)
         }
-        await mergeGames(recentGames)
+
+        // 2. Игры, в которых пользователь — участник (game_players.profile_id)
+        //    Берём game_id из game_players, затем подгружаем сами игры
+        let myParticipations: [GamePlayerDTO] = try await supabase.fetchByFilter(table: "game_players") { query in
+            query.eq("profile_id", value: userId)
+        }
+        let participantGameIds = Set(myParticipations.map(\.gameId))
+        let createdGameIds = Set(createdGames.map(\.id))
+        let missingGameIds = participantGameIds.subtracting(createdGameIds)
+
+        var participantGames: [GameDTO] = []
+        if !missingGameIds.isEmpty {
+            // Batch: подгружаем все недостающие игры одним запросом (вместо N запросов)
+            let idsArray = Array(missingGameIds)
+            participantGames = try await supabase.fetchByFilter(table: "games") { query in
+                query
+                    .in("id", values: idsArray.map(\.uuidString))
+                    .eq("soft_deleted", value: false)
+            }
+        }
+
+        let allGames = createdGames + participantGames
+        await mergeGames(allGames)
+
+        // 3. Batch: загружаем ВСЕ game_players одним запросом (вместо N)
+        if !allGames.isEmpty {
+            let gameIds = allGames.map(\.id)
+            let allPlayers: [GamePlayerDTO] = try await supabase.fetchByFilter(table: "game_players") { query in
+                query.in("game_id", values: gameIds.map(\.uuidString))
+            }
+            // Группируем по game_id и мержим
+            let grouped = Dictionary(grouping: allPlayers, by: \.gameId)
+            for (gameId, players) in grouped {
+                await mergeGamePlayers(players, forGameId: gameId)
+            }
+        }
 
         let pendingClaims: [PlayerClaimDTO] = try await supabase.fetchByFilter(table: "player_claims") { query in
             query
@@ -147,13 +200,11 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
             }
             await mergeGames(games)
 
-            for game in games {
-                let players: [GamePlayerDTO] = try await supabase.fetchByColumn(
-                    table: "game_players",
-                    column: "game_id",
-                    value: game.id
-                )
-                await mergeGamePlayers(players, forGameId: game.id)
+            // Batch: все game_players одним запросом (вместо N запросов по одному на игру)
+            let allPlayers: [GamePlayerDTO] = try await supabase.fetchAll(table: "game_players")
+            let grouped = Dictionary(grouping: allPlayers, by: \.gameId)
+            for (gameId, players) in grouped {
+                await mergeGamePlayers(players, forGameId: gameId)
             }
 
             let aliases: [PlayerAliasDTO] = try await supabase.fetchAll(table: "player_aliases")
@@ -185,6 +236,18 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
 
         let games: [GameDTO] = try await supabase.fetchSince(table: "games", since: since)
         await mergeGames(games)
+
+        // Batch: загружаем game_players для обновлённых игр одним запросом
+        if !games.isEmpty {
+            let gameIds = games.map(\.id)
+            let allPlayers: [GamePlayerDTO] = try await supabase.fetchByFilter(table: "game_players") { query in
+                query.in("game_id", values: gameIds.map(\.uuidString))
+            }
+            let grouped = Dictionary(grouping: allPlayers, by: \.gameId)
+            for (gameId, players) in grouped {
+                await mergeGamePlayers(players, forGameId: gameId)
+            }
+        }
 
         let aliases: [PlayerAliasDTO] = try await supabase.fetchAll(table: "player_aliases")
         await mergeAliases(aliases)
@@ -439,6 +502,21 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
     }
 
     // MARK: - Helpers
+
+    /// Ожидает восстановления Supabase auth-сессии (до `timeout` секунд).
+    /// Supabase SDK восстанавливает сессию из Keychain асинхронно —
+    /// smartSync может стартовать раньше. Polling с шагом 0.3с.
+    private func waitForAuth(timeout: TimeInterval = 10) async -> UUID? {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            if let userId = await supabase.currentUserId() {
+                debugLog("✅ waitForAuth: userId ready in \(String(format: "%.1f", Date().timeIntervalSince(start)))s")
+                return userId
+            }
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+        }
+        return nil
+    }
 
     func canSync() async -> Bool {
         await supabase.isAvailable()

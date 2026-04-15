@@ -1,15 +1,22 @@
 ---
-description: SwiftUI Views — разбиение, accessibility, casino background
-globs: FishAndChips/Views/**/*.swift
+description: SwiftUI Views — SyncCoordinator, разбиение, casino background
+globs: FishAndChips/Views/**/*.swift,FishAndChips/AddGameSheet.swift,FishAndChips/AddPlayerToGameSheet.swift
 alwaysApply: false
 ---
 
 # SwiftUI Views
 
-- **Разбивать на компоненты** при >200 строк: выносить subviews в отдельные файлы или приватные struct
+## Sync — ОБЯЗАТЕЛЬНО
+- **SyncCoordinator** — единственная точка доступа к sync из Views
+- `@EnvironmentObject var syncCoordinator: SyncCoordinator` — получать из environment (инжектируется в FishAndChipsApp)
+- **НИКОГДА** `CloudKitSyncService.shared` или `SupabaseSyncService.shared` в Views
+- Quick sync: `syncCoordinator.quickSyncGame()`, `syncCoordinator.quickSyncPlayerProfile()`
+
+## UI
+- **Разбивать на компоненты** при >200 строк
 - **NavigationStack** (не NavigationView) для iOS 16+
-- **Casino background**: использовать общий modifier `CasinoBackgroundModifier` или `casinoBackground()`
-- **formatCurrency**: через `Double.formatCurrency` extension, не дублировать
-- **accessibility**: добавлять `.accessibilityLabel`, `.accessibilityHint`, `accessibilityIdentifier` для XCUITest
+- **Casino background**: `CasinoBackgroundModifier` или `casinoBackground()`
+- **formatCurrency**: через `Double.formatCurrency` extension
+- **accessibility**: `.accessibilityLabel`, `.accessibilityHint`, `accessibilityIdentifier`
 - **Property wrappers**: `@StateObject` для владения, `@ObservedObject` для передачи, `@EnvironmentObject` для DI
-- **Timer/Combine**: invalidate в `onDisappear`, не оставлять подписки без отмены
+- **Timer/Combine**: invalidate в `onDisappear`

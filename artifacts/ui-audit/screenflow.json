@@ -1,0 +1,76 @@
+[
+  {
+    "navigation_action" : "existing_keychain_session",
+    "notes" : "legacy: screen.main",
+    "order" : 1,
+    "parent_screen_id" : "splash",
+    "screen_id" : "main_root",
+    "screen_title" : "Main (TabBar)",
+    "screen_type" : "root",
+    "screenshot" : "01_main_root.png"
+  },
+  {
+    "navigation_action" : "tab_overview",
+    "order" : 2,
+    "parent_screen_id" : "main_root",
+    "screen_id" : "tab_overview",
+    "screen_title" : "Обзор",
+    "screen_type" : "tab",
+    "screenshot" : "02_tab_overview.png"
+  },
+  {
+    "navigation_action" : "tab_games",
+    "order" : 3,
+    "parent_screen_id" : "main_root",
+    "screen_id" : "tab_games",
+    "screen_title" : "Игры",
+    "screen_type" : "tab",
+    "screenshot" : "03_tab_games.png"
+  },
+  {
+    "navigation_action" : "empty_list",
+    "notes" : "Нет строк для game_detail \/ billiard",
+    "order" : 4,
+    "parent_screen_id" : "tab_games",
+    "screen_id" : "games_empty",
+    "screen_title" : "Игры (пусто)",
+    "screen_type" : "empty_state",
+    "screenshot" : "04_games_empty.png"
+  },
+  {
+    "navigation_action" : "tab_statistics",
+    "order" : 5,
+    "parent_screen_id" : "main_root",
+    "screen_id" : "tab_statistics",
+    "screen_title" : "Статистика",
+    "screen_type" : "tab",
+    "screenshot" : "05_tab_statistics.png"
+  },
+  {
+    "navigation_action" : "tab_players",
+    "order" : 6,
+    "parent_screen_id" : "main_root",
+    "screen_id" : "tab_players",
+    "screen_title" : "Игроки",
+    "screen_type" : "tab",
+    "screenshot" : "06_tab_players.png"
+  },
+  {
+    "navigation_action" : "toolbar_profile",
+    "order" : 7,
+    "parent_screen_id" : "main_root",
+    "screen_id" : "profile",
+    "screen_title" : "Профиль",
+    "screen_type" : "modal",
+    "screenshot" : "07_profile.png"
+  },
+  {
+    "navigation_action" : "notifications_history",
+    "order" : 8,
+    "parent_screen_id" : "profile",
+    "screen_id" : "notifications",
+    "screen_title" : "Уведомления",
+    "screen_type" : "detail",
+    "screenshot" : "08_notifications.png"
+  }
+]

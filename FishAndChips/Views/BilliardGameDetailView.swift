@@ -17,7 +17,6 @@ struct BilliardGameDetailView: View {
     @State private var isEditPlayersSheetPresented: Bool = false
     @State private var showDeleteAlert = false
     @State private var selectedBatchToDelete: BilliardBatche?
-    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     
     var body: some View {
         NavigationStack {
@@ -97,6 +96,8 @@ struct BilliardGameDetailView: View {
                     
                     Spacer()
             }
+            .accessibilityIdentifier("billiard_detail_root")
+            .casinoBackground()
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     Button {
@@ -104,40 +105,19 @@ struct BilliardGameDetailView: View {
                     } label: {
                         Label("Добавить игрока", systemImage: "person.fill.badge.plus")
                     }
+                    .accessibilityIdentifier("billiard_add_player_button")
                     Button {
                         addBatch()
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityIdentifier("billiard_add_batch_button")
                 }
             }
             .sheet(isPresented: $isEditPlayersSheetPresented) {
                 EditBilliardsPlayersSheet(isPresented: $isEditPlayersSheetPresented, game: game)
                     .environment(\.managedObjectContext, viewContext)
             }
-            .background(
-                Group {
-                    if let image = backgroundImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .ignoresSafeArea()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.4),
-                                        Color.black.opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                            )
-                    } else {
-                        Color.black.ignoresSafeArea()
-                    }
-                }
-            )
         }
     }
     

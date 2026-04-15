@@ -40,7 +40,10 @@ struct PlayerRow: View {
                 // Управление buyin (только для хоста)
                 if isHost {
                     HStack(spacing: 8) {
-                        Button(action: { updateBuyIn(gameWithPlayer, -1) }) {
+                        Button(action: {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            updateBuyIn(gameWithPlayer, -1)
+                        }) {
                             Image(systemName: "minus.circle.fill")
                                 .font(.title)
                                 .foregroundColor(.red)
@@ -53,7 +56,10 @@ struct PlayerRow: View {
                             .foregroundColor(.white)
                             .frame(minWidth: 40)
                         
-                        Button(action: { updateBuyIn(gameWithPlayer, 1) }) {
+                        Button(action: {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            updateBuyIn(gameWithPlayer, 1)
+                        }) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title)
                                 .foregroundColor(.green)

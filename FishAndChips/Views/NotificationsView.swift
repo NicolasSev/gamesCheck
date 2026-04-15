@@ -22,9 +22,10 @@ struct NotificationsView: View {
                     systemImage: "bell.slash",
                     description: Text("Здесь будут отображаться уведомления о новых и обновлённых играх")
                 )
+                .foregroundStyle(.white)
                 .listRowBackground(Color.clear)
             } else {
-                ForEach(notifications) { notification in
+                ForEach(notifications, id: \.objectID) { notification in
                     NotificationRowView(notification: notification)
                         .onTapGesture {
                             markAsRead(notification)
@@ -32,11 +33,17 @@ struct NotificationsView: View {
                                 NotificationCenter.default.post(name: .openGameFromNotification, object: gameId)
                             }
                         }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 }
                 .onDelete(perform: deleteNotifications)
             }
         }
-        .listStyle(.insetGrouped)
+        .accessibilityIdentifier("notifications_view_root")
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .casinoBackground()
         .navigationTitle("Уведомления")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -67,17 +74,19 @@ struct NotificationRowView: View {
             HStack {
                 Text(notification.title)
                     .font(.headline)
-                    .foregroundColor(notification.isRead ? .secondary : .primary)
+                    .foregroundColor(notification.isRead ? .white.opacity(0.65) : .white)
                 Spacer()
                 Text(dateString)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.45))
             }
             Text(notification.body)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.75))
                 .lineLimit(2)
         }
-        .padding(.vertical, 6)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .liquidGlass(cornerRadius: 12)
     }
 }

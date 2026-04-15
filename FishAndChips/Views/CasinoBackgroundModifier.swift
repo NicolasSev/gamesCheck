@@ -5,6 +5,12 @@
 
 import SwiftUI
 
+/// Акценты в духе casino dark UI (см. Figma: зелёный CTA, золотой вторичный).
+extension Color {
+    static let casinoAccentGreen = Color(red: 0.2, green: 0.78, blue: 0.5)
+    static let casinoAccentGold = Color(red: 0.95, green: 0.78, blue: 0.3)
+}
+
 /// Общий фон с casino-background для экранов приложения
 struct CasinoBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {

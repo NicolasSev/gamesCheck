@@ -22,7 +22,14 @@ protocol BackendServiceProtocol: AnyObject, Sendable {
     func batchUpsert<T: Codable & Sendable>(table: String, values: [T]) async throws -> [T]
 }
 
-/// Абстракция над авторизацией (backend-level: Supabase Auth / CloudKit)
+/// Историческое имя: дефолтная реализация — `SupabaseAuthService` (`fetchUser` для офлайна возвращает nil).
+protocol AuthCloudKitSyncProtocol: AnyObject {
+    func fetchUser(byEmail email: String) async throws -> User?
+    func quickSyncUser(_ user: User) async
+    func quickSyncPlayerProfile(_ profile: PlayerProfile) async
+}
+
+/// Абстракция над авторизацией (Supabase Auth)
 protocol AuthServiceProtocol: AnyObject, Sendable {
     func signUp(email: String, password: String) async throws -> AuthUser
     func signIn(email: String, password: String) async throws -> AuthUser
@@ -46,8 +53,7 @@ struct AuthUser: Sendable {
     let createdAt: Date
 }
 
-/// Unified sync protocol — CloudKitSyncService and SupabaseSyncService both conform.
-/// SyncCoordinator routes calls based on network state.
+/// Реализует `SupabaseSyncService`. `SyncCoordinator` — единая точка для UI.
 @MainActor
 protocol SyncServiceProtocol: ObservableObject {
     var isSyncing: Bool { get }

@@ -73,14 +73,13 @@ class PlayerClaimService {
         
         try context.save()
         
-        // Синхронизируем заявку с CloudKit сразу после создания
         Task {
             do {
-                debugLog("☁️ [SUBMIT_CLAIM] Pushing claim to CloudKit...")
+                debugLog("☁️ [SUBMIT_CLAIM] Отправка заявки в Supabase...")
                 try await SyncCoordinator.shared.syncPlayerClaims()
-                debugLog("✅ [SUBMIT_CLAIM] Claim synced to CloudKit")
+                debugLog("✅ [SUBMIT_CLAIM] Заявка синхронизирована")
             } catch {
-                debugLog("❌ [SUBMIT_CLAIM] Failed to sync claim to CloudKit: \(error)")
+                debugLog("❌ [SUBMIT_CLAIM] Ошибка синхронизации заявки: \(error)")
                 // Помечаем как pending для последующей синхронизации
                 PendingSyncTracker.shared.addPendingPlayerClaim(claim.claimId)
             }
@@ -240,56 +239,21 @@ class PlayerClaimService {
         var profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
         
         if profile == nil {
-            debugLog("⚠️ [APPROVE_LINK_ALL] PlayerProfile not found locally, checking CloudKit...")
-            
-            // Пытаемся загрузить User из CloudKit если его нет локально
-            var user = persistence.fetchUser(byId: claim.claimantUserId)
-            
-            if user == nil {
-                debugLog("⚠️ [APPROVE_LINK_ALL] User not found locally, fetching from CloudKit...")
+            debugLog("⚠️ [APPROVE_LINK_ALL] PlayerProfile не найден локально...")
+            let user: User
+            if let local = persistence.fetchUser(byId: claim.claimantUserId) {
+                user = local
+            } else {
                 do {
-                    // Загружаем User из CloudKit Public DB
-                    let predicate = NSPredicate(format: "TRUEPREDICATE")
-                    let records = try await CloudKitService.shared.queryRecords(
-                        withType: .user,
-                        from: .publicDB,
-                        predicate: predicate,
-                        sortDescriptors: nil,
-                        resultsLimit: 1000
-                    )
-                    
-                    // Ищем пользователя с нужным userId
-                    if let userRecord = records.records.first(where: { $0.recordID.recordName == claim.claimantUserId.uuidString }) {
-                        debugLog("✅ [APPROVE_LINK_ALL] Found user in CloudKit, creating local copy...")
-                        
-                        // Создаем локальную копию User
-                        let newUser = User(context: context)
-                        newUser.userId = claim.claimantUserId
-                        newUser.updateFromCKRecord(userRecord)
-                        newUser.passwordHash = "remote_user_no_auth"
-                        
-                        user = newUser
-                        debugLog("✅ [APPROVE_LINK_ALL] Created local User: \(newUser.username)")
-                    } else {
-                        debugLog("❌ [APPROVE_LINK_ALL] User \(claim.claimantUserId) not found in CloudKit")
-                        throw ClaimError.userNotFound
-                    }
+                    user = try await ensureClaimantUserFromSupabase(claimantUserId: claim.claimantUserId, context: context)
                 } catch {
-                    debugLog("❌ [APPROVE_LINK_ALL] Failed to fetch user from CloudKit: \(error)")
+                    debugLog("❌ [APPROVE_LINK_ALL] Нет локального User и не удалось подтянуть profiles из Supabase: \(error)")
                     throw ClaimError.userNotFound
                 }
             }
-            
-            guard let user = user else {
-                throw ClaimError.userNotFound
-            }
-            
-            debugLog("📝 [APPROVE_LINK_ALL] Creating PlayerProfile for user \(user.username)...")
-            profile = persistence.createPlayerProfile(
-                displayName: user.username,
-                userId: claim.claimantUserId
-            )
-            debugLog("✅ [APPROVE_LINK_ALL] Created PlayerProfile")
+            profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
+                ?? persistence.createPlayerProfile(displayName: user.username, userId: claim.claimantUserId)
+            debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile готов")
         }
         
         guard let profile = profile else {
@@ -368,9 +332,7 @@ class PlayerClaimService {
         
         try context.save()
         
-        debugLog("☁️ [APPROVE_LINK_ALL] Syncing changes to CloudKit...")
-        
-        // Синхронизируем изменения в CloudKit
+        debugLog("☁️ [APPROVE_LINK_ALL] Синхронизация в Supabase...")
         do {
             // 1. Синхронизируем PlayerClaim (обновленный статус)
             try await SyncCoordinator.shared.syncPlayerClaims()
@@ -393,9 +355,9 @@ class PlayerClaimService {
             // 5. Phase 2: Обновить materialized views для клаиманта
             try? await MaterializedViewsService.shared.updateUserStatisticsSummary(userId: claim.claimantUserId)
 
-            debugLog("✅ [APPROVE_LINK_ALL] All changes synced to CloudKit")
+            debugLog("✅ [APPROVE_LINK_ALL] Изменения отправлены в Supabase")
         } catch {
-            debugLog("⚠️ [APPROVE_LINK_ALL] Failed to sync to CloudKit: \(error)")
+            debugLog("⚠️ [APPROVE_LINK_ALL] Ошибка синхронизации Supabase: \(error)")
             // Не бросаем ошибку, т.к. локально все сохранено
         }
         
@@ -522,12 +484,11 @@ class PlayerClaimService {
 
         try context.save()
 
-        // Сразу пушим в CloudKit, иначе при следующей синхронизации статус перезапишется обратно на pending
         do {
             try await SyncCoordinator.shared.syncPlayerClaims()
-            debugLog("✅ [REJECT_CLAIM] Claim synced to CloudKit")
+            debugLog("✅ [REJECT_CLAIM] Статус заявки отправлен в Supabase")
         } catch {
-            debugLog("❌ [REJECT_CLAIM] Failed to sync claim to CloudKit: \(error)")
+            debugLog("❌ [REJECT_CLAIM] Ошибка синхронизации: \(error)")
             PendingSyncTracker.shared.addPendingPlayerClaim(claimId)
         }
 
@@ -548,6 +509,40 @@ class PlayerClaimService {
     }
     
     // MARK: - Helpers
+
+    /// Локальный `User` + `PlayerProfile` из таблицы `profiles` Supabase (хост одобряет claim без локального клаиманта).
+    private func ensureClaimantUserFromSupabase(claimantUserId: UUID, context: NSManagedObjectContext) async throws -> User {
+        if let u = persistence.fetchUser(byId: claimantUserId) { return u }
+        guard let dto: ProfileDTO = try await SupabaseService.shared.fetchById(table: "profiles", id: claimantUserId) else {
+            throw ClaimError.userNotFound
+        }
+        return try await MainActor.run {
+            if let existing = persistence.fetchPlayerProfile(byProfileId: dto.id) {
+                existing.updateFromProfileDTO(dto)
+            } else {
+                _ = PlayerProfile.createFromProfileDTO(dto, context: context)
+            }
+            if let u = persistence.fetchUser(byId: claimantUserId) { return u }
+            let newUser = User(context: context)
+            newUser.userId = claimantUserId
+            var uname = dto.username.trimmingCharacters(in: .whitespacesAndNewlines)
+            if uname.isEmpty { uname = dto.displayName.trimmingCharacters(in: .whitespacesAndNewlines) }
+            if uname.isEmpty { uname = "user_\(String(claimantUserId.uuidString.prefix(8)))" }
+            newUser.username = uname
+            newUser.passwordHash = "remote_user_no_auth"
+            newUser.email = nil
+            newUser.createdAt = dto.createdAt
+            newUser.subscriptionStatus = dto.subscriptionStatus
+            newUser.isSuperAdmin = dto.isSuperAdmin
+            newUser.subscriptionExpiresAt = dto.subscriptionExpiresAt
+            if let prof = persistence.fetchPlayerProfile(byProfileId: claimantUserId) {
+                prof.user = newUser
+                newUser.playerProfile = prof
+            }
+            try context.save()
+            return newUser
+        }
+    }
     
     /// Найти GameWithPlayer по objectId строке
     private func findGameWithPlayer(byObjectId objectIdString: String) -> GameWithPlayer? {

@@ -1,14 +1,23 @@
 ---
-description: Тесты — in-memory Core Data, моки, Swift Testing
+description: iOS тесты — in-memory Core Data, моки, Swift Testing
 globs: FishAndChipsTests/**/*.swift
 alwaysApply: false
 ---
 
-# Testing
+# iOS Testing
 
+## Swift Testing (preferred)
 - **PersistenceController(inMemory: true)** для изолированных тестов
-- **Моки**: MockKeychainService, MockAuthCloudKitSync — не использовать .shared в тестах
-- **Swift Testing** (preferred): `@Test`, `#expect`, `@MainActor`
-- **XCTest**: `async throws` для async методов, `try await` для вызовов
-- **Naming**: `testMethodName_Scenario` или `methodName_scenario` (Swift Testing)
-- **Setup/Teardown**: очищать keychain, persistence в tearDown
+- **Моки**: MockKeychainService, MockAuthCloudKitSync, MockSupabaseService, MockSupabaseAuth
+- **НИКОГДА** не использовать `.shared` синглтоны в тестах — инжектировать через init
+- `@Test`, `#expect`, `@MainActor`
+- **Naming**: `methodName_scenario()`
+- **AuthViewModel** тесты: передавать `cloudKitSync:`, `syncCoordinator:` явно
+- **Pre-existing failures**: PokerOddsCalculatorTests (2), CloudKitServiceTests (2) — не чинить без запроса
+
+## XCTest
+- `async throws` для async методов
+
+## xcodebuild
+- Destination: `'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.5'`
+- Тесты: `-only-testing:FishAndChipsTests` (не UI-тесты)

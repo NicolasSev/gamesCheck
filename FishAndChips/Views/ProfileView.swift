@@ -13,8 +13,8 @@ struct ProfileView: View {
     @State private var isUpdatingUsername = false
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var showingLogoutConfirm = false
     
-    // Sync button visual states
     @State private var isSyncRotating = false
     @State private var syncButtonColor: Color = .blue
     @State private var syncErrorText: String? = nil
@@ -31,355 +31,313 @@ struct ProfileView: View {
         guard let userId = authViewModel.currentUserId else { return 0 }
         return claimService.getMyClaims(userId: userId).count
     }
+    
+    private var isSuperAdmin: Bool {
+        #if DEBUG
+        if authViewModel.currentUser?.email?.lowercased() == "sevasresident@gmail.com" {
+            return true
+        }
+        #endif
+        return authViewModel.currentUser?.isSuperAdmin ?? false
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                    VStack(spacing: 16) {
-                        // Версия и номер сборки
-                        VStack(alignment: .leading, spacing: 4) {
-                            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-                               let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
-                                Text("Версия \(version) (\(build))")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                        
-                        // Пользователь
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Пользователь")
-                                .font(.headline)
+                VStack(spacing: 16) {
+                    // Аватар и имя пользователя
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 80, height: 80)
+                            Text(String(authViewModel.currentUsername.prefix(1)).uppercased())
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
-                            
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(authViewModel.currentUsername)
-                                        .font(.body)
-                                        .foregroundColor(.white.opacity(0.9))
-                                    
-                                    if let user = authViewModel.currentUser, let email = user.email {
-                                        Text(email)
-                                            .font(.subheadline)
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-                                    
-                                    if let id = authViewModel.currentUserId {
-                                        Text(id.uuidString)
-                                            .font(.caption)
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                }
-                                
-                                Spacer()
+                        }
+                        
+                        VStack(spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text(authViewModel.currentUsername)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
                                 
                                 Button(action: {
                                     newUsername = authViewModel.currentUsername
                                     showingEditUsername = true
                                 }) {
                                     Image(systemName: "pencil.circle.fill")
-                                        .font(.title2)
+                                        .font(.body)
                                         .foregroundColor(.blue)
                                 }
                             }
-                        }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-
-                        // Заявки
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Заявки")
-                                .font(.headline)
-                                .foregroundColor(.white)
                             
-                            // Мои заявки
-                            Button(action: {
-                                showingMyClaims = true
-                            }) {
+                            if let user = authViewModel.currentUser, let email = user.email {
+                                Text(email)
+                                    .font(.subheadline)
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                        }
+                        
+                        if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                           let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                            Text("v\(version) (\(build))")
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                    }
+                    .padding(.top, 8)
+
+                    // Заявки
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Заявки", systemImage: "person.badge.clock")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Button(action: { showingMyClaims = true }) {
+                            HStack {
+                                Text("Мои заявки")
+                                    .foregroundColor(.white)
+                                Spacer()
+                                if myClaimsCount > 0 {
+                                    Text("\(myClaimsCount)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Capsule().fill(.blue.opacity(0.5)))
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                        .accessibilityIdentifier("profile_my_claims_button")
+                        
+                        if pendingClaimsCount > 0 {
+                            Divider().background(Color.white.opacity(0.1))
+                            
+                            Button(action: { showingPendingClaims = true }) {
                                 HStack {
-                                    Text("Мои заявки")
+                                    Text("Ожидающие заявки")
                                         .foregroundColor(.white)
                                     Spacer()
-                                    if myClaimsCount > 0 {
-                                        Text("\(myClaimsCount)")
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
+                                    Text("\(pendingClaimsCount)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Capsule().fill(.orange.opacity(0.6)))
                                     Image(systemName: "chevron.right")
-                                        .foregroundColor(.white.opacity(0.7))
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.5))
                                 }
                             }
-                            
-                            // Ожидающие заявки (для хоста)
-                            if pendingClaimsCount > 0 {
-                                Button(action: {
-                                    showingPendingClaims = true
-                                }) {
-                                    HStack {
-                                        Text("Ожидающие заявки")
-                                            .foregroundColor(.white)
-                                        Spacer()
-                                        Text("\(pendingClaimsCount)")
-                                            .foregroundColor(.orange)
-                                            .fontWeight(.semibold)
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(.white.opacity(0.7))
+                            .accessibilityIdentifier("profile_pending_claims_button")
+                        }
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+
+                    // Уведомления
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Уведомления", systemImage: "bell.fill")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Toggle("Подписка на новые игры", isOn: Binding(
+                            get: { notificationService.isGameSubscriptionEnabled },
+                            set: { newValue in
+                                Task {
+                                    if newValue {
+                                        await notificationService.enableGameSubscription()
+                                    } else {
+                                        await notificationService.disableGameSubscription()
                                     }
                                 }
                             }
-                        }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-
-                        // Подписка на push о новых играх
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Уведомления")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Toggle("Подписка на новые игры", isOn: Binding(
-                                get: { notificationService.isGameSubscriptionEnabled },
-                                set: { newValue in
-                                    Task {
-                                        if newValue {
-                                            await notificationService.enableGameSubscription()
-                                        } else {
-                                            await notificationService.disableGameSubscription()
-                                        }
-                                    }
-                                }
-                            ))
-                            .tint(.blue)
-                            Text("Получать push при импорте/обновлении игр другими пользователями")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-
-                        // Список уведомлений
+                        ))
+                        .tint(.blue)
+                        .foregroundColor(.white)
+                        
+                        Text("Push при импорте/обновлении игр другими игроками")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.5))
+                        
+                        Divider().background(Color.white.opacity(0.1))
+                        
                         NavigationLink(destination: NotificationsView().environment(\.managedObjectContext, viewContext)) {
                             HStack {
                                 Text("История уведомлений")
                                     .foregroundColor(.white)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.5))
                             }
                         }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-                        
-                        // Безопасность
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Безопасность")
+                        .accessibilityIdentifier("profile_notifications_history_link")
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+
+                    // Безопасность
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Безопасность", systemImage: "lock.shield.fill")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Toggle("Биометрия", isOn: Binding(
+                            get: { authViewModel.isBiometricEnabled },
+                            set: { authViewModel.isBiometricEnabled = $0 }
+                        ))
+                        .disabled(!authViewModel.canUseBiometric)
+                        .tint(.blue)
+                        .foregroundColor(.white)
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+                    
+                    // Синхронизация
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Label("Синхронизация", systemImage: "arrow.triangle.2.circlepath")
                                 .font(.headline)
                                 .foregroundColor(.white)
-                            Toggle("Биометрия", isOn: Binding(
-                                get: { authViewModel.isBiometricEnabled },
-                                set: { authViewModel.isBiometricEnabled = $0 }
-                            ))
-                            .disabled(!authViewModel.canUseBiometric)
-                            .tint(.blue)
-                        }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-                        
-                        // CloudKit Sync
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "icloud.and.arrow.up.fill")
-                                    .foregroundColor(.blue)
-                                Text("Синхронизация")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
+                            Spacer()
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(syncCoordinator.isSyncing ? .orange : (syncCoordinator.syncError != nil ? .red : .green))
+                                    .frame(width: 8, height: 8)
+                                Text(syncCoordinator.syncStatusText)
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.6))
                             }
+                        }
+                        
+                        if let error = syncCoordinator.syncError {
+                            Text(error)
+                                .font(.caption2)
+                                .foregroundColor(.red.opacity(0.8))
+                        }
+                        
+                        Button(action: {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            Task { await performSyncWithVisualFeedback() }
+                        }) {
+                            HStack {
+                                if syncCoordinator.isSyncing {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .rotationEffect(.degrees(isSyncRotating ? 360 : 0))
+                                        .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: isSyncRotating)
+                                    Text("Синхронизация...")
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                    Text("Синхронизировать")
+                                }
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                        }
+                        .disabled(syncCoordinator.isSyncing)
+                        .accessibilityIdentifier("profile_sync_button")
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(syncButtonColor.opacity(0.25))
+                        )
+                        
+                        if let errorText = syncErrorText {
+                            Text(errorText)
+                                .font(.caption2)
+                                .foregroundColor(.red.opacity(0.9))
+                                .transition(.opacity)
+                        }
+                        
+                        if PendingSyncTracker.shared.hasPendingData() {
+                            Divider().background(Color.white.opacity(0.1))
                             
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Image(systemName: "circle.fill")
-                                        .font(.caption2)
-                                        .foregroundColor(syncCoordinator.isSyncing ? .orange : (syncCoordinator.syncError != nil ? .red : .green))
-                                    Text(syncCoordinator.syncStatusText)
-                                        .font(.caption)
-                                        .foregroundColor(.white.opacity(0.7))
-                                }
-                                
-                                if let error = syncCoordinator.syncError {
-                                    Text(error)
-                                        .font(.caption2)
-                                        .foregroundColor(.red.opacity(0.8))
-                                        .padding(.leading, 16)
-                                }
+                            HStack(spacing: 8) {
+                                Circle().fill(.orange).frame(width: 6, height: 6)
+                                Text("Есть неотправленные данные")
+                                    .font(.caption)
+                                    .foregroundColor(.orange.opacity(0.9))
                             }
                             
                             Button(action: {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 Task {
-                                    await performSyncWithVisualFeedback()
+                                    do {
+                                        try await syncCoordinator.pushPendingData()
+                                    } catch {
+                                        debugLog("❌ Failed to push pending data: \(error)")
+                                    }
                                 }
                             }) {
                                 HStack {
                                     if syncCoordinator.isSyncing {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                            .rotationEffect(.degrees(isSyncRotating ? 360 : 0))
-                                            .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: isSyncRotating)
-                                        Text("Синхронизация...")
+                                        ProgressView().tint(.white).scaleEffect(0.8)
+                                        Text("Отправка...")
                                     } else {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                        Text("Синхронизировать")
+                                        Image(systemName: "icloud.and.arrow.up")
+                                        Text("Отправить данные")
                                     }
-                                }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                            }
-                            .disabled(syncCoordinator.isSyncing)
-                            .accessibilityIdentifier("profile_sync_button")
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(syncButtonColor.opacity(0.3))
-                            )
-                            
-                            // Показываем ошибку если есть
-                            if let errorText = syncErrorText {
-                                Text(errorText)
-                                    .font(.caption2)
-                                    .foregroundColor(.red.opacity(0.9))
-                                    .padding(.top, 4)
-                                    .transition(.opacity)
-                            }
-                            
-                            // Pending Data UI
-                            if PendingSyncTracker.shared.hasPendingData() {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Незалитые данные:")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                    Text(PendingSyncTracker.shared.getPendingSummary())
-                                        .font(.caption2)
-                                        .foregroundColor(.white.opacity(0.7))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 4)
-                                
-                                Button(action: {
-                                    Task {
-                                        do {
-                                            try await syncCoordinator.pushPendingData()
-                                        } catch {
-                                            debugLog("❌ Failed to push pending data: \(error)")
-                                        }
-                                    }
-                                }) {
-                                    HStack {
-                                        if syncCoordinator.isSyncing {
-                                            ProgressView()
-                                                .progressViewStyle(.circular)
-                                                .tint(.white)
-                                                .scaleEffect(0.8)
-                                            Text("Отправка...")
-                                        } else {
-                                            Image(systemName: "icloud.and.arrow.up")
-                                            Text("Запушить незалитые данные")
-                                        }
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                }
-                                .disabled(syncCoordinator.isSyncing)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(syncCoordinator.isSyncing ? Color.gray.opacity(0.3) : Color.orange.opacity(0.3))
-                                )
-                            } else {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("✓ Нет незалитых данных")
-                                        .font(.caption)
-                                        .foregroundColor(.green.opacity(0.8))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 4)
-                            }
-                        }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-
-                        // Очистка невалидных заявок
-                        VStack(alignment: .leading, spacing: 8) {
-                            Button(action: {
-                                Task {
-                                    do {
-                                        debugLog("🧹 Starting cleanup of invalid claims...")
-                                        try await SyncCoordinator.shared.cleanupInvalidClaims()
-                                        debugLog("✅ Cleanup completed")
-                                    } catch {
-                                        debugLog("❌ Cleanup failed: \(error)")
-                                    }
-                                }
-                            }) {
-                                HStack {
-                                    Image(systemName: "trash.circle")
-                                    Text("Очистить невалидные заявки")
                                 }
                                 .font(.subheadline)
-                                .foregroundColor(.orange)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.orange.opacity(0.2))
-                            )
-                            
-                            Text("Удаляет поврежденные заявки из CloudKit")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.6))
-                        }
-                        .padding()
-                        .liquidGlass(cornerRadius: 15)
-                        .padding(.horizontal)
-                        
-                        // Debug (доступно в TestFlight)
-                        Button(action: {
-                            showingDebug = true
-                        }) {
-                            HStack {
-                                Image(systemName: "ladybug")
-                                Text("Debug")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .liquidGlass(cornerRadius: 15)
-                        }
-                        .padding(.horizontal)
-                        
-                        // Выйти
-                        Button(action: {
-                            authViewModel.logout()
-                            dismiss()
-                        }) {
-                            Text("Выйти")
-                                .font(.headline)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .padding()
-                                .liquidGlass(cornerRadius: 15)
+                                .padding(.vertical, 10)
+                            }
+                            .disabled(syncCoordinator.isSyncing)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.orange.opacity(0.25))
+                            )
+                        } else {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.green.opacity(0.7))
+                                Text("Все данные синхронизированы")
+                                    .font(.caption)
+                                    .foregroundColor(.green.opacity(0.7))
+                            }
                         }
-                        .accessibilityIdentifier("profile_logout_button")
-                        .padding(.horizontal)
                     }
-                    .padding(.horizontal, 32)
-                    .padding(.vertical)
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+
+                    // Утилиты (admin/debug) — скрыты от обычных пользователей
+                    #if DEBUG
+                    adminSection
+                    #else
+                    if isSuperAdmin {
+                        adminSection
+                    }
+                    #endif
+                    
+                    // Выйти
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        showingLogoutConfirm = true
+                    }) {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                            Text("Выйти")
+                        }
+                        .font(.headline)
+                        .foregroundColor(.red.opacity(0.9))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .liquidGlass(cornerRadius: 15)
+                    }
+                    .accessibilityIdentifier("profile_logout_button")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical)
             }
             .casinoBackground()
             .navigationTitle("Профиль")
@@ -409,14 +367,10 @@ struct ProfileView: View {
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("profile_username_field")
                 
-                Button("Отмена", role: .cancel) {
-                    newUsername = ""
-                }
+                Button("Отмена", role: .cancel) { newUsername = "" }
                 
-                Button("Сохранить") {
-                    updateUsername()
-                }
-                .disabled(newUsername.isEmpty || newUsername == authViewModel.currentUsername || isUpdatingUsername)
+                Button("Сохранить") { updateUsername() }
+                    .disabled(newUsername.isEmpty || newUsername == authViewModel.currentUsername || isUpdatingUsername)
             } message: {
                 Text("Введите новое имя пользователя")
             }
@@ -425,17 +379,67 @@ struct ProfileView: View {
             } message: {
                 Text(errorMessage)
             }
-            .onAppear {
-                // Обновить счетчики при открытии
+            .confirmationDialog("Выйти из аккаунта?", isPresented: $showingLogoutConfirm, titleVisibility: .visible) {
+                Button("Выйти", role: .destructive) {
+                    authViewModel.logout()
+                    dismiss()
+                }
+                Button("Отмена", role: .cancel) { }
             }
         }
     }
     
+    @ViewBuilder
+    private var adminSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Инструменты", systemImage: "wrench.and.screwdriver")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            Button(action: {
+                Task {
+                    do {
+                        try await SyncCoordinator.shared.cleanupInvalidClaims()
+                    } catch {
+                        debugLog("❌ Cleanup failed: \(error)")
+                    }
+                }
+            }) {
+                HStack {
+                    Image(systemName: "trash.circle")
+                    Text("Очистить невалидные заявки")
+                }
+                .font(.subheadline)
+                .foregroundColor(.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.orange.opacity(0.15))
+            )
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            Button(action: { showingDebug = true }) {
+                HStack {
+                    Image(systemName: "ladybug")
+                    Text("Debug")
+                }
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.7))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .accessibilityIdentifier("profile_debug_button")
+        }
+        .padding()
+        .liquidGlass(cornerRadius: 15)
+    }
+    
     private func performSyncWithVisualFeedback() async {
-        // Сброс состояний
         syncErrorText = nil
         
-        // Начало синхронизации - желтая кнопка + вращение иконки
         withAnimation {
             syncButtonColor = .yellow
             isSyncRotating = true
@@ -444,30 +448,26 @@ struct ProfileView: View {
         do {
             try await syncCoordinator.performFullSync()
             
-            // Успех - зеленая кнопка на 2 секунды
             withAnimation {
                 syncButtonColor = .green
                 isSyncRotating = false
             }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
             
-            // Возврат к синему через 2 секунды
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек
-            withAnimation {
-                syncButtonColor = .blue
-            }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation { syncButtonColor = .blue }
             
         } catch {
-            // Ошибка - красная кнопка на 2 секунды + текст ошибки
             withAnimation {
                 syncButtonColor = .red
                 isSyncRotating = false
                 syncErrorText = error.localizedDescription
             }
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
             
             debugLog("❌ [SYNC] Error: \(error.localizedDescription)")
             
-            // Возврат к синему через 2 секунды
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 сек
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             withAnimation {
                 syncButtonColor = .blue
                 syncErrorText = nil
@@ -484,6 +484,7 @@ struct ProfileView: View {
                 try await authViewModel.updateUsername(newUsername)
                 isUpdatingUsername = false
                 newUsername = ""
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch let error as AuthenticationError {
                 isUpdatingUsername = false
                 switch error {
@@ -503,4 +504,3 @@ struct ProfileView: View {
         }
     }
 }
-

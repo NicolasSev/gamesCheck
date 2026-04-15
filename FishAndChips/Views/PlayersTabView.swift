@@ -33,39 +33,57 @@ struct PlayersTabView: View {
     }
 
     var body: some View {
-        List {
-            if displayedProfiles.isEmpty {
-                ContentUnavailableView(
-                    searchText.isEmpty ? "Нет игроков" : "Ничего не найдено",
-                    systemImage: "person.2.slash",
-                    description: Text(isSuperAdmin ? "Зарегистрированные игроки появятся здесь" : "Публичные профили появятся, когда игроки сделают профиль видимым")
-                )
-                .listRowBackground(Color.clear)
-            } else {
-                ForEach(displayedProfiles, id: \.profileId) { profile in
-                    Button {
-                        selectedProfileWrapper = PlayerProfileWrapper(profile: profile)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(profile.displayName)
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                if isSuperAdmin, !profile.isPublic {
-                                    Text("Приватный")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+        ScrollView {
+            VStack(spacing: 12) {
+                if displayedProfiles.isEmpty {
+                    ContentUnavailableView(
+                        searchText.isEmpty ? "Нет игроков" : "Ничего не найдено",
+                        systemImage: "person.2.slash",
+                        description: Text(isSuperAdmin ? "Зарегистрированные игроки появятся здесь" : "Публичные профили появятся, когда игроки сделают профиль видимым")
+                    )
+                    .frame(minHeight: 300)
+                } else {
+                    ForEach(Array(displayedProfiles.enumerated()), id: \.element.profileId) { index, profile in
+                        Button {
+                            selectedProfileWrapper = PlayerProfileWrapper(profile: profile)
+                        } label: {
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                        .frame(width: 44, height: 44)
+                                    Text(String(profile.displayName.prefix(1)).uppercased())
+                                        .font(.headline)
+                                        .foregroundColor(.white)
                                 }
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(profile.displayName)
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    if isSuperAdmin, !profile.isPublic {
+                                        Text("Приватный")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.5))
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.white.opacity(0.5))
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
+                            .padding()
+                            .liquidGlass(cornerRadius: 12)
                         }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityIdentifier(index == 0 ? "players_first_profile_row" : "players_profile_row")
                     }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical)
         }
-        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .casinoBackground()
         .searchable(text: $searchText, prompt: "Поиск игрока")
         .navigationTitle("Игроки")
         .task {
@@ -137,6 +155,7 @@ struct PlayerPublicProfileView: View {
                 onRefresh: loadData,
                 onPlayerSelected: nil
             )
+            .accessibilityIdentifier("player_public_profile_root")
             .navigationTitle(profile.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

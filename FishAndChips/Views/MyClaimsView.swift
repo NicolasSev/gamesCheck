@@ -36,7 +36,7 @@ struct MyClaimsView: View {
                         Text("Нет заявок")
                             .font(.headline)
                             .foregroundColor(.white)
-                        Text("Вы еще не подали ни одной заявки")
+                        Text("Вы ещё не подали ни одной заявки")
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -51,6 +51,7 @@ struct MyClaimsView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("my_claims_root")
             .navigationTitle("Мои заявки")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -80,29 +81,7 @@ struct MyClaimsView: View {
             .onAppear {
                 loadMyClaims()
             }
-            .background(
-                Group {
-                    if let image = UIImage(named: "casino-background") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .ignoresSafeArea()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.4),
-                                        Color.black.opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                            )
-                    } else {
-                        Color.black.ignoresSafeArea()
-                    }
-                }
-            )
+            .casinoBackground()
         }
     }
     

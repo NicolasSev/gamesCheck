@@ -26,7 +26,8 @@ struct ConflictsResolutionView: View {
     }
     
     var body: some View {
-        ScrollView {
+        ZStack {
+            ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // Заголовок
                 VStack(alignment: .leading, spacing: 8) {
@@ -81,6 +82,7 @@ struct ConflictsResolutionView: View {
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
+                    .accessibilityIdentifier("import_conflicts_confirm_replace")
                     
                     Button(action: onCancel) {
                         HStack {
@@ -98,8 +100,11 @@ struct ConflictsResolutionView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
+            }
+            .accessibilityIdentifier("import_conflicts_scroll")
         }
         .background(Color(.systemBackground))
+        .accessibilityIdentifier("import_conflicts_root")
     }
     
     private func isDateSkipped(_ date: Date) -> Bool {

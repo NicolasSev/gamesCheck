@@ -76,6 +76,7 @@ struct MainView: View {
                     .tag(MainTab.players)
                     .accessibilityIdentifier("tab_players")
             }
+            .accessibilityIdentifier("screen.main")
             .navigationTitle(titleForTab(selectedTab))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -113,6 +114,7 @@ struct MainView: View {
                         }
                         Menu {
                         Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             showingAddGame = true
                         } label: {
                             Label("Создать игру", systemImage: "plus.circle")
@@ -129,6 +131,7 @@ struct MainView: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
                     }
+                    .accessibilityIdentifier("main_toolbar_menu_button")
                     }
                 }
             }
@@ -179,7 +182,7 @@ struct MainView: View {
                         Text("Загрузка игры...")
                             .font(.headline)
                             .foregroundColor(.secondary)
-                        Text("Получение данных из CloudKit")
+                        Text("Получение данных с сервера")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -262,7 +265,7 @@ struct MainView: View {
                 deepLinkService.clearDeepLink()
             } else {
                 debugLog("⚠️ MainView: Game not found locally, DeepLinkService should be loading it...")
-                // DeepLinkService уже обрабатывает загрузку из CloudKit
+                // DeepLinkService подгружает игру через Supabase при необходимости
             }
             
         case .none:

@@ -5,10 +5,10 @@ import Testing
 struct BackendSwitchTests {
 
     @Test func backendSwitch_fullLifecycle() async throws {
-        // 1. Reset to default
+        // 1. Reset to default (Supabase)
         UserDefaults.standard.removeObject(forKey: "activeBackend")
-        #expect(BackendSwitch.isCloudKit == true)
-        #expect(BackendSwitch.isSupabase == false)
+        #expect(BackendSwitch.isSupabase == true)
+        #expect(BackendSwitch.isCloudKit == false)
 
         // 2. Switch to Supabase
         BackendSwitch.switchToSupabase()

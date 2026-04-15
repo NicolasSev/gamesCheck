@@ -35,7 +35,8 @@ struct ProfileDTO: Codable, Identifiable, Sendable {
         case updatedAt = "updated_at"
     }
 
-    var balance: Double { totalCashouts - totalBuyins }
+    /// ₸: cashout сумма в тенге, buyin — чипы (×2000), как GameService / веб.
+    var balance: Double { totalCashouts - totalBuyins * 2000 }
 }
 
 // MARK: - Game

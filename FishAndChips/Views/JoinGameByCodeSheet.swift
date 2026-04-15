@@ -22,7 +22,7 @@ struct JoinGameByCodeSheet: View {
                 // Иконка
                 Image(systemName: "link.circle.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.casinoAccentGreen)
                     .padding(.top, 40)
                 
                 // Заголовок
@@ -46,6 +46,7 @@ struct JoinGameByCodeSheet: View {
                         .foregroundColor(.white.opacity(0.8))
                     
                     TextField("6566CB8E-6D9E-4C4A-A87F-...", text: $gameCode)
+                        .accessibilityIdentifier("join_game_code_field")
                         .textFieldStyle(.plain)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -83,7 +84,7 @@ struct JoinGameByCodeSheet: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(gameCode.isEmpty ? Color.gray : Color.blue)
+                    .background(gameCode.isEmpty ? Color.white.opacity(0.22) : Color.casinoAccentGreen)
                     .cornerRadius(12)
                 }
                 .disabled(gameCode.isEmpty || isLoading)
@@ -142,31 +143,11 @@ struct JoinGameByCodeSheet: View {
                         dismiss()
                     }
                     .foregroundColor(.white)
+                    .accessibilityIdentifier("join_game_sheet_cancel")
                 }
             }
-            .background(
-                Group {
-                    if let image = UIImage(named: "casino-background") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .ignoresSafeArea()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.4),
-                                        Color.black.opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                            )
-                    } else {
-                        Color.black.ignoresSafeArea()
-                    }
-                }
-            )
+            .casinoBackground()
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }
     

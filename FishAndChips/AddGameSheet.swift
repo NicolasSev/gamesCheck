@@ -35,12 +35,14 @@ struct AddGameSheet: View {
                         .accessibilityIdentifier("add_game_date_picker")
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Новая игра")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") {
                         isPresented = false
                     }
+                    .foregroundColor(.white)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Создать") {
@@ -48,8 +50,11 @@ struct AddGameSheet: View {
                         isPresented = false
                     }
                     .accessibilityIdentifier("add_game_save_button")
+                    .foregroundColor(.white)
                 }
             }
+            .preferredColorScheme(.dark)
+            .casinoBackground()
         }
     }
     
@@ -63,7 +68,7 @@ struct AddGameSheet: View {
         do {
             try viewContext.save()
             
-            // Автоматическая синхронизация в CloudKit
+            // Синхронизация через SyncCoordinator → Supabase
             Task {
                 await SyncCoordinator.shared.quickSyncGame(newGame)
                 try? await MaterializedViewsService.shared.updateGameSummary(gameId: newGame.gameId)

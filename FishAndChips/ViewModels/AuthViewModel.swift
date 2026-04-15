@@ -3,8 +3,7 @@ import SwiftUI
 import LocalAuthentication
 import CryptoKit
 import Combine
-
-enum AuthenticationState {
+enum AuthenticationState: Equatable {
     case unauthenticated
     case authenticating
     case authenticated
@@ -17,6 +16,8 @@ enum AuthenticationError: LocalizedError {
     case userAlreadyExists
     case emailAlreadyExists
     case userNotFound
+    case passwordNotLatin
+    case emailNotConfirmed
     case weakPassword
     case invalidEmail
     case biometricFailed
@@ -32,6 +33,10 @@ enum AuthenticationError: LocalizedError {
             return "Пользователь с такой почтой уже существует"
         case .userNotFound:
             return "Пользователь не найден"
+        case .passwordNotLatin:
+            return "Пароль введите латиницей (английская раскладка)"
+        case .emailNotConfirmed:
+            return "Подтвердите email — перейдите по ссылке из письма"
         case .weakPassword:
             return "Пароль должен содержать минимум 6 символов"
         case .invalidEmail:
@@ -75,7 +80,8 @@ final class AuthViewModel: ObservableObject {
     ) {
         self.persistence = persistence
         self.keychain = keychain
-        self.cloudKitSync = cloudKitSync ?? CloudKitSyncService.shared
+        // AuthCloudKitSyncProtocol: дефолт — Supabase (fetchUser offline = nil; уникальность email — локально + Auth при появлении сети)
+        self.cloudKitSync = cloudKitSync ?? SupabaseAuthService.shared
         self.syncCoordinator = syncCoordinator ?? SyncCoordinator.shared
         self.supabaseAuth = supabaseAuth ?? SupabaseAuthService.shared
         self.networkMonitor = networkMonitor ?? NetworkMonitor.shared
@@ -188,6 +194,12 @@ final class AuthViewModel: ObservableObject {
             throw AuthenticationError.weakPassword
         }
         debugLog("✅ [REGISTER] Password validation passed")
+
+        let regPassword = normalizedPasswordForLogin(password)
+        guard regPassword.isEntirelyASCII else {
+            debugLog("❌ [REGISTER] FAILED: non-ASCII password (use English keyboard)")
+            throw AuthenticationError.passwordNotLatin
+        }
         
         // Validate email format
         debugLog("🔍 [REGISTER] Validating email format...")
@@ -196,45 +208,30 @@ final class AuthViewModel: ObservableObject {
             throw AuthenticationError.invalidEmail
         }
         debugLog("✅ [REGISTER] Email format valid")
+
+        let normEmail = normalizedEmail(email)
         
         // Check if email already exists
         debugLog("🔍 [REGISTER] Checking if email already exists...")
-        if let existingUser = persistence.fetchUser(byEmail: email) {
+        if let existingUser = persistence.fetchUser(byEmail: normEmail) {
             debugLog("❌ [REGISTER] FAILED: Email already exists (user: \(existingUser.username))")
             throw AuthenticationError.emailAlreadyExists
         }
         debugLog("✅ [REGISTER] Email is available")
 
-        // Check email uniqueness — Supabase (online) or CloudKit (offline)
+        // Уникальность email: локально выше; онлайн — Supabase Auth на signUp; офлайн без глобальной проверки (синк при появлении сети)
         if networkMonitor.isOnline {
-            debugLog("☁️ [REGISTER] Checking email via Supabase Auth...")
-            // Supabase Auth will reject duplicate emails during signUp — no pre-check needed
+            debugLog("☁️ [REGISTER] Online — дубликат email отловит Supabase Auth при signUp")
         } else {
-            debugLog("☁️ [REGISTER] Offline — checking email in CloudKit Public DB...")
-            do {
-                if let cloudUser = try await cloudKitSync.fetchUser(byEmail: email) {
-                    debugLog("❌ [REGISTER] FAILED: Email exists in CloudKit (userId: \(cloudUser.userId))")
-                    isLoading = false
-                    authState = .error("Пользователь с такой почтой уже существует")
-                    throw AuthenticationError.emailAlreadyExists
-                }
-                debugLog("✅ [REGISTER] Email not found in CloudKit - OK to register")
-            } catch {
-                if let authError = error as? AuthenticationError { throw authError }
-                debugLog("❌ [REGISTER] CloudKit check failed: \(error)")
-                isLoading = false
-                authState = .error("Ошибка проверки: \(error.localizedDescription)")
-                throw AuthenticationError.unknown
-            }
+            debugLog("☁️ [REGISTER] Offline — глобальная уникальность email недоступна (только локальная БД)")
         }
         
-        // NOTE: Локальная проверка username убрана
-        // Email - единственный источник правды, хранится в CloudKit Public DB
+        // NOTE: Локальная проверка username убрана; канон — Supabase Auth + профиль
         // Локальная БД может содержать устаревшие данные (после удаления приложения, при восстановлении и т.д.)
         // При создании нового User с уже существующим username - старый локальный User будет перезаписан
 
         debugLog("🔐 [REGISTER] Hashing password...")
-        let passwordHash = hashPassword(password)
+        let passwordHash = hashPassword(regPassword)
         debugLog("   - Hash: \(passwordHash.prefix(20))...")
 
         debugLog("💾 [REGISTER] Creating user in database...")
@@ -245,7 +242,7 @@ final class AuthViewModel: ObservableObject {
         guard let user = persistence.createUser(
             username: username,
             passwordHash: passwordHash,
-            email: email
+            email: normEmail
         ) else {
             debugLog("❌ [REGISTER] FAILED: Could not create user in database")
             throw AuthenticationError.unknown
@@ -259,14 +256,14 @@ final class AuthViewModel: ObservableObject {
         let profile = persistence.createPlayerProfile(displayName: username, userId: user.userId)
         debugLog("✅ [REGISTER] PlayerProfile created")
 
-        // Sync user and profile via SyncCoordinator (Supabase primary / CloudKit fallback)
+        // Sync profile via SyncCoordinator (Supabase / офлайн-очередь)
         debugLog("☁️ [REGISTER] Syncing via SyncCoordinator...")
 
         if networkMonitor.isOnline {
             do {
                 let _ = try await supabaseAuth.signUp(
-                    email: email,
-                    password: password,
+                    email: normEmail,
+                    password: regPassword,
                     username: username,
                     displayName: username
                 )
@@ -280,7 +277,7 @@ final class AuthViewModel: ObservableObject {
         debugLog("☁️ [REGISTER] Profile sync completed")
 
         debugLog("🔑 [REGISTER] Auto-login after registration...")
-        try await login(email: email, password: password)
+        try await login(email: normEmail, password: regPassword)
         
         // Показываем уведомление об успешной регистрации
         await MainActor.run {
@@ -291,10 +288,19 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Login
     func login(email: String, password: String) async throws {
+        let normEmail = normalizedEmail(email)
+        let normPassword = normalizedPasswordForLogin(password)
         debugLog("\n🔑 [LOGIN] Starting login process...")
-        debugLog("📧 [LOGIN] Email provided: \(email)")
-        debugLog("🔒 [LOGIN] Password provided: \(password.isEmpty ? "empty" : "****** (length: \(password.count))")")
-        
+        debugLog("📧 [LOGIN] Email (raw): \(email)")
+        debugLog("📧 [LOGIN] Email (normalized): \(normEmail)")
+        debugLog("🔒 [LOGIN] Password length: \(normPassword.count)")
+
+        if !normPassword.isEmpty, !normPassword.isEntirelyASCII {
+            isLoading = false
+            authState = .unauthenticated
+            throw AuthenticationError.passwordNotLatin
+        }
+
         isLoading = true
         authState = .authenticating
 
@@ -303,7 +309,7 @@ final class AuthViewModel: ObservableObject {
 
         // Попытка 1: Поиск пользователя локально по email
         debugLog("🔍 [LOGIN] Attempt 1: Searching user locally by email...")
-        var user = persistence.fetchUser(byEmail: email)
+        var user = persistence.fetchUser(byEmail: normEmail)
         
         if let localUser = user {
             debugLog("✅ [LOGIN] User found locally:")
@@ -314,43 +320,51 @@ final class AuthViewModel: ObservableObject {
             debugLog("⚠️ [LOGIN] User NOT found locally")
         }
         
-        // Попытка 2: Если не найден локально — Supabase (online) или CloudKit (offline)
+        // Попытка 2: Если не найден локально — Supabase Auth (online)
         if user == nil {
             if networkMonitor.isOnline {
                 debugLog("🔍 [LOGIN] Attempt 2: Trying Supabase Auth signIn...")
                 do {
-                    let _ = try await supabaseAuth.signIn(email: email, password: password)
+                    let authUser = try await supabaseAuth.signIn(email: normEmail, password: normPassword)
                     debugLog("✅ [LOGIN] Supabase Auth signIn succeeded — pulling profile...")
-                    try? await syncCoordinator.smartSync()
-                    user = persistence.fetchUser(byEmail: email)
+                    do {
+                        try await syncCoordinator.smartSync()
+                    } catch {
+                        debugLog("⚠️ [LOGIN] smartSync after signIn: \(error)")
+                    }
+                    let profileDTO: ProfileDTO? = try? await SupabaseService.shared.fetchById(table: "profiles", id: authUser.id)
+                    let localPart = normEmail.split(separator: "@").first.map(String.init) ?? "user"
+                    let fromProfile = profileDTO?.username.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let preferredUsername = fromProfile.isEmpty ? localPart : fromProfile
+                    let pwHash = hashPassword(normPassword)
+                    if persistence.upsertUserForSupabaseLogin(
+                        userId: authUser.id,
+                        email: normEmail,
+                        passwordHash: pwHash,
+                        preferredUsername: preferredUsername
+                    ) != nil {
+                        debugLog("✅ [LOGIN] Local Core Data User upserted for Supabase session")
+                    } else {
+                        debugLog("⚠️ [LOGIN] upsertUserForSupabaseLogin failed (email conflict or save error)")
+                    }
+                    user = persistence.fetchUser(byEmail: normEmail)
                 } catch {
                     debugLog("⚠️ [LOGIN] Supabase signIn failed: \(error)")
                 }
             }
 
-            if user == nil {
-                debugLog("🔍 [LOGIN] Attempt 3: Trying to fetch from CloudKit...")
-                do {
-                    user = try await cloudKitSync.fetchUser(byEmail: email)
-                    if let cloudUser = user {
-                        debugLog("✅ [LOGIN] User restored from CloudKit: \(cloudUser.username)")
-                    }
-                } catch {
-                    debugLog("❌ [LOGIN] Failed to fetch user from CloudKit: \(error)")
-                }
-            }
         }
         
         // Если пользователь все еще не найден - ошибка
         guard let foundUser = user else {
-            debugLog("❌ [LOGIN] FAILED: User not found (neither locally nor in CloudKit)")
+            debugLog("❌ [LOGIN] FAILED: User not found (локально или через Supabase при сети)")
             isLoading = false
             authState = .error("Пользователь не найден")
             throw AuthenticationError.userNotFound
         }
 
         debugLog("🔐 [LOGIN] Validating password...")
-        let passwordHash = hashPassword(password)
+        let passwordHash = hashPassword(normPassword)
         debugLog("   - Password hash: \(passwordHash.prefix(20))...")
         debugLog("   - Stored hash: \(foundUser.passwordHash.prefix(20))...")
         
@@ -424,7 +438,11 @@ final class AuthViewModel: ObservableObject {
     }
 
     var isBiometricEnabled: Bool {
-        get { keychain.isBiometricEnabled() }
+        get {
+            // UI-тесты скриншотов: не показывать экран биометрии, сразу MainView при наличии сессии
+            if ProcessInfo.processInfo.environment["UITEST_FORCE_BIOMETRIC_OFF"] == "1" { return false }
+            return keychain.isBiometricEnabled()
+        }
         set { _ = keychain.setBiometricEnabled(newValue) }
     }
 
@@ -505,6 +523,16 @@ final class AuthViewModel: ObservableObject {
         currentUser = user
     }
 
+    /// GoTrue хранит email в нижнем регистре; в поле ввода часто бывают пробелы по краям.
+    private func normalizedEmail(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Убираем только переводы строк (часто залетают при автозаполнении / вставке) — пробелы внутри пароля не трогаем.
+    private func normalizedPasswordForLogin(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .newlines)
+    }
+
     // MARK: - Password Hashing
     private func hashPassword(_ password: String) -> String {
         let data = Data(password.utf8)
@@ -533,6 +561,13 @@ final class AuthViewModel: ObservableObject {
         let emailRegex = "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$"
         let emailPredicate = NSPredicate(format: "SELF MATCHES[c] %@", emailRegex)
         return emailPredicate.evaluate(with: email)
+    }
+}
+
+private extension String {
+    /// Пароль для Supabase/локального хеша — только ASCII (исключает кириллицу при неверной раскладке).
+    var isEntirelyASCII: Bool {
+        unicodeScalars.allSatisfy { $0.isASCII }
     }
 }
 

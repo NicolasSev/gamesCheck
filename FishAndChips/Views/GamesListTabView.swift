@@ -66,6 +66,16 @@ struct GamesListTabView: View {
         }
     }
     
+    // Количество пустых ячеек перед первым днём месяца (Пн=0, Вт=1, ..., Вс=6)
+    private var leadingEmptyDays: Int {
+        guard let firstDay = firstDayOfMonth() else { return 0 }
+        var cal = Calendar.current
+        cal.firstWeekday = 2 // Понедельник
+        let weekday = cal.component(.weekday, from: firstDay)
+        // weekday: 1=Вс, 2=Пн, ..., 7=Сб → offset для Пн-начала: (weekday + 5) % 7
+        return (weekday + 5) % 7
+    }
+    
     // Дни текущего месяца
     private var daysInMonth: [Date] {
         guard let firstDay = firstDayOfMonth(),
@@ -102,8 +112,6 @@ struct GamesListTabView: View {
         formatter.locale = Locale(identifier: "ru_RU")
         return formatter.string(from: date)
     }
-    
-    @State private var backgroundImage: UIImage? = UIImage(named: "casino-background")
     
     var body: some View {
         ScrollView {
@@ -223,6 +231,12 @@ struct GamesListTabView: View {
                                 Text(day)
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.7))
+                            }
+                            
+                            // Пустые ячейки до первого дня месяца
+                            ForEach(0..<leadingEmptyDays, id: \.self) { _ in
+                                Color.clear
+                                    .frame(width: 36, height: 40)
                             }
                             
                             // Дни месяца
@@ -368,6 +382,7 @@ struct GamesListTabView: View {
                                         GameListRowView(game: game, userId: userId)
                                     }
                                     .buttonStyle(PlainButtonStyle())
+                                    .accessibilityIdentifier("games_game_row_\(index)")
                                     .onAppear {
                                         if index == filteredBySearch.count - 1 {
                                             onLoadMore?()
@@ -385,29 +400,7 @@ struct GamesListTabView: View {
             .accessibilityIdentifier("games_list")
             .scrollContentBackground(.hidden)
             .searchable(text: $searchText, prompt: "Поиск игр")
-            .background(
-            Group {
-                if let image = backgroundImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .ignoresSafeArea()
-                        .overlay(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.4),
-                                    Color.black.opacity(0.6)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .ignoresSafeArea()
-                        )
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
-            }
-        )
+            .casinoBackground()
         .refreshable {
             await refreshGames()
         }
@@ -547,7 +540,7 @@ struct GamesListTabView: View {
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .foregroundColor(isSelected ? .white : .white.opacity(0.7))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(

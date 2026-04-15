@@ -2,31 +2,27 @@
 //  MaterializedViewsService.swift
 //  FishAndChips
 //
-//  Phase 2: Автоматическое обновление materialized views при изменениях данных
+//  Локальные агрегаты (Core Data) для UI. Серверная аналитика — PostgreSQL views в Supabase.
 //
 
 import Foundation
 import CoreData
-import CloudKit
 
 class MaterializedViewsService {
     static let shared = MaterializedViewsService()
 
     private let persistence: PersistenceController
     private let gameService: GameService
-    private let cloudKit: CloudKitService
 
     init(
         persistence: PersistenceController = .shared,
-        gameService: GameService = GameService(),
-        cloudKit: CloudKitService = .shared
+        gameService: GameService = GameService()
     ) {
         self.persistence = persistence
         self.gameService = gameService
-        self.cloudKit = cloudKit
     }
 
-    /// Обновить предрассчитанную статистику пользователя
+    /// Обновить предрассчитанную статистику пользователя (только Core Data)
     func updateUserStatisticsSummary(userId: UUID) async throws {
         let context = persistence.container.viewContext
         let stats = gameService.getUserStatistics(userId)
@@ -59,15 +55,9 @@ class MaterializedViewsService {
         summary.lastUpdated = Date()
 
         try context.save()
-
-        // Синхронизация в CloudKit (опционально)
-        if await cloudKit.isCloudKitAvailable() {
-            let record = summary.toCKRecord()
-            _ = try? await cloudKit.save(record: record, to: .publicDB)
-        }
     }
 
-    /// Обновить краткую информацию об игре (GameSummaryRecord)
+    /// Обновить краткую информацию об игре (GameSummaryRecord), только Core Data
     func updateGameSummary(gameId: UUID) async throws {
         guard let game = persistence.fetchGame(byId: gameId) else { return }
 
@@ -96,11 +86,6 @@ class MaterializedViewsService {
         summary.checksum = computeGameSummaryChecksum(gameId: gameId, timestamp: game.timestamp, totalPlayers: totalPlayers, totalBuyins: totalBuyins)
 
         try context.save()
-
-        if await cloudKit.isCloudKitAvailable() {
-            let record = summary.toCKRecord()
-            _ = try? await cloudKit.save(record: record, to: .publicDB)
-        }
     }
 
     private func computeGameSummaryChecksum(gameId: UUID, timestamp: Date?, totalPlayers: Int64, totalBuyins: Double) -> String {
@@ -108,8 +93,7 @@ class MaterializedViewsService {
         return "\(gameId.uuidString)_\(Int(ts))_\(totalPlayers)_\(totalBuyins)"
     }
 
-    /// Пересоздать все GameSummaryRecord для всех игр. Вызывать после pull из CloudKit,
-    /// чтобы materialized views были актуальны (в т.ч. после смены имён игроков).
+    /// Пересоздать все GameSummaryRecord для всех игр
     func rebuildAllGameSummaries() async throws {
         let context = persistence.container.viewContext
         let fetchRequest: NSFetchRequest<Game> = Game.fetchRequest()

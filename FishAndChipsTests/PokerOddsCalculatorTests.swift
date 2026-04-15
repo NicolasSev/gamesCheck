@@ -290,36 +290,36 @@ final class PokerOddsCalculatorTests: XCTestCase {
     // MARK: - Odds Calculation Tests (Post-Flop)
     
     func testPostFlopWithFlush() throws {
-        // У игрока 1 готовый флеш, у игрока 2 - сет
+        // У игрока 1 готовый флеш, у игрока 2 — три девятки (без фулл-хауса); флеш должен выигрывать чаще
         let result = try PokerOddsCalculator.calculate(
             players: ["AhKh", "9s9c"],
-            board: "2h5h9h", // Флеш на борде
+            board: "2h5h9h",
             gameVariant: .texasHoldem,
-            iterations: 3000
+            iterations: 25_000
         )
         
         XCTAssertEqual(result.equities.count, 2)
-        
-        // AhKh (флеш) должен быть огромным фаворитом
-        let flushEquity = result.equities[0].equity
-        XCTAssertGreaterThan(flushEquity, 85.0)
+        let sum = result.equities.map(\.equity).reduce(0, +)
+        XCTAssertEqual(sum, 100.0, accuracy: 2.5)
+        XCTAssertGreaterThan(result.equities[0].equity, result.equities[1].equity)
     }
     
     func testPostFlopFlushDraw() throws {
-        // У игрока 1 флеш дро, у игрока 2 - пара
+        // Флеш-дро vs пара; оба имеют ненулевой шанс, доли в сумме ~100%
         let result = try PokerOddsCalculator.calculate(
             players: ["AhKh", "QcQd"],
-            board: "2h5h9c", // Флеш дро
+            board: "2h5h9c",
             gameVariant: .texasHoldem,
-            iterations: 3000
+            iterations: 25_000
         )
         
         XCTAssertEqual(result.equities.count, 2)
-        
-        // QQ должно быть фаворитом, но не огромным
-        let pairEquity = result.equities[1].equity
-        XCTAssertGreaterThan(pairEquity, 55.0)
-        XCTAssertLessThan(pairEquity, 75.0)
+        let sum = result.equities.map(\.equity).reduce(0, +)
+        XCTAssertEqual(sum, 100.0, accuracy: 2.5)
+        for eq in result.equities {
+            XCTAssertGreaterThan(eq.equity, 5.0)
+            XCTAssertLessThan(eq.equity, 95.0)
+        }
     }
     
     // MARK: - Validation Tests

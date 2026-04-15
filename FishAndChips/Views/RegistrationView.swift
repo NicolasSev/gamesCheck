@@ -16,106 +16,195 @@ struct RegistrationView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Учетные данные") {
-                    TextField("Имя пользователя", text: $username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("register_username")
+            ScrollView {
+                VStack(spacing: 20) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 56))
+                        .foregroundStyle(.linearGradient(
+                            colors: [
+                                Color(red: 0.2, green: 0.8, blue: 0.5),
+                                Color(red: 0.95, green: 0.78, blue: 0.3)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .shadow(color: Color(red: 0.2, green: 0.8, blue: 0.5).opacity(0.35), radius: 16, y: 6)
+                        .padding(.top, 12)
 
-                    HStack {
-                        TextField("Email", text: $email)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.emailAddress)
-                            .accessibilityIdentifier("register_email")
-                        
-                        if !email.isEmpty {
-                            Image(systemName: authViewModel.validateEmail(email) ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(authViewModel.validateEmail(email) ? .green : .red)
-                        }
-                    }
-                    
-                    if !email.isEmpty && !authViewModel.validateEmail(email) {
-                        Text("Неверный формат email")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
+                    // Учётные данные
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Учётные данные")
+                            .font(.headline)
+                            .foregroundColor(.white)
 
-                Section {
-                    HStack {
-                        if showPassword {
-                            TextField("Пароль", text: $password)
-                        } else {
-                            SecureField("Пароль", text: $password)
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.white.opacity(0.5))
+                                .frame(width: 20)
+                            TextField("Имя пользователя", text: $username)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .foregroundColor(.white)
+                                .accessibilityIdentifier("register_username")
                         }
-                        Button(action: { showPassword.toggle() }) {
-                            Image(systemName: showPassword ? "eye.slash" : "eye")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .accessibilityIdentifier("register_password")
-                    
-                    HStack {
-                        if showConfirmPassword {
-                            TextField("Подтвердите пароль", text: $confirmPassword)
-                        } else {
-                            SecureField("Подтвердите пароль", text: $confirmPassword)
-                        }
-                        Button(action: { showConfirmPassword.toggle() }) {
-                            Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .accessibilityIdentifier("register_confirm_password")
+                        .padding()
+                        .liquidGlass(cornerRadius: 12)
 
-                    if !password.isEmpty {
-                        let validation = authViewModel.validatePassword(password)
-                        if !validation.isValid {
-                            Text(validation.message ?? "")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        } else {
-                            Text("✓ Пароль соответствует требованиям")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                        }
-                    }
-                    
-                    if !confirmPassword.isEmpty && password != confirmPassword {
-                        Text("Пароли не совпадают")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                } header: {
-                    Text("Пароль")
-                } footer: {
-                    Text("Минимум 6 символов, должен содержать буквы и цифры")
-                        .font(.caption)
-                }
-
-                Section {
-                    Button(action: register) {
-                        if authViewModel.isLoading {
-                            HStack {
-                                ProgressView()
-                                Text("Регистрация...")
+                        HStack(spacing: 12) {
+                            Image(systemName: "envelope.fill")
+                                .foregroundColor(.white.opacity(0.5))
+                                .frame(width: 20)
+                            TextField("Email", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.emailAddress)
+                                .foregroundColor(.white)
+                                .accessibilityIdentifier("register_email")
+                            
+                            if !email.isEmpty {
+                                Image(systemName: authViewModel.validateEmail(email) ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .foregroundColor(authViewModel.validateEmail(email) ? .green : .red)
+                                    .transition(.scale.combined(with: .opacity))
                             }
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 12)
+                        
+                        if !email.isEmpty && !authViewModel.validateEmail(email) {
+                            Text("Неверный формат email")
+                                .font(.caption)
+                                .foregroundColor(.red.opacity(0.9))
+                                .padding(.leading, 4)
+                        }
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+
+                    // Пароль
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Пароль")
+                            .font(.headline)
+                            .foregroundColor(.white)
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "lock.fill")
+                                .foregroundColor(.white.opacity(0.5))
+                                .frame(width: 20)
+                            if showPassword {
+                                TextField("Пароль", text: $password)
+                                    .keyboardType(.asciiCapable)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .foregroundColor(.white)
+                            } else {
+                                SecureField("Пароль", text: $password)
+                                    .keyboardType(.asciiCapable)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .foregroundColor(.white)
+                            }
+                            Button(action: { showPassword.toggle() }) {
+                                Image(systemName: showPassword ? "eye.slash" : "eye")
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 12)
+                        .accessibilityIdentifier("register_password")
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "lock.fill")
+                                .foregroundColor(.white.opacity(0.5))
+                                .frame(width: 20)
+                            if showConfirmPassword {
+                                TextField("Подтвердите пароль", text: $confirmPassword)
+                                    .keyboardType(.asciiCapable)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .foregroundColor(.white)
+                            } else {
+                                SecureField("Подтвердите пароль", text: $confirmPassword)
+                                    .keyboardType(.asciiCapable)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .foregroundColor(.white)
+                            }
+                            Button(action: { showConfirmPassword.toggle() }) {
+                                Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 12)
+                        .accessibilityIdentifier("register_confirm_password")
+
+                        if !password.isEmpty {
+                            let validation = authViewModel.validatePassword(password)
+                            if !validation.isValid {
+                                Label(validation.message ?? "", systemImage: "xmark.circle")
+                                    .font(.caption)
+                                    .foregroundColor(.red.opacity(0.9))
+                                    .padding(.leading, 4)
+                            } else {
+                                Label("Пароль соответствует требованиям", systemImage: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.green.opacity(0.9))
+                                    .padding(.leading, 4)
+                            }
+                        }
+                        
+                        if !confirmPassword.isEmpty && password != confirmPassword {
+                            Label("Пароли не совпадают", systemImage: "xmark.circle")
+                                .font(.caption)
+                                .foregroundColor(.red.opacity(0.9))
+                                .padding(.leading, 4)
+                        }
+                        
+                        Text("Минимум 6 символов, буквы и цифры")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.4))
+                            .padding(.leading, 4)
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 15)
+
+                    // Кнопка регистрации
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        register()
+                    }) {
+                        if authViewModel.isLoading {
+                            HStack(spacing: 8) {
+                                ProgressView().tint(.white)
+                                Text("Регистрация...")
+                                    .foregroundColor(.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                         } else {
                             Text("Зарегистрироваться")
                                 .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0.2, green: 0.72, blue: 0.48))
                     .disabled(!isValid || authViewModel.isLoading)
                     .accessibilityIdentifier("register_button")
+                    .padding(.top, 4)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical)
             }
+            .scrollContentBackground(.hidden)
+            .casinoBackground()
             .navigationTitle("Регистрация")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
+                        .foregroundColor(.white)
                 }
             }
             .alert("Ошибка", isPresented: $showingError) {
@@ -124,9 +213,7 @@ struct RegistrationView: View {
                 Text(errorMessage)
             }
             .alert("Успех", isPresented: $showingSuccess) {
-                Button("OK") {
-                    dismiss()
-                }
+                Button("OK") { dismiss() }
             } message: {
                 Text("Вы успешно зарегистрировались!")
             }
@@ -150,8 +237,8 @@ struct RegistrationView: View {
                     password: password,
                     email: email
                 )
-                // Успешная регистрация - показываем уведомление
                 await MainActor.run {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                     showingSuccess = true
                 }
             } catch let error as AuthenticationError {
@@ -160,12 +247,7 @@ struct RegistrationView: View {
                     showingError = true
                 }
             } catch {
-                // Логируем полную информацию об ошибке
                 debugLog("❌ [REGISTRATION_VIEW] Unexpected error: \(error)")
-                debugLog("❌ [REGISTRATION_VIEW] Error type: \(type(of: error))")
-                debugLog("❌ [REGISTRATION_VIEW] Localized: \(error.localizedDescription)")
-                
-                // Показываем более информативное сообщение
                 await MainActor.run {
                     errorMessage = "Ошибка регистрации: \(error.localizedDescription)"
                     showingError = true
@@ -174,4 +256,3 @@ struct RegistrationView: View {
         }
     }
 }
-

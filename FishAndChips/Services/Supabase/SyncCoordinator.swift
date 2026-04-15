@@ -2,8 +2,7 @@ import Foundation
 import Combine
 
 /// Central sync coordinator — replaces SyncRouter.
-/// Routes operations: Supabase (online/primary), CloudKit (offline fallback + secondary mirror).
-/// On reconnect, replays OfflineSyncQueue and pulls fresh Supabase data.
+/// **Supabase** — единственный серверный бэкенд. Офлайн: Core Data + `OfflineSyncQueue`, при reconnect — проигрывание очереди и pull с Supabase.
 @MainActor
 final class SyncCoordinator: ObservableObject {
     static let shared = SyncCoordinator()
@@ -16,21 +15,21 @@ final class SyncCoordinator: ObservableObject {
 
     let networkMonitor: NetworkMonitor
     private let supabaseSync: SupabaseSyncService
-    private let cloudKitSync: CloudKitSyncService
     private let offlineQueue: OfflineSyncQueue
+    private let persistence: PersistenceController
 
     private var cancellables = Set<AnyCancellable>()
 
     private init(
         networkMonitor: NetworkMonitor = .shared,
         supabaseSync: SupabaseSyncService = .shared,
-        cloudKitSync: CloudKitSyncService = .shared,
-        offlineQueue: OfflineSyncQueue = .shared
+        offlineQueue: OfflineSyncQueue = .shared,
+        persistence: PersistenceController = .shared
     ) {
         self.networkMonitor = networkMonitor
         self.supabaseSync = supabaseSync
-        self.cloudKitSync = cloudKitSync
         self.offlineQueue = offlineQueue
+        self.persistence = persistence
 
         setupBindings()
         setupReconnectHandler()
@@ -50,7 +49,7 @@ final class SyncCoordinator: ObservableObject {
         }
     }
 
-    // MARK: - Bindings (forward published state from active backend)
+    // MARK: - Bindings (forward published state from Supabase)
 
     private func setupBindings() {
         networkMonitor.$isOnline
@@ -58,14 +57,10 @@ final class SyncCoordinator: ObservableObject {
             .assign(to: &$isOnline)
 
         supabaseSync.$isSyncing
-            .combineLatest(cloudKitSync.$isSyncing)
-            .map { $0 || $1 }
             .receive(on: RunLoop.main)
             .assign(to: &$isSyncing)
 
         supabaseSync.$isBackgroundSyncing
-            .combineLatest(cloudKitSync.$isBackgroundSyncing)
-            .map { $0 || $1 }
             .receive(on: RunLoop.main)
             .assign(to: &$isBackgroundSyncing)
 
@@ -108,9 +103,7 @@ final class SyncCoordinator: ObservableObject {
     func sync() async throws {
         if isOnline {
             try await supabaseSync.sync()
-            Task { try? await cloudKitSync.sync() }
         } else {
-            try await cloudKitSync.sync()
             offlineQueue.enqueueFullSync()
         }
     }
@@ -118,9 +111,7 @@ final class SyncCoordinator: ObservableObject {
     func smartSync() async throws {
         if isOnline {
             try await supabaseSync.smartSync()
-            Task { try? await cloudKitSync.smartSync() }
         } else {
-            try await cloudKitSync.smartSync()
             offlineQueue.enqueueFullSync()
         }
     }
@@ -128,9 +119,7 @@ final class SyncCoordinator: ObservableObject {
     func performFullSync() async throws {
         if isOnline {
             try await supabaseSync.performFullSync()
-            Task { try? await cloudKitSync.performFullSync() }
         } else {
-            try await cloudKitSync.performFullSync()
             offlineQueue.enqueueFullSync()
         }
     }
@@ -138,9 +127,8 @@ final class SyncCoordinator: ObservableObject {
     func performIncrementalSync() async throws {
         if isOnline {
             try await supabaseSync.performIncrementalSync()
-            Task { try? await cloudKitSync.performIncrementalSync() }
         } else {
-            try await cloudKitSync.performIncrementalSync()
+            debugLog("SyncCoordinator: offline — пропуск incremental (данные из Core Data)")
         }
     }
 
@@ -148,16 +136,15 @@ final class SyncCoordinator: ObservableObject {
         if isOnline {
             try await supabaseSync.pushPendingData()
         } else {
-            try await cloudKitSync.pushPendingData()
+            debugLog("SyncCoordinator: offline — pushPendingData пропущен (сервер недоступен)")
         }
     }
 
     func canSync() async -> Bool {
         if isOnline {
             return await supabaseSync.canSync()
-        } else {
-            return await cloudKitSync.canSync()
         }
+        return true
     }
 
     // MARK: - Quick Sync
@@ -165,9 +152,7 @@ final class SyncCoordinator: ObservableObject {
     func quickSyncGame(_ game: Game) async {
         if isOnline {
             await supabaseSync.quickSyncGame(game)
-            Task { await cloudKitSync.quickSyncGame(game) }
         } else {
-            await cloudKitSync.quickSyncGame(game)
             offlineQueue.enqueue(table: "games", operation: .upsert, item: game.toGameDTO())
         }
     }
@@ -175,9 +160,7 @@ final class SyncCoordinator: ObservableObject {
     func quickSyncGameWithPlayers(_ gwp: [GameWithPlayer]) async {
         if isOnline {
             await supabaseSync.quickSyncGameWithPlayers(gwp)
-            Task { await cloudKitSync.quickSyncGameWithPlayers(gwp) }
         } else {
-            await cloudKitSync.quickSyncGameWithPlayers(gwp)
             for player in gwp {
                 if let dto = player.toGamePlayerDTO() {
                     offlineQueue.enqueue(table: "game_players", operation: .upsert, item: dto)
@@ -189,9 +172,7 @@ final class SyncCoordinator: ObservableObject {
     func quickSyncPlayerProfile(_ profile: PlayerProfile) async {
         if isOnline {
             await supabaseSync.quickSyncPlayerProfile(profile)
-            Task { await cloudKitSync.quickSyncPlayerProfile(profile) }
         } else {
-            await cloudKitSync.quickSyncPlayerProfile(profile)
             offlineQueue.enqueue(table: "profiles", operation: .upsert, item: profile.toProfileDTO())
         }
     }
@@ -201,18 +182,16 @@ final class SyncCoordinator: ObservableObject {
     func syncPlayerClaims() async throws {
         if isOnline {
             try await supabaseSync.syncPlayerClaims()
-            Task { try? await cloudKitSync.syncPlayerClaims() }
         } else {
-            try await cloudKitSync.syncPlayerClaims()
+            debugLog("SyncCoordinator: offline — syncPlayerClaims отложен до сети")
         }
     }
 
     func syncPlayerAliases() async throws {
         if isOnline {
             try await supabaseSync.syncPlayerAliases()
-            Task { try? await cloudKitSync.syncPlayerAliases() }
         } else {
-            try await cloudKitSync.syncPlayerAliases()
+            debugLog("SyncCoordinator: offline — syncPlayerAliases отложен до сети")
         }
     }
 
@@ -222,7 +201,7 @@ final class SyncCoordinator: ObservableObject {
         if isOnline {
             try await supabaseSync.fetchGameWithPlayers(forGameId: gameId)
         } else {
-            try await cloudKitSync.fetchGameWithPlayers(forGameId: gameId)
+            debugLog("SyncCoordinator: offline — fetchGameWithPlayers без сети (кэш Core Data)")
         }
     }
 
@@ -230,23 +209,18 @@ final class SyncCoordinator: ObservableObject {
         if isOnline {
             try await supabaseSync.fetchPlayerProfiles(notifyOnNewPublic: notifyOnNewPublic)
         } else {
-            try await cloudKitSync.fetchPlayerProfiles(notifyOnNewPublic: notifyOnNewPublic)
+            debugLog("SyncCoordinator: offline — fetchPlayerProfiles без сети (кэш Core Data)")
         }
     }
 
     func fetchGame(byId gameId: UUID) async throws -> Game? {
         if isOnline {
             return try await supabaseSync.fetchGame(byId: gameId)
-        } else {
-            return try await cloudKitSync.fetchGame(byId: gameId)
         }
+        return persistence.fetchGame(byId: gameId)
     }
 
     func cleanupInvalidClaims() async throws {
-        if isOnline {
-            try await supabaseSync.cleanupInvalidClaims()
-        } else {
-            try await cloudKitSync.cleanupInvalidClaims()
-        }
+        try await supabaseSync.cleanupInvalidClaims()
     }
 }

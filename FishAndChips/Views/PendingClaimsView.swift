@@ -10,6 +10,7 @@ import CoreData
 
 struct PendingClaimsView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.dismiss) private var dismiss
     @State private var allClaims: [PlayerClaim] = []
     @State private var selectedClaim: PlayerClaim?
     @State private var showingClaimDetail = false
@@ -90,8 +91,17 @@ struct PendingClaimsView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("pending_claims_root")
             .navigationTitle("Заявки на игроков")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
             .onAppear {
                 loadAllClaims()
             }
@@ -107,29 +117,7 @@ struct PendingClaimsView: View {
                     Text(error)
                 }
             }
-            .background(
-                Group {
-                    if let image = UIImage(named: "casino-background") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .ignoresSafeArea()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.4),
-                                        Color.black.opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                            )
-                    } else {
-                        Color.black.ignoresSafeArea()
-                    }
-                }
-            )
+            .casinoBackground()
         }
     }
     
@@ -367,29 +355,7 @@ struct ClaimDetailView: View {
                     Text(error)
                 }
             }
-            .background(
-                Group {
-                    if let image = UIImage(named: "casino-background") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .ignoresSafeArea()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.4),
-                                        Color.black.opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                            )
-                    } else {
-                        Color.black.ignoresSafeArea()
-                    }
-                }
-            )
+            .casinoBackground()
         }
     }
     

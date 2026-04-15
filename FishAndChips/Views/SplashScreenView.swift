@@ -12,35 +12,6 @@ struct SplashScreenView: View {
     
     var body: some View {
         ZStack {
-            // Фоновое изображение
-            if let backgroundImage = UIImage(named: "casino-background") {
-                Image(uiImage: backgroundImage)
-                    .resizable()
-                    .scaledToFill()
-                    .ignoresSafeArea()
-                    .overlay(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.black.opacity(0.7),
-                                Color.black.opacity(0.5)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            } else {
-                // Fallback gradient если изображение не найдено
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.1, green: 0.2, blue: 0.3),
-                        Color(red: 0.2, green: 0.3, blue: 0.4)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-            }
-            
             VStack(spacing: 30) {
                 Spacer()
                 
@@ -76,13 +47,15 @@ struct SplashScreenView: View {
                             value: isAnimating
                         )
                     
-                    Text("CloudKit")
+                    Text("Подготовка данных")
                         .font(.system(size: 14, weight: .light))
                         .foregroundColor(.white.opacity(0.7))
                 }
                 .padding(.bottom, 60)
             }
         }
+        .casinoBackground()
+        .accessibilityIdentifier("splash_screen")
         .onAppear {
             isAnimating = true
             startSuitAnimation()

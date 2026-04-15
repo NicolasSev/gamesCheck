@@ -7,11 +7,14 @@
 
 import SwiftUI
 import CoreData
+import PhotosUI
+import UIKit
 
 struct HandAddView: View {
     let game: Game
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) var dismiss
+    @StateObject private var networkMonitor = NetworkMonitor.shared
     
     @State private var selectedPlayers: [HandPlayer] = []
     @State private var boardCards: [Card?] = [nil, nil, nil, nil, nil]
@@ -21,6 +24,10 @@ struct HandAddView: View {
     @State private var calculatedOdds: OddsResult?
     @State private var isCalculating = false
     @State private var errorMessage: String?
+    @State private var geminiPhotoItem: PhotosPickerItem?
+    @State private var geminiBusy = false
+    @State private var geminiAlertTitle = ""
+    @State private var geminiAlertPresented = false
     
     private var gamePlayers: [String] {
         // Получаем игроков через gameWithPlayers (связь Game -> GameWithPlayer -> Player)
@@ -63,13 +70,35 @@ struct HandAddView: View {
                             
                             Spacer()
                             
+                            if networkMonitor.isOnline {
+                                PhotosPicker(
+                                    selection: $geminiPhotoItem,
+                                    matching: .images,
+                                    photoLibrary: .shared()
+                                ) {
+                                    HStack(spacing: 4) {
+                                        if geminiBusy {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                .scaleEffect(0.85)
+                                        } else {
+                                            Image(systemName: "photo.on.rectangle.angled")
+                                        }
+                                        Text("Фото (Gemini)")
+                                            .font(.caption)
+                                    }
+                                    .foregroundColor(Color.casinoAccentGold)
+                                }
+                                .disabled(geminiBusy)
+                            }
+                            
                             Button(action: { showingPlayerPicker = true }) {
                                 HStack {
                                     Image(systemName: "plus.circle.fill")
                                     Text("Добавить")
                                 }
                                 .font(.subheadline)
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color.casinoAccentGold)
                             }
                         }
                         .padding(.horizontal)
@@ -77,7 +106,7 @@ struct HandAddView: View {
                         if selectedPlayers.isEmpty {
                             Text("Добавьте минимум 2 игроков")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.white.opacity(0.55))
                                 .padding(.horizontal)
                         } else {
                             ForEach(selectedPlayers.indices, id: \.self) { index in
@@ -113,7 +142,7 @@ struct HandAddView: View {
                             HStack(spacing: 12) {
                                 Text("Флоп")
                                     .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.white.opacity(0.55))
                                     .frame(width: 50, alignment: .leading)
                                 
                                 ForEach(0..<3, id: \.self) { index in
@@ -132,7 +161,7 @@ struct HandAddView: View {
                             HStack(spacing: 12) {
                                 Text("Терн")
                                     .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.white.opacity(0.55))
                                     .frame(width: 50, alignment: .leading)
                                 
                                 SimpleBoardCardButton(
@@ -149,7 +178,7 @@ struct HandAddView: View {
                             HStack(spacing: 12) {
                                 Text("Ривер")
                                     .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.white.opacity(0.55))
                                     .frame(width: 50, alignment: .leading)
                                 
                                 SimpleBoardCardButton(
@@ -187,7 +216,7 @@ struct HandAddView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(canCalculate ? Color.blue : Color.gray)
+                                .fill(canCalculate ? Color.casinoAccentGreen : Color.white.opacity(0.22))
                         )
                     }
                     .disabled(!canCalculate || isCalculating)
@@ -210,19 +239,23 @@ struct HandAddView: View {
                     Spacer(minLength: 20)
                 }
             }
-            .background(Color(red: 0.1, green: 0.15, blue: 0.2))
+            .accessibilityIdentifier("hand_add_root")
+            .casinoBackground()
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена") {
                         dismiss()
                     }
+                    .foregroundColor(.white)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Сохранить") {
                         saveAndClose()
                     }
+                    .foregroundColor(calculatedOdds == nil ? .white.opacity(0.45) : Color.casinoAccentGold)
                     .disabled(calculatedOdds == nil)
                 }
             }
@@ -247,6 +280,12 @@ struct HandAddView: View {
                     excludedCards: allSelectedCards
                 )
             }
+            .onChange(of: geminiPhotoItem) { _, item in
+                Task { await runGeminiFromPhoto(item: item) }
+            }
+            .alert(geminiAlertTitle, isPresented: $geminiAlertPresented) {
+                Button("OK", role: .cancel) {}
+            }
         }
     }
     
@@ -268,6 +307,64 @@ struct HandAddView: View {
         let player = HandPlayer(name: name)
         selectedPlayers.append(player)
         calculatedOdds = nil
+    }
+    
+    @MainActor
+    private func runGeminiFromPhoto(item: PhotosPickerItem?) async {
+        guard let item else { return }
+        geminiBusy = true
+        defer {
+            geminiBusy = false
+            geminiPhotoItem = nil
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                geminiAlertTitle = "Не удалось загрузить фото"
+                geminiAlertPresented = true
+                return
+            }
+            let result = try await GeminiCardRecognitionService.shared.recognize(image: image)
+            applyGeminiResult(result)
+        } catch {
+            geminiAlertTitle = error.localizedDescription
+            geminiAlertPresented = true
+        }
+    }
+    
+    private func applyGeminiResult(_ r: CardRecognitionResult) {
+        calculatedOdds = nil
+        errorMessage = nil
+        for i in boardCards.indices {
+            boardCards[i] = nil
+        }
+        let bc = r.boardCards ?? []
+        for (idx, notation) in bc.prefix(5).enumerated() {
+            if let card = try? Card(notation: notation) {
+                boardCards[idx] = card
+            }
+        }
+        let ps = r.players ?? []
+        guard ps.count >= 2 else {
+            errorMessage = "На фото нужно минимум 2 игрока с картами"
+            return
+        }
+        var newPlayers: [HandPlayer] = []
+        for p in ps {
+            let cards = p.cards
+            guard cards.count >= 2,
+                  let c1 = try? Card(notation: cards[0]),
+                  let c2 = try? Card(notation: cards[1]) else { continue }
+            var hp = HandPlayer(name: "Игрок \(p.position)")
+            hp.card1 = c1
+            hp.card2 = c2
+            newPlayers.append(hp)
+        }
+        if newPlayers.count >= 2 {
+            selectedPlayers = newPlayers
+        } else {
+            errorMessage = "Не удалось разобрать карты игроков"
+        }
     }
     
     private func getSelectedCard() -> Card? {

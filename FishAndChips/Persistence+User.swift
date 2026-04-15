@@ -96,6 +96,58 @@ extension PersistenceController {
         saveContext()
         return true
     }
+
+    /// После успешного Supabase `signIn` в Core Data есть `PlayerProfile` (merge из `profiles`), но записи `User` с `email` часто нет — без этого `fetchUser(byEmail:)` не находит пользователя.
+    /// Создаём/обновляем локальный `User` с тем же `userId`, что и у профиля Supabase, и связываем с `PlayerProfile`.
+    func upsertUserForSupabaseLogin(
+        userId: UUID,
+        email: String,
+        passwordHash: String,
+        preferredUsername: String
+    ) -> User? {
+        let context = container.viewContext
+
+        if let existing = fetchUser(byId: userId) {
+            existing.email = email
+            existing.passwordHash = passwordHash
+            if let profile = fetchPlayerProfile(byProfileId: userId) {
+                profile.user = existing
+                existing.playerProfile = profile
+            }
+            saveContext()
+            return existing
+        }
+
+        if let emailOwner = fetchUser(byEmail: email), emailOwner.userId != userId {
+            debugLog("upsertUserForSupabaseLogin: email уже занят другим userId (локально) — конфликт с Supabase \(userId)")
+            return nil
+        }
+
+        var username = preferredUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        if username.isEmpty { username = "user" }
+        if let other = fetchUser(byUsername: username), other.userId != userId {
+            username = "\(username)_\(String(userId.uuidString.prefix(8)))"
+        }
+
+        let user = User(context: context)
+        user.userId = userId
+        user.username = username
+        user.email = email
+        user.passwordHash = passwordHash
+        user.createdAt = Date()
+        user.subscriptionStatus = "free"
+
+        if let profile = fetchPlayerProfile(byProfileId: userId) {
+            profile.user = user
+            user.playerProfile = profile
+        } else if let profile = fetchPlayerProfile(byUserId: userId) {
+            profile.user = user
+            user.playerProfile = profile
+        }
+
+        saveContext()
+        return user
+    }
     
     func setSuperAdmin(username: String, isSuperAdmin: Bool) {
         guard let user = fetchUser(byUsername: username) else { return }

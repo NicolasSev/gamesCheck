@@ -98,6 +98,21 @@ struct DataImportServiceTests {
         #expect(games.isEmpty)
     }
 
+    @Test func parseText_uiAuditFixture_parsesBulkGames() async throws {
+        let service = makeService()
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("TestData/ui_audit_import_games.txt")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            Issue.record("Нет TestData/ui_audit_import_games.txt рядом с проектом.")
+            return
+        }
+        let games = service.parseText(text)
+        #expect(games.count >= 75)
+        #expect(games.contains { $0.players.contains { $0.name == "Ник" } })
+    }
+
     @Test func parseText_malformedInput_handlesGracefully() async throws {
         let service = makeService()
 

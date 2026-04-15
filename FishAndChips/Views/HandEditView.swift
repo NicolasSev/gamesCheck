@@ -56,6 +56,7 @@ struct HandEditView: View {
                         HStack {
                             Text("Игроки")
                                 .font(.headline)
+                                .foregroundColor(.white)
                             Spacer()
                             Button(action: {
                                 showingPlayerPicker = true
@@ -65,7 +66,7 @@ struct HandEditView: View {
                                     Text("Добавить игрока")
                                         .font(.caption)
                                 }
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color.casinoAccentGold)
                             }
                         }
                         .padding(.horizontal)
@@ -73,7 +74,7 @@ struct HandEditView: View {
                         if selectedPlayers.isEmpty {
                             Text("Нет игроков")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.white.opacity(0.55))
                                 .padding()
                         } else {
                             ForEach(selectedPlayers.indices, id: \.self) { index in
@@ -97,7 +98,7 @@ struct HandEditView: View {
                     .padding(.vertical)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(UIColor.secondarySystemBackground))
+                            .fill(Color.white.opacity(0.08))
                     )
                     .padding(.horizontal)
                     
@@ -105,6 +106,7 @@ struct HandEditView: View {
                     VStack(spacing: 12) {
                         Text("Борд (опционально)")
                             .font(.headline)
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal)
                         
@@ -127,7 +129,7 @@ struct HandEditView: View {
                     .padding(.vertical)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(UIColor.secondarySystemBackground))
+                            .fill(Color.white.opacity(0.08))
                     )
                     .padding(.horizontal)
                     
@@ -147,7 +149,7 @@ struct HandEditView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(selectedPlayers.count >= 2 ? Color.blue : Color.gray)
+                                .fill(selectedPlayers.count >= 2 ? Color.casinoAccentGreen : Color.white.opacity(0.22))
                         )
                         .foregroundColor(.white)
                     }
@@ -191,13 +193,16 @@ struct HandEditView: View {
                     }
                 }
             }
-            .background(Color(UIColor.systemBackground))
+            .casinoBackground()
+            .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена") {
                         dismiss()
                     }
+                    .foregroundColor(.white)
                     .disabled(isSaving)
                 }
                 
@@ -205,6 +210,7 @@ struct HandEditView: View {
                     Button("Сохранить") {
                         saveAndClose()
                     }
+                    .foregroundColor((calculatedOdds == nil || isSaving) ? .white.opacity(0.45) : Color.casinoAccentGold)
                     .disabled(calculatedOdds == nil || isSaving)
                 }
             }

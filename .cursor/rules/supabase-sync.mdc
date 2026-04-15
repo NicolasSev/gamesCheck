@@ -1,18 +1,28 @@
 ---
-description: Supabase синхронизация — REST API, RLS, DTO, small diffs
-globs: FishAndChips/Services/Supabase/*.swift,FishAndChips/Models/Supabase/*.swift
+description: Синхронизация через Supabase + офлайн-очередь — архитектура, правила
+globs: FishAndChips/Services/Supabase/*.swift,FishAndChips/Services/NetworkMonitor.swift,FishAndChips/Models/Supabase/*.swift
 alwaysApply: false
 ---
 
-# Supabase Sync
+# Sync (Supabase + Core Data + OfflineSyncQueue)
 
-- **SupabaseService** — CRUD обёртка с retry. Не вызывать `client.from()` напрямую в Views.
-- **DTO** — все данные идут через `SupabaseDTO.swift`. Конвертеры в `SupabaseModelConverters.swift`.
-- **BackendSwitch** — проверять `BackendSwitch.isSupabase` при изменении sync-логики.
-- **SyncRouter** — единая точка доступа для Views. Не вызывать `SupabaseSyncService` / `CloudKitSyncService` напрямую из Views.
-- **RLS** — при добавлении таблиц: `ENABLE ROW LEVEL SECURITY` + политики. Тестировать через Dashboard.
-- **SQL миграции** — новый файл в **`../fishchips-supabase/migrations/`** с порядковым номером. Supabase — отдельный репозиторий.
-- **Small diffs**: один метод/шаг за раз, компиляция после каждого изменения.
-- **Обработка ошибок**: `SupabaseServiceError`, `isRetryable`, `mapError()`.
-- **Логи**: `debugLog()` (не `print`) — только в DEBUG.
-- **Тесты**: `MockSupabaseService` / `MockSupabaseAuth` для изоляции от сети.
+## Архитектура
+
+- **SyncCoordinator** (`SyncCoordinator.swift`) — единственная точка доступа из Views и Services. НИКОГДА не вызывать `SupabaseSyncService.shared` из Views напрямую.
+- **NetworkMonitor** (`NetworkMonitor.swift`) — NWPathMonitor, `@Published isOnline`. При reconnect — `OfflineSyncQueue.processQueue()` + pull Supabase.
+- **Online**: только Supabase (`SupabaseSyncService`).
+- **Offline**: Core Data + `OfflineSyncQueue.enqueue` (replay на Supabase при появлении сети); fetch без сети — кэш Core Data (см. логи в координаторе).
+- **SyncServiceProtocol** — по-прежнему реализуют `SupabaseSyncService` и (legacy) `CloudKitSyncService` для `SyncRouter`/отладки; **маршрутизация данных** идёт через `SyncCoordinator` без CloudKit.
+- **Conflict resolution**: Server wins. На стороне PostgreSQL — `upsert_with_conflict()` (SQL 004).
+
+## Правила при изменениях
+
+- Новый sync-метод для UI → добавить в `SyncCoordinator` и `SupabaseSyncService` по необходимости
+- При offline-операции → `OfflineSyncQueue.enqueue()` (таблица + DTO)
+- **SupabaseService** — CRUD обёртка с retry. Не вызывать `client.from()` в Views.
+- **DTO** — все данные через `SupabaseDTO.swift`. Конвертеры в `SupabaseModelConverters.swift`.
+- **RLS** — при добавлении таблиц: `ENABLE ROW LEVEL SECURITY` + политики.
+- **SQL миграции** — `fishchips-supabase/migrations/` (от workspace root) с порядковым номером (отдельный репозиторий).
+- **Ошибки**: `SupabaseServiceError`, `isRetryable`, `mapError()`.
+- **Логи**: `debugLog()` (не `print`).
+- **Тесты**: `MockSupabaseService` / `MockSupabaseAuth` для изоляции.

@@ -26,6 +26,7 @@ Pods/
 # Environment
 .env
 .env.local
+.env.ui-audit
 
 # Separated repositories (live in their own repos as top-level dirs)
 /web-admin/
@@ -33,3 +34,12 @@ Pods/
 
 # Cursor
 .cursor/chat/
+
+# UI audit PNG (manifest screenflow.json остаётся в репо)
+artifacts/ui-audit/screenshots/*.png
+
+# Local dev / tooling (не коммитить)
+.derivedDataRun/
+.figma_*.js
+.figma_js_batch/
+.figma_one/

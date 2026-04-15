@@ -17,8 +17,8 @@ struct SupabaseDTOTests {
         let profile = persistence.createPlayerProfile(displayName: "DTO Test", userId: user.userId)
         profile.isPublic = true
         profile.totalGamesPlayed = 5
-        profile.totalBuyins = NSDecimalNumber(value: 1000)
-        profile.totalCashouts = NSDecimalNumber(value: 1500)
+        profile.totalBuyins = NSDecimalNumber(value: 100)
+        profile.totalCashouts = NSDecimalNumber(value: 200_500)
         try persistence.container.viewContext.save()
 
         let dto = user.toProfileDTO()
@@ -30,8 +30,8 @@ struct SupabaseDTOTests {
         #expect(dto.subscriptionStatus == "premium")
         #expect(dto.isPublic == true)
         #expect(dto.totalGamesPlayed == 5)
-        #expect(dto.totalBuyins == 1000)
-        #expect(dto.totalCashouts == 1500)
+        #expect(dto.totalBuyins == 100)
+        #expect(dto.totalCashouts == 200_500)
         #expect(dto.balance == 500)
     }
 

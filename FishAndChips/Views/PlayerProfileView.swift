@@ -84,7 +84,7 @@ struct PlayerProfileView: View {
                                     }) {
                                         HStack {
                                             Image(systemName: selectedPlayerNames.contains(playerName) ? "checkmark.square.fill" : "square")
-                                                .foregroundColor(selectedPlayerNames.contains(playerName) ? .blue : .white.opacity(0.6))
+                                                .foregroundColor(selectedPlayerNames.contains(playerName) ? Color.casinoAccentGreen : .white.opacity(0.6))
                                                 .font(.system(size: 22))
                                             
                                             Text(playerName)
@@ -95,7 +95,7 @@ struct PlayerProfileView: View {
                                             
                                             if selectedPlayerNames.contains(playerName) {
                                                 Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundColor(.blue)
+                                                    .foregroundColor(Color.casinoAccentGreen)
                                                     .font(.system(size: 18))
                                             }
                                         }
@@ -124,7 +124,7 @@ struct PlayerProfileView: View {
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color.blue.opacity(0.8))
+                                    .background(Color.casinoAccentGreen.opacity(0.85))
                                     .cornerRadius(12)
                                 }
                                 .padding(.top, 8)
@@ -313,10 +313,12 @@ struct PlayerProfileSelectionSheet: View {
             Group {
                 if isLoading {
                     ProgressView("Загрузка...")
+                        .tint(.white)
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if playerNames.isEmpty {
                     Text("Нет игроков в базе")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.7))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
@@ -327,23 +329,28 @@ struct PlayerProfileSelectionSheet: View {
                             }) {
                                 HStack {
                                     Text(playerName)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(.white)
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.white.opacity(0.45))
                                 }
                             }
+                            .listRowBackground(Color.white.opacity(0.06))
                         }
                     }
+                    .scrollContentBackground(.hidden)
                 }
             }
+            .casinoBackground()
             .navigationTitle("Выберите игрока")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Отмена") {
                         dismiss()
                     }
+                    .foregroundColor(.white)
                 }
             }
             .onAppear {

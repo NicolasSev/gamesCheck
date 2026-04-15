@@ -86,7 +86,7 @@ struct AddPlayerToGameSheet: View {
         do {
             try viewContext.save()
             
-            // Автоматическая синхронизация в CloudKit
+            // Синхронизация через SyncCoordinator → Supabase
             if !addedGameWithPlayers.isEmpty {
                 Task {
                     await SyncCoordinator.shared.quickSyncGameWithPlayers(addedGameWithPlayers)

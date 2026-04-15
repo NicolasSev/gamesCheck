@@ -43,11 +43,16 @@ struct FishAndChipsApp: App {
                 UserDefaults.standard.set(true, forKey: "hasMigratedCreatorUserId")
                 debugLog("🔧 Migration completed and flag set")
             } else {
-                debugLog("⚠️ Cannot migrate: no currentUserId found in Keychain")
+                // Нормально при первом запуске / после сброса — не ошибка
+                debugLog("ℹ️ creatorUserId migration skipped: нет userId в Keychain (ещё не входили)")
             }
         } else {
             debugLog("✅ Migration already completed")
         }
+
+        #if DEBUG
+        UITestSessionSeeder.seedIfNeeded(persistence: persistenceController)
+        #endif
     }
     
     var body: some Scene {
@@ -93,28 +98,6 @@ struct AppBodyView: View {
                             }
                         }
 
-                        // Test CloudKit connection
-                        Task {
-                            do {
-                                let status = try await CloudKitService.shared.checkAccountStatus()
-                                switch status {
-                                case .available:
-                                    debugLog("✅ CloudKit Status: AVAILABLE - Ready to use!")
-                                case .noAccount:
-                                    debugLog("❌ CloudKit Status: NO ACCOUNT - Please sign in to iCloud")
-                                case .restricted:
-                                    debugLog("⚠️ CloudKit Status: RESTRICTED - iCloud access is restricted")
-                                case .couldNotDetermine:
-                                    debugLog("⚠️ CloudKit Status: COULD NOT DETERMINE")
-                                case .temporarilyUnavailable:
-                                    debugLog("⚠️ CloudKit Status: TEMPORARILY UNAVAILABLE")
-                                @unknown default:
-                                    debugLog("⚠️ CloudKit Status: UNKNOWN")
-                                }
-                            } catch {
-                                debugLog("❌ CloudKit Status Check Failed: \(error.localizedDescription)")
-                            }
-                        }
                     }
             } else {
                 // Splash Screen с фоновым изображением
@@ -122,6 +105,9 @@ struct AppBodyView: View {
             }
         }
         .task {
+            if ProcessInfo.processInfo.arguments.contains("--uitesting-splash-hold") {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
             // Phase 3: Smart Sync — витринная двухфазная загрузка
             do {
                 // Phase 1: Минимальная загрузка для быстрого показа UI
@@ -171,9 +157,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             UNUserNotificationCenter.current().delegate = NotificationService.shared
         }
-        // CloudKit subscriptions — ранняя регистрация при запуске (до ContentView)
         Task {
-            guard await CloudKitService.shared.isCloudKitAvailable() else { return }
             await NotificationService.shared.setupGameSubscription()
             await NotificationService.shared.setupPlayerProfileSubscription()
         }
@@ -203,31 +187,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any]
     ) async -> UIBackgroundFetchResult {
         debugLog("📬 Received remote notification: \(userInfo)")
-        
-        // Handle silent push notifications - CloudKit subscription (Game, PlayerProfile, Claims и т.д.)
-        if userInfo["ck"] != nil {
+        let aps = userInfo["aps"] as? [String: Any]
+        if aps?["content-available"] as? Int == 1 || userInfo["ck"] != nil {
             do {
-                let subscriptionID = (userInfo["ck"] as? [String: Any])
-                    .flatMap { $0["qry"] as? [String: Any] }
-                    .flatMap { $0["sid"] as? String }
-
-                if subscriptionID == "profile-public" {
-                    try await SyncCoordinator.shared.fetchPlayerProfiles(notifyOnNewPublic: true)
-                } else {
-                    try await SyncCoordinator.shared.performIncrementalSync()
-                    await MainActor.run {
-                        Task {
-                            try? await NotificationService.shared.notifyGameUpdated(gameName: "Новая игра")
-                        }
-                    }
-                }
+                try await SyncCoordinator.shared.performIncrementalSync()
                 return .newData
             } catch {
-                debugLog("❌ Sync failed: \(error)")
+                debugLog("❌ Sync after silent push: \(error)")
                 return .failed
             }
         }
-        
         return .noData
     }
 
