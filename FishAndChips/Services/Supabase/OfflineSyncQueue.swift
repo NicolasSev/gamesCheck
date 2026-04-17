@@ -136,6 +136,9 @@ final class OfflineSyncQueue: ObservableObject {
         case "player_claims":
             let dto = try JSONDecoder().decode(PlayerClaimDTO.self, from: operation.payload)
             let _: [PlayerClaimDTO] = try await service.upsert(table: "player_claims", values: [dto])
+        case "range_charts":
+            let dto = try JSONDecoder().decode(RangeChartDTO.self, from: operation.payload)
+            let _: RangeChartDTO = try await service.upsert(table: "range_charts", values: dto)
         default:
             debugLog("OfflineSyncQueue: unknown table \(operation.table)")
         }

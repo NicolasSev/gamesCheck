@@ -223,4 +223,14 @@ final class SyncCoordinator: ObservableObject {
     func cleanupInvalidClaims() async throws {
         try await supabaseSync.cleanupInvalidClaims()
     }
+
+    // MARK: - Range Charts
+
+    func syncRangeCharts(for userId: UUID) async throws {
+        if isOnline {
+            try await RangeChartRepository().syncFromRemote(userId: userId)
+        } else {
+            debugLog("SyncCoordinator: offline — syncRangeCharts отложен до сети")
+        }
+    }
 }

@@ -178,11 +178,7 @@ struct OverviewTabView: View {
                         ForEach(stats.recentGames.prefix(5), id: \.gameId) { gameSummary in
                             NavigationLink {
                                 if let game = persistence.fetchGame(byId: gameSummary.gameId) {
-                                    if gameSummary.gameType == "Бильярд" {
-                                        BilliardGameDetailView(game: game)
-                                    } else {
-                                        GameDetailView(game: game)
-                                    }
+                                    GameDetailView(game: game)
                                 }
                             } label: {
                                 if let game = persistence.fetchGame(byId: gameSummary.gameId) {

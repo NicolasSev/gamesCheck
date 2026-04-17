@@ -180,11 +180,7 @@ struct MonthAccordionView: View {
                 VStack(spacing: 8) {
                     ForEach(monthData.games.sorted(by: { ($0.timestamp ?? Date()) > ($1.timestamp ?? Date()) }), id: \.gameId) { game in
                         NavigationLink {
-                            if let gameType = game.gameType, gameType == "Бильярд" {
-                                BilliardGameDetailView(game: game)
-                            } else {
-                                GameDetailView(game: game)
-                            }
+                            GameDetailView(game: game)
                         } label: {
                             GameRowView(game: game, userProfit: gameProfit(for: game))
                         }

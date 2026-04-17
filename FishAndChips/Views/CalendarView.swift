@@ -180,23 +180,13 @@ struct CalendarView: View {
                             List(periodGames) { game in
                                 let info = GameResultInfo(game: game)
                                 NavigationLink(destination: {
-                                    if game.gameType == "Бильярд" {
-                                        BilliardGameDetailView(game: game)
-                                    } else {
-                                        GameDetailView(game: game)
-                                    }
+                                    GameDetailView(game: game)
                                 }, label: {
                                     VStack(alignment: .leading) {
                                         Text(formattedTime(from: game.timestamp))
-                                        Text("Дата: \(info.shortDate)")
+                                        Text(info.summaryLine)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
-                                        Text("Партии: \(info.batches.count)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Text("Результат: \(info.resultText)")
-                                            .font(.caption2)
-                                            .foregroundColor(.blue)
                                     }
                                 })
                             }
@@ -219,35 +209,18 @@ struct CalendarView: View {
                             Text("Нет игр в этот день")
                         } else {
                             List(selectedDayGames) { game in
+                                let info = GameResultInfo(game: game)
                                 NavigationLink(destination: {
-                                    // Если тип игры "billiards", открываем специальное вью, иначе стандартное GameDetailView
-                                    if let type = game.gameType, type == "Бильярд" {
-                                        BilliardGameDetailView(game: game)
-                                    } else {
-                                        GameDetailView(game: game)
-                                    }
+                                    GameDetailView(game: game)
                                 }, label: {
                                     HStack {
-                                        if let type = game.gameType, type == "Бильярд" {
-                                            let info = GameResultInfo(game: game)
-                                            // Для игр по бильярду — отображаем информацию о партиях
-                                            VStack(alignment: .leading) {
-                                                Text(formattedTime(from: game.timestamp))
-                                                Text("Дата: \(info.shortDate)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Text("Партии: \(info.batches.count)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Text("Результат: \(info.resultText)")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.blue)
-                                            }
-                                        } else {
-                                            // Для покера — иконка карты (например, spade)
-                                            Image(systemName: "suit.spade.fill")
-                                                .foregroundColor(.red)
-                                            Text("\(formattedShortDate(from: game.timestamp)) - Байины: \(totalBuyin(for: game)), Тип: - \(String(describing: game.gameType))")
+                                        Image(systemName: "suit.spade.fill")
+                                            .foregroundColor(.red)
+                                        VStack(alignment: .leading) {
+                                            Text(formattedTime(from: game.timestamp))
+                                            Text(info.summaryLine)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                         }
                                     }
                                 })
@@ -267,33 +240,18 @@ struct CalendarView: View {
                             let count = games.count
                             let listHeight: CGFloat = count <= 1 ? 100 : 100 + CGFloat(count - 1) * 40
                             List(games) { game in
+                                let info = GameResultInfo(game: game)
                                 NavigationLink(destination: {
-                                    if let type = game.gameType, type == "Бильярд" {
-                                        BilliardGameDetailView(game: game)
-                                    } else {
-                                        GameDetailView(game: game)
-                                    }
+                                    GameDetailView(game: game)
                                 }, label: {
                                     HStack {
-                                        if let type = game.gameType, type == "Бильярд" {
-                                            let info = GameResultInfo(game: game)
-                                            // Для игр по бильярду — отображаем информацию о партиях
-                                            VStack(alignment: .leading) {
-                                                Text(formattedTime(from: game.timestamp))
-                                                Text("Дата: \(info.shortDate)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Text("Партии: \(info.batches.count)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Text("Результат: \(info.resultText)")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.blue)
-                                            }
-                                        } else {
-                                            Image(systemName: "suit.spade.fill")
-                                                .foregroundColor(.red)
-                                            Text("\(formattedShortDate(from: game.timestamp)) - Байины: \(totalBuyin(for: game))")
+                                        Image(systemName: "suit.spade.fill")
+                                            .foregroundColor(.red)
+                                        VStack(alignment: .leading) {
+                                            Text(formattedTime(from: game.timestamp))
+                                            Text(info.summaryLine)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                         }
                                     }
                                 })

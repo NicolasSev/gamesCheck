@@ -42,7 +42,7 @@ enum UITestSessionSeeder {
     private static func ensureSeedGames(for userId: UUID, persistence: PersistenceController) {
         if persistence.fetchGames(createdBy: userId).isEmpty {
             _ = persistence.createGame(gameType: "poker", creatorUserId: userId)
-            _ = persistence.createGame(gameType: "billiards", creatorUserId: userId)
+            _ = persistence.createGame(gameType: "Покер", creatorUserId: userId)
         }
     }
 }

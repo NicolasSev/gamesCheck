@@ -19,7 +19,7 @@ struct GameServiceTests {
         _ = persistence.createPlayerProfile(displayName: "Test User", userId: user.userId)
 
         let game1 = persistence.createGame(gameType: "Poker", creatorUserId: user.userId)
-        let game2 = persistence.createGame(gameType: "Billiard", creatorUserId: user.userId)
+        let game2 = persistence.createGame(gameType: "Покер", creatorUserId: user.userId)
 
         let other = persistence.createUser(username: "other", passwordHash: "hash")!
         _ = persistence.createPlayerProfile(displayName: "Other", userId: other.userId)
@@ -60,15 +60,15 @@ struct GameServiceTests {
         // profit = cashout - (buyin * 2000)
         try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Poker", buyin: 1, cashout: 2050)  // +50
         try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Poker", buyin: 1, cashout: 1980)   // -20
-        try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Billiard", buyin: 1, cashout: 2020) // +20
+        try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Poker", buyin: 1, cashout: 2020) // +20
 
         let stats = service.getGameTypeStatistics(user.userId)
         let poker = stats.first { $0.gameType == "Poker" }
 
         #expect(poker != nil)
-        #expect(poker?.gamesCount == 2)
-        #expect(poker?.totalProfit == 30) // 50 - 20
-        #expect(poker?.winRate == 0.5)
+        #expect(poker?.gamesCount == 3)
+        #expect(poker?.totalProfit == 50) // 50 - 20 + 20
+        #expect(poker?.winRate == 2.0 / 3.0)
     }
 
     @Test func gameFiltering_profitableAndLosing() async throws {
@@ -81,7 +81,7 @@ struct GameServiceTests {
         // profit = cashout - (buyin * 2000)
         try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Poker", buyin: 1, cashout: 2050)  // +50
         try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Poker", buyin: 1, cashout: 1950)   // -50
-        try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Billiard", buyin: 1, cashout: 2020) // +20
+        try createGameWithProfit(persistence: persistence, user: user, profile: profile, type: "Poker", buyin: 1, cashout: 2020) // +20
 
         let profitable = service.getGames(filter: .profitable, forUser: user.userId)
         let losing = service.getGames(filter: .losing, forUser: user.userId)
@@ -90,7 +90,7 @@ struct GameServiceTests {
         #expect(losing.count == 1)
 
         let pokerGames = service.getGames(filter: .byType("Poker"), forUser: user.userId)
-        #expect(pokerGames.count == 2)
+        #expect(pokerGames.count == 3)
     }
 
     // MARK: - Helpers

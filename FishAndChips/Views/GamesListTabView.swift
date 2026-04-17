@@ -373,11 +373,7 @@ struct GamesListTabView: View {
                             VStack(spacing: 12) {
                                 ForEach(Array(filteredBySearch.enumerated()), id: \.element.gameId) { index, game in
                                     NavigationLink {
-                                        if let type = game.gameType, type == "Бильярд" {
-                                            BilliardGameDetailView(game: game)
-                                        } else {
-                                            GameDetailView(game: game)
-                                        }
+                                        GameDetailView(game: game)
                                     } label: {
                                         GameListRowView(game: game, userId: userId)
                                     }

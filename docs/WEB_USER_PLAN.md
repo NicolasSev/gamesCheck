@@ -17,7 +17,7 @@
 |-----|--------|----------------|
 | Auth | SplashScreen, LoginView, RegistrationView, BiometricPromptView | ✅ 4 frames, clickable |
 | Tabs | OverviewTabView, GamesListTabView, StatisticsTabView, PlayersTabView | ✅ 4 frames, tab switching |
-| Detail | GameDetailView, BilliardGameDetailView, ProfileView, AddGameSheet | ✅ 4 frames |
+| Detail | GameDetailView, ProfileView, AddGameSheet | ✅ 3 frames |
 | Claims | NotificationsView, PendingClaimsView, MyClaimsView, PlayerPublicProfileView | ✅ 4 frames |
 | Extra | HandAddView, DebugView, ImportDataSheet, JoinGameByCodeSheet | ✅ 4 frames |
 
@@ -43,7 +43,6 @@
 - Личный дашборд (баланс, статистика, последние игры)
 - Создание и управление играми (CRUD)
 - Управление игроками в игре (добавление, buyins, cashouts)
-- Бильярдные игры (создание, партии)
 - Личный профиль и настройки
 - Система заявок (подача, просмотр, одобрение)
 - Уведомления в реальном времени (Realtime)
@@ -197,7 +196,7 @@ supabase.from('games')
 **Задачи для агента:**
 1. Game detail: шапка игры, таблица игроков с buyins/cashouts, итоги, баланс-чек
 2. Inline-редактирование buyins/cashouts (для хоста)
-3. Создание игры: тип (Poker/Billiard), название, дата, публичность
+3. Создание игры: дата, публичность (тип — только покер)
 4. Добавление игрока: поиск по профилям + добавление по имени (без профиля)
 5. Удаление игрока (для хоста)
 6. Share ссылка на игру (invite code)
@@ -319,28 +318,9 @@ supabase.from('games').select('id, name').eq('invite_code', code).single()
 
 ---
 
-### Phase 7: Billiard Games (2 дня) — P1
+### Phase 7: Billiard Games — **removed (2026-04-16)**
 
-| iOS Screen | Web Page | Supabase API | Приоритет |
-|------------|----------|--------------|-----------|
-| **BilliardGameDetailView** | `/(user)/games/[id]` (type=billiard) | `billiard_batches` | P1 |
-
-**Задачи для агента:**
-1. Деталь бильярдной игры: таблица партий, счёт
-2. Добавление/редактирование партий (для хоста)
-3. Выбор/смена игроков
-
-**API endpoints:**
-```typescript
-// Billiard batches
-supabase.from('billiard_batches')
-  .select('*')
-  .eq('game_id', gameId)
-  .order('batch_number')
-
-// Add batch
-supabase.from('billiard_batches').insert({ game_id, batch_number, player1_score, player2_score, winner_id })
-```
+Тип «Бильярд» и таблица `billiard_batches` удалены из продукта; остаётся только покер. См. `fishchips-supabase/migrations/019_remove_billiard.sql` и `fishchips-web/docs/REMOVE_BILLIARD_PLAN.md`.
 
 ---
 
@@ -451,7 +431,6 @@ supabase.channel('user-updates')
 | Профиль | `ProfileView` | аватар буква, username, email, sync, заявки, выход | `AuthViewModel`, `PlayerClaimService`, `SyncCoordinator` | `profiles` update, claims count | `/app/profile` + меню |
 | Новая игра | `AddGameSheet` | тип, дата, заметки | Core Data insert + sync | `games.insert` | `/app/games/new` |
 | Деталь покера | `GameDetailView` | игроки buy-in/cashout, баланс, руки [`HandsStorageService`](../../FishAndChips/Services/), claim, шаринг | локальные руки | `games`, `game_players`, `check_game_balance`; руки — локально или будущая таблица | `/app/games/[id]`, `/app/games/[id]/hands` |
-| Бильярд | `BilliardGameDetailView` | партии | Core Data | `billiard_batches` | ветка в `/app/games/[id]` |
 | Мои заявки | `MyClaimsView` | список claims | `PlayerClaimService` | `player_claims` claimant | `/app/claims` |
 | Входящие | `PendingClaimsView` | approve/reject | host | `player_claims` host | `/app/claims/pending` |
 | Уведомления | `NotificationsView` | список | сервис + Core Data | Realtime | `/app/notifications` |
@@ -486,6 +465,6 @@ supabase.channel('user-updates')
 | Phase 4: Players + Public Profiles | Done | 2026-03-27 |
 | Phase 5: Statistics + Charts | Done | 2026-03-27 |
 | Phase 6: Claims System | Done | 2026-03-27 |
-| Phase 7: Billiard Games | Done | 2026-03-27 |
+| Phase 7: Billiard Games | Removed (poker-only product) | 2026-04-16 |
 | Phase 8: Notifications + Realtime | Done | 2026-03-27 |
 | Phase 9: Poker Hands | Partial (local notes only) | 2026-03-27 |

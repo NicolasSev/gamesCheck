@@ -136,13 +136,7 @@ struct StatisticsTabView: View {
             get: { selectedGame },
             set: { selectedGame = $0 }
         )) { game in
-            Group {
-                if let gameType = game.gameType, gameType == "Бильярд" {
-                    BilliardGameDetailView(game: game)
-                } else {
-                    GameDetailView(game: game)
-                }
-            }
+            GameDetailView(game: game)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled(false)

@@ -28,8 +28,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		171F35912DA175CE00430DDF /* BilliardBatche+CoreDataClass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "BilliardBatche+CoreDataClass.swift"; path = "FishAndChips/Models/CoreData/BilliardBatche+CoreDataClass.swift"; sourceTree = "<group>"; };
-		171F35922DA175CE00430DDF /* BilliardBatche+CoreDataProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "BilliardBatche+CoreDataProperties.swift"; path = "FishAndChips/Models/CoreData/BilliardBatche+CoreDataProperties.swift"; sourceTree = "<group>"; };
 		171F35932DA175CE00430DDF /* Game+CoreDataClass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Game+CoreDataClass.swift"; path = "FishAndChips/Models/CoreData/Game+CoreDataClass.swift"; sourceTree = "<group>"; };
 		171F35942DA175CE00430DDF /* Game+CoreDataProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Game+CoreDataProperties.swift"; path = "FishAndChips/Models/CoreData/Game+CoreDataProperties.swift"; sourceTree = "<group>"; };
 		171F35952DA175CE00430DDF /* GameWithPlayer+CoreDataClass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "GameWithPlayer+CoreDataClass.swift"; path = "FishAndChips/Models/CoreData/GameWithPlayer+CoreDataClass.swift"; sourceTree = "<group>"; };
@@ -101,8 +99,6 @@
 		179340F72D91874300CDBF18 = {
 			isa = PBXGroup;
 			children = (
-				171F35912DA175CE00430DDF /* BilliardBatche+CoreDataClass.swift */,
-				171F35922DA175CE00430DDF /* BilliardBatche+CoreDataProperties.swift */,
 				171F35932DA175CE00430DDF /* Game+CoreDataClass.swift */,
 				171F35942DA175CE00430DDF /* Game+CoreDataProperties.swift */,
 				171F35952DA175CE00430DDF /* GameWithPlayer+CoreDataClass.swift */,

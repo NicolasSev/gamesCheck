@@ -368,7 +368,7 @@ final class UIAuditUITests: XCTestCase {
             if mainPage.addGameButton.waitForExistence(timeout: 4) {
                 mainPage.addGameButton.tap()
             }
-            if app.otherElements["add_game_type_picker"].waitForExistence(timeout: 8)
+            if app.otherElements["add_game_date_picker"].waitForExistence(timeout: 8)
                 || app.pickers.firstMatch.waitForExistence(timeout: 3) {
                 try audit.recordIfNew(
                     screenId: "add_game",
@@ -538,16 +538,15 @@ final class UIAuditUITests: XCTestCase {
                 parentScreenId: "tab_games",
                 navigationAction: "empty_list",
                 screenType: .empty_state,
-                notes: "Нет строк для game_detail / billiard"
+                notes: "Нет строк для game_detail"
             )
             return
         }
 
         var sawPoker = false
-        var sawBilliard = false
 
         for i in 0 ..< 8 {
-            if sawPoker && sawBilliard { break }
+            if sawPoker { break }
             mainPage.switchToGames()
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
             let row = app.buttons["games_game_row_\(i)"]
@@ -556,7 +555,6 @@ final class UIAuditUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(1.0))
 
             let isPoker = app.buttons["game_detail_add_hand_button"].waitForExistence(timeout: 6)
-            let isBilliard = app.staticTexts["Дата игры"].waitForExistence(timeout: 2)
 
             if isPoker && !sawPoker {
                 try audit.recordIfNew(
@@ -582,15 +580,6 @@ final class UIAuditUITests: XCTestCase {
                         app.buttons["Отмена"].firstMatch.tap()
                     }
                 }
-            } else if isBilliard && !sawBilliard {
-                try audit.recordIfNew(
-                    screenId: "billiard",
-                    title: "Бильярд — детали",
-                    parentScreenId: "tab_games",
-                    navigationAction: "open_game_row_\(i)",
-                    screenType: .detail
-                )
-                sawBilliard = true
             }
 
             if app.navigationBars.buttons.firstMatch.waitForExistence(timeout: 3) {

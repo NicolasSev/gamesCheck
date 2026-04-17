@@ -247,23 +247,3 @@ extension PlayerClaim {
     }
 }
 
-// MARK: - BilliardBatche -> BilliardBatchDTO
-
-extension BilliardBatche {
-    func toBilliardBatchDTO() -> BilliardBatchDTO? {
-        guard let gameId = game?.gameId else { return nil }
-        return BilliardBatchDTO(
-            id: UUID(),
-            gameId: gameId,
-            scorePlayer1: scorePlayer1,
-            scorePlayer2: scorePlayer2,
-            timestamp: timestamp
-        )
-    }
-
-    func updateFromBilliardBatchDTO(_ dto: BilliardBatchDTO) {
-        scorePlayer1 = dto.scorePlayer1
-        scorePlayer2 = dto.scorePlayer2
-        timestamp = dto.timestamp
-    }
-}

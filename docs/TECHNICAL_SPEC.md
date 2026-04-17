@@ -77,7 +77,7 @@ class User: NSManagedObject {
 class Game: NSManagedObject {
     @NSManaged var gameId: UUID          // PK
     @NSManaged var timestamp: Date?
-    @NSManaged var gameType: String?     // "Poker" | "Billiard"
+    @NSManaged var gameType: String?     // "Покер" / "Poker" (только покер)
     @NSManaged var creatorUserId: UUID?
     @NSManaged var notes: String?
     @NSManaged var isDeleted: Bool       // Soft delete
@@ -455,8 +455,7 @@ Response: 200
   "best_session": decimal,
   "worst_session": decimal,
   "profit_by_game_type": {
-    "Poker": decimal,
-    "Billiard": decimal
+    "Poker": decimal
   }
 }
 ```

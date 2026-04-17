@@ -65,11 +65,7 @@ struct BuyinsChartView: View {
             set: { selectedGameId = $0?.id }
         )) { item in
             if let game = persistence.fetchGame(byId: item.id) {
-                if let gameType = game.gameType, gameType == "Бильярд" {
-                    BilliardGameDetailView(game: game)
-                } else {
-                    GameDetailView(game: game)
-                }
+                GameDetailView(game: game)
             }
         }
         .fullScreenCover(isPresented: $isFullScreen) {
@@ -175,11 +171,7 @@ struct FullScreenChartView: View {
             set: { selectedGameId = $0?.id }
         )) { item in
             if let game = persistence.fetchGame(byId: item.id) {
-                if let gameType = game.gameType, gameType == "Бильярд" {
-                    BilliardGameDetailView(game: game)
-                } else {
-                    GameDetailView(game: game)
-                }
+                GameDetailView(game: game)
             }
         }
     }

@@ -261,13 +261,27 @@ final class AuthViewModel: ObservableObject {
 
         if networkMonitor.isOnline {
             do {
-                let _ = try await supabaseAuth.signUp(
+                let authUser = try await supabaseAuth.signUp(
                     email: normEmail,
                     password: regPassword,
                     username: username,
                     displayName: username
                 )
-                debugLog("☁️ [REGISTER] Supabase Auth signUp succeeded")
+                debugLog("☁️ [REGISTER] Supabase Auth signUp succeeded: \(authUser.id)")
+
+                // CRITICAL: align local UUIDs with the Supabase auth UUID.
+                // Supabase RLS checks auth.uid() for every query:
+                //   - games: creator_id = auth.uid()
+                //   - profiles: id = auth.uid()
+                //   - game_players: profile_id = auth.uid()
+                // Without this, local UUID (B) ≠ auth.uid() (A) → all writes/reads return empty.
+                if authUser.id != user.userId {
+                    debugLog("🔑 [REGISTER] Aligning local UUIDs with Supabase auth: \(user.userId) → \(authUser.id)")
+                    user.userId = authUser.id
+                    profile.profileId = authUser.id
+                    profile.userId = authUser.id
+                    persistence.saveContext()
+                }
             } catch {
                 debugLog("⚠️ [REGISTER] Supabase signUp error: \(error) — continuing with local user")
             }

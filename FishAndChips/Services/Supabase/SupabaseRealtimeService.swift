@@ -14,6 +14,7 @@ final class SupabaseRealtimeService: ObservableObject {
     private var gameChannel: RealtimeChannelV2?
     private var claimChannel: RealtimeChannelV2?
     private var profileChannel: RealtimeChannelV2?
+    private var rangeChartChannel: RealtimeChannelV2?
 
     private nonisolated init(client: SupabaseClient = SupabaseConfig.client) {
         self.client = client
@@ -25,6 +26,7 @@ final class SupabaseRealtimeService: ObservableObject {
         await subscribeToGames()
         await subscribeToClaims()
         await subscribeToProfiles()
+        await subscribeToRangeCharts()
         isConnected = true
         debugLog("Supabase Realtime: all subscriptions active")
     }
@@ -43,6 +45,10 @@ final class SupabaseRealtimeService: ObservableObject {
         if let channel = profileChannel {
             await channel.unsubscribe()
             profileChannel = nil
+        }
+        if let channel = rangeChartChannel {
+            await channel.unsubscribe()
+            rangeChartChannel = nil
         }
         isConnected = false
         debugLog("Supabase Realtime: all subscriptions removed")
@@ -116,6 +122,44 @@ final class SupabaseRealtimeService: ObservableObject {
         await channel.subscribe()
         profileChannel = channel
         debugLog("Supabase Realtime: subscribed to profiles")
+    }
+
+    // MARK: - Range Charts
+
+    private func subscribeToRangeCharts() async {
+        let channel = client.realtimeV2.channel("range-chart-changes")
+
+        let insertions = channel.postgresChange(InsertAction.self, table: "range_charts")
+        let updates    = channel.postgresChange(UpdateAction.self, table: "range_charts")
+
+        Task {
+            for await insertion in insertions {
+                await handleRangeChartChange(record: insertion.record)
+            }
+        }
+
+        Task {
+            for await update in updates {
+                await handleRangeChartChange(record: update.record)
+            }
+        }
+
+        await channel.subscribe()
+        rangeChartChannel = channel
+        debugLog("Supabase Realtime: subscribed to range_charts")
+    }
+
+    private func handleRangeChartChange(record: [String: AnyJSON]) async {
+        guard let userIdString = record["user_id"]?.stringValue,
+              let userId = UUID(uuidString: userIdString) else { return }
+
+        debugLog("Realtime: range_chart updated for user \(userId)")
+
+        do {
+            try await SyncCoordinator.shared.syncRangeCharts(for: userId)
+        } catch {
+            debugLog("Realtime range_chart handler error: \(error)")
+        }
     }
 
     // MARK: - Handlers

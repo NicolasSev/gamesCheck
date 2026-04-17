@@ -35,7 +35,7 @@ struct MockSupabaseServiceTests {
             timestamp: Date(), createdAt: nil, updatedAt: nil
         )
         let game2 = GameDTO(
-            id: UUID(), gameType: "Billiard", creatorId: creatorId,
+            id: UUID(), gameType: "Poker", creatorId: creatorId,
             isPublic: true, softDeleted: false, notes: "Test",
             timestamp: Date(), createdAt: nil, updatedAt: nil
         )
@@ -49,7 +49,7 @@ struct MockSupabaseServiceTests {
         try mock.deleteGame(id: game1.id)
         let remaining = try mock.fetchGames(creatorId: creatorId)
         #expect(remaining.count == 1)
-        #expect(remaining.first?.gameType == "Billiard")
+        #expect(remaining.first?.gameType == "Poker")
     }
 
     @Test func mockService_errorThrows() async throws {

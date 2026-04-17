@@ -141,24 +141,6 @@ struct PlayerClaimDTO: Codable, Identifiable, Sendable {
     var isRejected: Bool { status == "rejected" }
 }
 
-// MARK: - BilliardBatch
-
-struct BilliardBatchDTO: Codable, Identifiable, Sendable {
-    let id: UUID
-    var gameId: UUID
-    var scorePlayer1: Int16
-    var scorePlayer2: Int16
-    var timestamp: Date?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case gameId = "game_id"
-        case scorePlayer1 = "score_player1"
-        case scorePlayer2 = "score_player2"
-        case timestamp
-    }
-}
-
 // MARK: - Materialized Views (read-only)
 
 struct GameSummaryDTO: Codable, Identifiable, Sendable {
@@ -228,6 +210,26 @@ struct DeviceTokenDTO: Codable, Identifiable, Sendable {
         case token
         case platform
         case createdAt = "created_at"
+    }
+}
+
+// MARK: - RangeChart
+
+struct RangeChartDTO: Codable, Identifiable, Sendable {
+    let id: UUID
+    var userId: UUID
+    var position: String        // UTG/MP/CO/BTN/SB/BB
+    var selectedHands: [String]
+    var createdAt: Date?
+    var updatedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case position
+        case selectedHands = "selected_hands"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
     }
 }
 

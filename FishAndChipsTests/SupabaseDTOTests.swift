@@ -65,7 +65,7 @@ struct SupabaseDTOTests {
 
         let dto = GameDTO(
             id: gameId,
-            gameType: "Billiard",
+            gameType: "Poker",
             creatorId: creatorId,
             isPublic: false,
             softDeleted: false,
@@ -79,7 +79,7 @@ struct SupabaseDTOTests {
         try context.save()
 
         #expect(game.gameId == gameId)
-        #expect(game.gameType == "Billiard")
+        #expect(game.gameType == "Poker")
         #expect(game.creatorUserId == creatorId)
         #expect(game.notes == "Created from DTO")
     }

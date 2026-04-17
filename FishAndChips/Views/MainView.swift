@@ -22,6 +22,7 @@ struct MainView: View {
         case games
         case statistics
         case players
+        case ranges
     }
 
     var body: some View {
@@ -75,6 +76,12 @@ struct MainView: View {
                     .tabItem { Label("Игроки", systemImage: "person.2.fill") }
                     .tag(MainTab.players)
                     .accessibilityIdentifier("tab_players")
+
+                RangesTabView()
+                    .environmentObject(authViewModel)
+                    .tabItem { Label("Диапазоны", systemImage: "square.grid.3x3.fill") }
+                    .tag(MainTab.ranges)
+                    .accessibilityIdentifier("tab_ranges")
             }
             .accessibilityIdentifier("screen.main")
             .navigationTitle(titleForTab(selectedTab))
@@ -154,11 +161,7 @@ struct MainView: View {
             }
             .sheet(item: $deepLinkGame) { game in
                 NavigationStack {
-                    if let type = game.gameType, type == "Бильярд" {
-                        BilliardGameDetailView(game: game)
-                    } else {
-                        GameDetailView(game: game)
-                    }
+                    GameDetailView(game: game)
                 }
             }
             .alert("Ошибка", isPresented: Binding(
@@ -250,6 +253,7 @@ struct MainView: View {
         case .games: return "Игры"
         case .statistics: return "Статистика"
         case .players: return "Игроки"
+        case .ranges: return "Диапазоны"
         }
     }
     

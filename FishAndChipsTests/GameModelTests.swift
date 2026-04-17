@@ -26,7 +26,7 @@ struct GameModelTests {
     @Test func createGame_withoutCreator_allowsLegacy() async throws {
         let persistence = PersistenceController(inMemory: true)
 
-        let game = persistence.createGame(gameType: "Billiard", creatorUserId: nil)
+        let game = persistence.createGame(gameType: "Покер", creatorUserId: nil)
 
         #expect(game.creatorUserId == nil)
         #expect(game.creator == nil)
@@ -37,7 +37,7 @@ struct GameModelTests {
 
         let user = persistence.createUser(username: "creator", passwordHash: "hash")!
         let game1 = persistence.createGame(gameType: "Poker", creatorUserId: user.userId)
-        let game2 = persistence.createGame(gameType: "Billiard", creatorUserId: user.userId)
+        let game2 = persistence.createGame(gameType: "Покер", creatorUserId: user.userId)
 
         // soft delete one
         persistence.softDeleteGame(game2)

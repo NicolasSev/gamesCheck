@@ -25,7 +25,7 @@
 **SyncCoordinator** — центральный координатор. Online → Supabase; offline → Core Data + `OfflineSyncQueue` (без CloudKit в координаторе).  
 **NetworkMonitor** — отслеживает состояние сети, при reconnect автоматически обрабатывает очередь.
 
-**Supabase таблицы:** profiles (User+PlayerProfile), games, game_players, player_aliases, player_claims, billiard_batches, device_tokens  
+**Supabase таблицы:** profiles (User+PlayerProfile), games, game_players, player_aliases, player_claims, device_tokens  
 **Views (PostgreSQL):** game_summaries, user_statistics (обычные VIEW; см. миграция 010), admin_player_stats (016 — агрегаты по имени игрока для админки)  
 **RLS:** Row Level Security на всех таблицах  
 **Realtime:** WebSocket подписки на games, claims, profiles

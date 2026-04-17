@@ -25,7 +25,6 @@ extension Game {
     @NSManaged public var notes: String?
     @NSManaged public var softDeleted: Bool
     @NSManaged public var timestamp: Date?
-    @NSManaged public var billiardBatches: NSSet?
     @NSManaged public var creator: User?
     @NSManaged public var gameWithPlayers: NSSet?
     @NSManaged public var player1: Player?
@@ -67,23 +66,6 @@ extension Game {
     var isBalanced: Bool {
         totalBuyins == totalCashouts
     }
-}
-
-// MARK: Generated accessors for billiardBatches
-extension Game {
-
-    @objc(addBilliardBatchesObject:)
-    @NSManaged public func addToBilliardBatches(_ value: BilliardBatche)
-
-    @objc(removeBilliardBatchesObject:)
-    @NSManaged public func removeFromBilliardBatches(_ value: BilliardBatche)
-
-    @objc(addBilliardBatches:)
-    @NSManaged public func addToBilliardBatches(_ values: NSSet)
-
-    @objc(removeBilliardBatches:)
-    @NSManaged public func removeFromBilliardBatches(_ values: NSSet)
-
 }
 
 // MARK: Generated accessors for gameWithPlayers
