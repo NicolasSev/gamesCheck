@@ -69,7 +69,7 @@ enum HandGrid {
     /// Weighted percentage of selected hands out of 1326 total combos.
     static func weightedPercent(_ hands: Set<String>) -> Double {
         let total = 1326.0
-        let selected = hands.reduce(0) { $0 + combos(for: kind(of: $1)) }
+        let selected = Double(hands.reduce(0) { $0 + combos(for: kind(of: $1)) })
         return selected / total * 100.0
     }
 }

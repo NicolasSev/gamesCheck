@@ -14,11 +14,11 @@ final class RangesViewModel: ObservableObject {
     private var saveWorkItems: [RangePosition: DispatchWorkItem] = [:]
 
     init(
-        repo: RangeChartRepository = RangeChartRepository(),
-        syncCoordinator: SyncCoordinator = .shared
+        repo: RangeChartRepository? = nil,
+        syncCoordinator: SyncCoordinator? = nil
     ) {
-        self.repo = repo
-        self.syncCoordinator = syncCoordinator
+        self.repo = repo ?? RangeChartRepository()
+        self.syncCoordinator = syncCoordinator ?? .shared
     }
 
     // MARK: - Load
