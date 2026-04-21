@@ -51,7 +51,7 @@ struct PlayerStatisticsChartView: View {
             
             let buyin = Int64(gwp.buyin)
             let cashout = gwp.cashout
-            let final = cashout - (buyin * 2000)
+            let final = cashout - ChipValue.chipsToTenge(buyin)
             
             return GameDataPoint(
                 date: timestamp,
@@ -63,6 +63,15 @@ struct PlayerStatisticsChartView: View {
     }
     
     // Данные для графика (накопительные)
+    private var chartAccentColor: Color {
+        switch selectedStatType {
+        case .buyin:
+            return .casinoAccentGold
+        case .cashout, .final:
+            return .casinoAccentGreen
+        }
+    }
+
     private var chartData: [ChartDataPoint] {
         var cumulativeBuyin: Int64 = 0
         var cumulativeCashout: Int64 = 0
@@ -129,7 +138,7 @@ struct PlayerStatisticsChartView: View {
                                     x: .value("Дата", dataPoint.date),
                                     y: .value("Значение", dataPoint.value)
                                 )
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(chartAccentColor)
                                 .interpolationMethod(.catmullRom)
                                 
                                 AreaMark(
@@ -138,7 +147,7 @@ struct PlayerStatisticsChartView: View {
                                 )
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.blue.opacity(0.3), .blue.opacity(0.0)],
+                                        colors: [chartAccentColor.opacity(0.35), chartAccentColor.opacity(0.0)],
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
@@ -149,7 +158,7 @@ struct PlayerStatisticsChartView: View {
                                     x: .value("Дата", dataPoint.date),
                                     y: .value("Значение", dataPoint.value)
                                 )
-                                .foregroundStyle(selectedDataPoint?.id == dataPoint.id ? .red : .blue)
+                                .foregroundStyle(selectedDataPoint?.id == dataPoint.id ? Color.red : chartAccentColor)
                                 .symbolSize(selectedDataPoint?.id == dataPoint.id ? 100 : 50)
                             }
                             .chartXSelection(value: Binding(
@@ -252,11 +261,11 @@ struct PlayerStatisticsChartView: View {
     private func valueColor(for value: Int64) -> Color {
         switch selectedStatType {
         case .buyin:
-            return .blue
+            return .casinoAccentGold
         case .cashout:
-            return .green
+            return .casinoAccentGreen
         case .final:
-            return value >= 0 ? .green : .red
+            return value >= 0 ? .casinoAccentGreen : .red
         }
     }
     

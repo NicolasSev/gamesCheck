@@ -34,7 +34,7 @@ struct GameResultsChart: View {
     }
     
     private func formatBuyinInTenge(_ buyin: Int16) -> String {
-        let buyinInTenge = Decimal(buyin) * 2000
+        let buyinInTenge = Decimal(buyin) * Decimal(ChipValue.tengePerChip)
         return buyinInTenge.formatCurrency()
     }
     
@@ -68,14 +68,14 @@ struct GameResultsChart: View {
                                 Text(result.profit.formatCurrency())
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(result.profit >= 0 ? .green : .red)
+                                    .foregroundColor(result.profit >= 0 ? Color.casinoAccentGreen : .red)
                                     .frame(width: 100, alignment: .trailing)
                             }
                             
                             GeometryReader { geometry in
                                 ZStack(alignment: .leading) {
                                     Rectangle()
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color.white.opacity(0.08))
                                         .frame(height: 24)
                                         .cornerRadius(12)
                                     
@@ -88,12 +88,12 @@ struct GameResultsChart: View {
                                             if result.profit < 0 {
                                                 Spacer()
                                                 Rectangle()
-                                                    .fill(Color.red.opacity(0.8))
+                                                    .fill(Color.red.opacity(0.85))
                                                     .frame(width: width, height: 24)
                                                     .cornerRadius(12)
                                             } else {
                                                 Rectangle()
-                                                    .fill(Color.green.opacity(0.8))
+                                                    .fill(Color.casinoAccentGreen.opacity(0.85))
                                                     .frame(width: width, height: 24)
                                                     .cornerRadius(12)
                                                 Spacer()
@@ -168,7 +168,7 @@ struct GameResultsChart: View {
                         Text(result.profit.formatCurrency())
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(result.profit >= 0 ? .green : .red)
+                            .foregroundColor(result.profit >= 0 ? Color.casinoAccentGreen : .red)
                     }
                 }
             }

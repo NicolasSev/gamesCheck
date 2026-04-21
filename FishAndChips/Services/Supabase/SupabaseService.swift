@@ -228,6 +228,21 @@ final class SupabaseService: @unchecked Sendable {
         }
     }
 
+    // MARK: - Equity Guesser (view `equity_guesser_user_stats`)
+
+    /// Агрегаты по завершённым сессиям для текущего пользователя (RLS).
+    func fetchEquityGuesserUserStats() async throws -> EquityGuesserUserStatsRow? {
+        try await withRetry {
+            let rows: [EquityGuesserUserStatsRow] = try await self.client
+                .from("equity_guesser_user_stats")
+                .select()
+                .limit(1)
+                .execute()
+                .value
+            return rows.first
+        }
+    }
+
     // MARK: - Retry Logic
 
     private func withRetry<T>(

@@ -13,28 +13,31 @@ enum DeepLink: Equatable {
     case none
     
     static func parse(from url: URL) -> DeepLink {
+        // https://host/app/games/{gameId}  (SPA пользователя; совпадает с fishchips-web)
+        if let gameId = DeepLinkParsing.gameIdFromWebPath(url: url) {
+            debugLog("✅ DeepLink parsed (SPA /app/games): game(\(gameId))")
+            return .game(gameId)
+        }
+
         // pokertracker://game/{gameId}
         // fishandchips://game/{gameId}
-        
         guard let host = url.host else {
             debugLog("❌ DeepLink: No host in URL: \(url)")
             return .none
         }
-        
+
         let pathComponents = url.pathComponents.filter { $0 != "/" }
-        
+
         debugLog("🔗 DeepLink parsing: host=\(host), path=\(pathComponents)")
-        
-        // Check for game deep link
+
         if host == "game" {
-            // pokertracker://game/{gameId}
             if let gameIdString = pathComponents.first,
                let gameId = UUID(uuidString: gameIdString) {
                 debugLog("✅ DeepLink parsed: game(\(gameId))")
                 return .game(gameId)
             }
         }
-        
+
         debugLog("❌ DeepLink: Unable to parse URL: \(url)")
         return .none
     }

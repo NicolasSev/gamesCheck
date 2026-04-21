@@ -59,7 +59,7 @@ struct GameDetailView: View {
         gameWithPlayers.map { gwp in
             let buyin = Decimal(Int(gwp.buyin))
             let cashout = Decimal(Int(gwp.cashout))
-            let profit = cashout - (buyin * 2000)
+            let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
             return PlayerResult(
                 playerName: gwp.playerProfile?.displayName ?? gwp.player?.name ?? "Без имени",
                 profit: profit,
@@ -100,7 +100,7 @@ struct GameDetailView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.7))
                             Spacer()
-                            Text("\(Int(truncating: NSDecimalNumber(decimal: game.totalBuyins))) (\((game.totalBuyins * 2000).formatCurrency()))")
+                            Text("\(Int(truncating: NSDecimalNumber(decimal: game.totalBuyins))) (\((game.totalBuyins * Decimal(ChipValue.tengePerChip)).formatCurrency()))")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.white)
@@ -421,13 +421,16 @@ struct GameDetailView: View {
     private func shareGameLink() {
         let gameId = game.gameId.uuidString
         let deepLink = "fishandchips://game/\(gameId)"
-        
+        let webURL = AppWebConfig.gameURL(gameId: game.gameId).absoluteString
+
         let message = """
         🎮 Приглашение в Fish & Chips!
         
         📋 Код игры: \(gameId)
         
-        🔗 Быстрый вход (если работает):
+        🌐 Веб (приложение): \(webURL)
+        
+        🔗 Схема приложения:
         \(deepLink)
         
         📱 Или вручную:

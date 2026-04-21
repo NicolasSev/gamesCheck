@@ -6,6 +6,10 @@ struct StatisticsTabView: View {
     let gameTypeStats: [GameTypeStatistics]
     let topAnalytics: TopAnalytics?
     let chartData: [(date: Date, buyin: Decimal, gameId: UUID)]
+
+    @EnvironmentObject private var authViewModel: AuthViewModel
+    @State private var equityGuesserStats: EquityGuesserUserStatsRow?
+    @State private var equityGuesserLoading = false
     
     @State private var selectedGame: Game?
     @Environment(\.managedObjectContext) private var viewContext
@@ -22,6 +26,52 @@ struct StatisticsTabView: View {
                         
                         BuyinsChartView(data: chartData, formatCurrency: { $0.formatCurrency() })
                             .padding(.bottom, 8)
+                    }
+
+                    if equityGuesserLoading {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity)
+                    } else if let eg = equityGuesserStats, (eg.total_sessions ?? 0) > 0 {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Тренажёр эквити")
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                equityStatCell(title: "Сессий", value: "\(eg.total_sessions ?? 0)")
+                                equityStatCell(title: "Раундов", value: "\(eg.total_rounds ?? 0)")
+                                equityStatCell(
+                                    title: "MAE",
+                                    value: eg.overall_mae != nil
+                                        ? String(format: "%.2f%%", eg.overall_mae!)
+                                        : "—"
+                                )
+                                equityStatCell(title: "Лучший стрик", value: "\(eg.best_streak ?? 0)")
+                            }
+
+                            NavigationLink {
+                                EquityGuesserLobbyView()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "scope")
+                                    Text("Играть ещё")
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.5))
+                                }
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.casinoAccentGreen)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.white.opacity(0.08))
+                                .cornerRadius(12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding()
+                        .liquidGlass(cornerRadius: 15)
                     }
                     
                     // Топовая аналитика
@@ -132,6 +182,12 @@ struct StatisticsTabView: View {
             }
             .scrollContentBackground(.hidden)
             .casinoBackground()
+            .task(id: authViewModel.currentUserId) {
+                await refreshEquityGuesserStats()
+            }
+            .refreshable {
+                await refreshEquityGuesserStats()
+            }
         .sheet(item: Binding(
             get: { selectedGame },
             set: { selectedGame = $0 }
@@ -140,6 +196,35 @@ struct StatisticsTabView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled(false)
+        }
+    }
+
+    private func equityStatCell(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.65))
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @MainActor
+    private func refreshEquityGuesserStats() async {
+        equityGuesserStats = nil
+        guard authViewModel.currentUserId != nil else {
+            equityGuesserLoading = false
+            return
+        }
+        equityGuesserLoading = true
+        defer { equityGuesserLoading = false }
+        guard await SupabaseService.shared.isAvailable() else { return }
+        do {
+            equityGuesserStats = try await SupabaseService.shared.fetchEquityGuesserUserStats()
+        } catch {
+            debugLog("StatisticsTabView: equity guesser stats — \(error.localizedDescription)")
         }
     }
 

@@ -66,6 +66,7 @@ struct MainView: View {
                     topAnalytics: viewModel.topAnalytics,
                     chartData: viewModel.chartData
                 )
+                .environmentObject(authViewModel)
                 .tabItem { Label("Статистика", systemImage: "chart.pie.fill") }
                 .tag(MainTab.statistics)
                 .accessibilityIdentifier("tab_statistics")
@@ -207,10 +208,13 @@ struct MainView: View {
                 }
             }
             .onAppear {
-                // Настройка цвета текста и иконки активного таба
+                // Активный таб — акцент как в web v13 (`--accent-green`).
                 let tabBarAppearance = UITabBarAppearance()
-                tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor.white]
-                tabBarAppearance.stackedLayoutAppearance.selected.iconColor = .white
+                let accent = UIColor(Color.casinoAccentGreen)
+                tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accent]
+                tabBarAppearance.stackedLayoutAppearance.selected.iconColor = accent
+                tabBarAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.white.withAlphaComponent(0.65)]
+                tabBarAppearance.stackedLayoutAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.65)
                 UITabBar.appearance().standardAppearance = tabBarAppearance
                 UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
                 

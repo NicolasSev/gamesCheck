@@ -136,7 +136,7 @@ struct MonthAccordionView: View {
         
         let buyin = Decimal(Int(myParticipation.buyin))
         let cashout = Decimal(Int(myParticipation.cashout))
-        return cashout - (buyin * 2000)
+        return cashout - buyin * Decimal(ChipValue.tengePerChip)
     }
     
     var body: some View {

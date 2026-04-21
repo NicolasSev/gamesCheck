@@ -6,6 +6,8 @@ struct SplashScreenView: View {
     @State private var scale: CGFloat = 1.0
     @State private var opacity: Double = 1.0
     @State private var suitAnimationTimer: Timer?
+    /// Первый показ hero (как web v13: scale 0.6 → 1).
+    @State private var heroAppeared = false
 
     // Масти по кругу: club, heart, diamond, spade
     let suits = ["suit.club.fill", "suit.heart.fill", "suit.diamond.fill", "suit.spade.fill"]
@@ -28,6 +30,8 @@ struct SplashScreenView: View {
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 5)
                 }
+                .scaleEffect(heroAppeared ? 1 : 0.6)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: heroAppeared)
                 
                 Spacer()
                 
@@ -58,6 +62,7 @@ struct SplashScreenView: View {
         .accessibilityIdentifier("splash_screen")
         .onAppear {
             isAnimating = true
+            heroAppeared = true
             startSuitAnimation()
         }
         .onDisappear {

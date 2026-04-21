@@ -124,7 +124,7 @@ final class GameService {
             sessionsWithParticipation += 1
             let buyin = Decimal(Int(myParticipation.buyin))
             let cashout = Decimal(Int(myParticipation.cashout))
-            let profit = cashout - (buyin * 2000)
+            let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
             totalBuyins += buyin
             totalCashouts += cashout
             sessionProfits.append(profit)
@@ -134,13 +134,13 @@ final class GameService {
                 guard let player = gwp.player, let name = player.name else { return nil }
                 let b = Decimal(Int(gwp.buyin))
                 let c = Decimal(Int(gwp.cashout))
-                return (name: name, profit: c - (b * 2000))
+                return (name: name, profit: c - (b * Decimal(ChipValue.tengePerChip)))
             }
             if let max = playersWithProfit.max(by: { $0.profit < $1.profit }),
                namesSet.contains(max.name.lowercased()) { mvpCount += 1 }
         }
         let totalSessions = sessionsWithParticipation
-        let currentBalance = totalCashouts - (totalBuyins * 2000)
+        let currentBalance = totalCashouts - (totalBuyins * Decimal(ChipValue.tengePerChip))
         let winRate = totalSessions > 0 ? Double(wins) / Double(totalSessions) : 0
         let averageProfit = totalSessions > 0 ? currentBalance / Decimal(totalSessions) : 0
         let bestSession = sessionProfits.max() ?? 0
@@ -170,7 +170,7 @@ final class GameService {
                     totalPlayers: p.count,
                     myBuyin: buyin,
                     myCashout: cashout,
-                    profit: cashout - (buyin * 2000),
+                    profit: cashout - (buyin * Decimal(ChipValue.tengePerChip)),
                     isCreator: false
                 )
             }
@@ -221,7 +221,7 @@ final class GameService {
             
             let buyin = Decimal(Int(myParticipation.buyin))
             let cashout = Decimal(Int(myParticipation.cashout))
-            let profit = cashout - (buyin * 2000)
+            let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
             
             totalBuyins += buyin
             totalCashouts += cashout
@@ -238,7 +238,7 @@ final class GameService {
                 guard let player = gwp.player, let name = player.name else { return nil }
                 let buyin = Decimal(Int(gwp.buyin))
                 let cashout = Decimal(Int(gwp.cashout))
-                let profit = cashout - (buyin * 2000)
+                let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
                 return (playerName: name, profit: profit)
             }
             
@@ -249,7 +249,7 @@ final class GameService {
         }
         
         let totalSessions = sessionsWithParticipation
-        let currentBalance = totalCashouts - (totalBuyins * 2000)
+        let currentBalance = totalCashouts - (totalBuyins * Decimal(ChipValue.tengePerChip))
         let winRate = totalSessions > 0 ? Double(wins) / Double(totalSessions) : 0
         let averageProfit = totalSessions > 0 ? currentBalance / Decimal(totalSessions) : 0
         let bestSession = sessionProfits.max() ?? 0
@@ -274,7 +274,7 @@ final class GameService {
                 }
                 let buyin = Decimal(Int(myParticipation?.buyin ?? 0))
                 let cashout = Decimal(Int(myParticipation?.cashout ?? 0))
-                let profit = cashout - (buyin * 2000)
+                let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
                 
                 return GameSummary(
                     gameId: game.gameId,
@@ -338,7 +338,7 @@ final class GameService {
             let buyin = Decimal(Int(myParticipation.buyin))
             let cashout = Decimal(Int(myParticipation.cashout))
             // Конвертируем байин в тенге: 1 байин = 2000 тенге
-            let profit = cashout - (buyin * 2000)
+            let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
 
             totalBuyins += buyin
             totalCashouts += cashout
@@ -354,7 +354,7 @@ final class GameService {
             let playersWithProfit = participations.compactMap { gwp -> (playerProfile: PlayerProfile?, profit: Decimal)? in
                 let buyin = Decimal(Int(gwp.buyin))
                 let cashout = Decimal(Int(gwp.cashout))
-                let profit = cashout - (buyin * 2000)
+                let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
                 return (gwp.playerProfile, profit)
             }
             
@@ -365,7 +365,7 @@ final class GameService {
         }
 
         // Конвертируем байины в тенге: 1 байин = 2000 тенге
-        let balance = totalCashouts - (totalBuyins * 2000)
+        let balance = totalCashouts - (totalBuyins * Decimal(ChipValue.tengePerChip))
         let totalSessions = sessionsWithParticipation // Используем только игры с участием
         let winRate = totalSessions == 0 ? 0 : Double(wins) / Double(totalSessions)
         let averageProfit = totalSessions == 0 ? 0 : balance / Decimal(totalSessions)
@@ -414,7 +414,7 @@ final class GameService {
             var sessionsWithParticipation = 0 // Считаем только игры, где пользователь участвовал
 
             for game in gamesOfType {
-                // gameProfit уже учитывает конвертацию байина в тенге (buyin * 2000)
+                // gameProfit уже учитывает конвертацию байина в тенге (buyin × ChipValue.tengePerChip)
                 // gameProfit возвращает 0, если пользователь не участвовал в игре
                 let profit = gameProfit(for: game, userId: userId)
                 
@@ -461,7 +461,7 @@ final class GameService {
         // Конвертируем байин в тенге: 1 байин = 2000 тенге
         let buyin = Decimal(Int(myParticipation.buyin))
         let cashout = Decimal(Int(myParticipation.cashout))
-        return cashout - (buyin * 2000)
+        return cashout - (buyin * Decimal(ChipValue.tengePerChip))
     }
 
     private func createGameSummary(from game: Game, userId: UUID, profile: PlayerProfile) -> GameSummary {
@@ -471,7 +471,7 @@ final class GameService {
         let buyin = Decimal(Int(myParticipation?.buyin ?? 0))
         let cashout = Decimal(Int(myParticipation?.cashout ?? 0))
         // Конвертируем байин в тенге: 1 байин = 2000 тенге
-        let profit = cashout - (buyin * 2000)
+        let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
 
         return GameSummary(
             gameId: game.gameId,
@@ -594,7 +594,7 @@ extension GameService {
                 
                 let buyin = Decimal(Int(participation.buyin))
                 let cashout = Decimal(Int(participation.cashout))
-                let profit = cashout - (buyin * 2000)
+                let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
                 
                 // Самый большой выигрыш
                 if profit > 0 {
@@ -625,7 +625,7 @@ extension GameService {
                 }
                 
                 // Самое большое количество байинов
-                let buyinInTenge = buyin * 2000
+                let buyinInTenge = buyin * Decimal(ChipValue.tengePerChip)
                 if maxBuyins == nil || buyinInTenge > maxBuyins!.value {
                     maxBuyins = TopRecord(
                         value: buyinInTenge,
@@ -711,7 +711,7 @@ extension GameService {
             }
             
             // Находим самую дорогую игру (максимальная сумма байинов всех участников)
-            let gameTotalBuyins = game.totalBuyins * 2000 // В тенге
+            let gameTotalBuyins = game.totalBuyins * Decimal(ChipValue.tengePerChip) // В тенге
             if mostExpensiveGame == nil || gameTotalBuyins > mostExpensiveGame!.value {
                 mostExpensiveGame = TopRecord(
                     value: gameTotalBuyins,
@@ -726,7 +726,7 @@ extension GameService {
             let gameMaxProfit = participations.map { participation -> Decimal in
                 let buyin = Decimal(Int(participation.buyin))
                 let cashout = Decimal(Int(participation.cashout))
-                return cashout - (buyin * 2000)
+                return cashout - (buyin * Decimal(ChipValue.tengePerChip))
             }.max() ?? 0
             
             if gameMaxProfit > 0 {

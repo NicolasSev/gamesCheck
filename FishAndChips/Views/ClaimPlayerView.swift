@@ -174,7 +174,7 @@ struct ClaimPlayerRow: View {
     private var profit: Decimal {
         let buyin = Decimal(Int(gameWithPlayer.buyin))
         let cashout = Decimal(Int(gameWithPlayer.cashout))
-        return cashout - (buyin * 2000)
+        return cashout - buyin * Decimal(ChipValue.tengePerChip)
     }
     
     private var formattedProfit: String {

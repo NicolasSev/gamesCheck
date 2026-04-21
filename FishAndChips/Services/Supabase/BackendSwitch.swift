@@ -26,6 +26,13 @@ enum BackendSwitch {
     static var isSupabase: Bool { active == .supabase }
     static var isCloudKit: Bool { active == .cloudKit }
 
+    /// Супер-админ: при `false` не показывать опциональный админ-UI (RLS 026 «видеть всё» на сервере не отключается).
+    private static let adminViewEnabledKey = "adminViewEnabled"
+    static var adminViewEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: adminViewEnabledKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: adminViewEnabledKey) }
+    }
+
     static func switchToSupabase() {
         active = .supabase
         debugLog("Backend switched to Supabase")

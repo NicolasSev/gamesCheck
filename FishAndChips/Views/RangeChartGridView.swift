@@ -3,17 +3,18 @@ import SwiftUI
 // MARK: - Range Colors
 
 private extension Color {
+    // Имена не пересекаются с Asset symbols (`rangePairOn` и т.д. в xcassets).
     // Pair: синий
-    static let rangePairOn  = Color(red: 0.145, green: 0.388, blue: 0.922)  // #2563eb
-    static let rangePairOff = Color(red: 0.859, green: 0.937, blue: 1.0)    // #dbeafe (light) / dark handled below
+    static let gridPairOn  = Color(red: 0.145, green: 0.388, blue: 0.922)  // #2563eb
+    static let gridPairOff = Color(red: 0.859, green: 0.937, blue: 1.0)    // #dbeafe
 
     // Suited: золотой
-    static let rangeSuitedOn  = Color(red: 0.961, green: 0.620, blue: 0.043) // #f59e0b
-    static let rangeSuitedOff = Color(red: 0.996, green: 0.953, blue: 0.780) // #fef3c7
+    static let gridSuitedOn  = Color(red: 0.961, green: 0.620, blue: 0.043) // #f59e0b
+    static let gridSuitedOff = Color(red: 0.996, green: 0.953, blue: 0.780) // #fef3c7
 
     // Offsuit: красный
-    static let rangeOffsuitOn  = Color(red: 0.863, green: 0.149, blue: 0.149) // #dc2626
-    static let rangeOffsuitOff = Color(red: 0.996, green: 0.886, blue: 0.886) // #fee2e2
+    static let gridOffsuitOn  = Color(red: 0.863, green: 0.149, blue: 0.149) // #dc2626
+    static let gridOffsuitOff = Color(red: 0.996, green: 0.886, blue: 0.886) // #fee2e2
 }
 
 // MARK: - Cell View
@@ -43,11 +44,11 @@ private struct RangeCell: View {
     private var cellColor: Color {
         switch kind {
         case .pair:
-            return isSelected ? .rangePairOn    : .rangePairOff
+            return isSelected ? .gridPairOn    : .gridPairOff
         case .suited:
-            return isSelected ? .rangeSuitedOn  : .rangeSuitedOff
+            return isSelected ? .gridSuitedOn  : .gridSuitedOff
         case .offsuit:
-            return isSelected ? .rangeOffsuitOn : .rangeOffsuitOff
+            return isSelected ? .gridOffsuitOn : .gridOffsuitOff
         }
     }
 }

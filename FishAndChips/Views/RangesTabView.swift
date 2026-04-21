@@ -10,6 +10,30 @@ struct RangesTabView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                NavigationLink {
+                    EquityGuesserLobbyView()
+                } label: {
+                    HStack {
+                        Image(systemName: "scope")
+                            .foregroundColor(.casinoAccentGreen)
+                        VStack(alignment: .leading) {
+                            Text("Тренировки")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                            Text("Тренажёр эквити")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+
                 // Position picker
                 Picker("Позиция", selection: $selectedPosition) {
                     ForEach(RangePosition.allCases, id: \.self) { pos in
@@ -17,6 +41,7 @@ struct RangesTabView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .tint(.casinoAccentGreen)
                 .padding(.horizontal)
 
                 // Stats bar

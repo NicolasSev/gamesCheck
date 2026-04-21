@@ -1,5 +1,7 @@
 # Диаграмма данных — Fish & Chips
 
+**Обновление:** 2026-04-21 | v4.8 — iOS: `ChipValue.tengePerChip` (= `buyin_to_tenge_units()` / 2000) в `Models/ChipValue.swift`; клиентский профит/баланс согласован с DTO (`GamePlayerDTO.profit`, `ProfileDTO.balance`). Deep link / share: базовый URL веб-SPA — `WEB_APP_BASE_URL` (Info.plist), путь игры `/app/games/:id`.
+
 **Обновление:** 2026-04-16 | v4.7 — миграция **019** `remove_billiard`: таблица `billiard_batches` удалена; исторические игры с типом бильярд в `games.game_type` приведены к `Poker`. Только покер.
 
 **Обновление:** 2026-03-29 | v4.6 — миграция **017** `buyin_tenge_balance`: в БД и iOS **buyin** = чипы, **cashout** = ₸; баланс/профит в тенге = `cashout − buyin×2000`. Обновлены VIEW `user_statistics`, `admin_users_overview`, `admin_player_stats`; RPC `check_game_balance`, `get_player_sessions`, `get_player_mvp_count`, `admin_dashboard_stats`; хелпер `buyin_to_tenge_units()` = 2000.

@@ -446,6 +446,15 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         }
     }
     
+    /// `gameId` в payload или UUID из `action_url` вида `.../app/games/:id` (web push / Edge).
+    private func gameIdStringForNotification(_ userInfo: [AnyHashable: Any]) -> String? {
+        if let id = userInfo["gameId"] as? String { return id }
+        if let url = userInfo["action_url"] as? String {
+            return DeepLinkParsing.gameIdFromActionURLString(url)
+        }
+        return nil
+    }
+
     private func handleNotificationTap(userInfo: [AnyHashable: Any]) async {
         guard let type = userInfo["type"] as? String else { return }
         
@@ -455,7 +464,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
                 await deepLink(to: .claim(claimId))
             }
         case "game_invite", "game_new", "game_updated":
-            if let gameId = userInfo["gameId"] as? String {
+            if let gameId = gameIdStringForNotification(userInfo) {
                 await deepLink(to: .game(gameId))
             } else {
                 NotificationCenter.default.post(name: .openNotificationsTab, object: nil)
@@ -482,7 +491,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
                 await deepLink(to: .claim(claimId))
             }
         case .viewGame:
-            if let gameId = userInfo["gameId"] as? String {
+            if let gameId = gameIdStringForNotification(userInfo) {
                 await deepLink(to: .game(gameId))
             }
         }

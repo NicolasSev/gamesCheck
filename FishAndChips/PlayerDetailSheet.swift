@@ -33,7 +33,7 @@ struct PlayerDetailSheet: View {
                     }
                     Text("Байины: \(gwp.buyin)")
                     Text("Кэшауты: \(gwp.cashout)")
-                    Text("Финальная сумма: \(Int(gwp.cashout) - (Int(gwp.buyin) * 2000))")
+                    Text("Финальная сумма: \(Int64(gwp.cashout) - ChipValue.chipsToTenge(Int(gwp.buyin)))")
                         .font(.footnote)
                         .bold(true)
                 }

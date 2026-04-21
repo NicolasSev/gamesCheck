@@ -1,5 +1,18 @@
 import Foundation
 import CoreData
+import PostgREST
+import Supabase
+
+enum AccountDeletionError: LocalizedError {
+    case canOnlyDeleteOwnAccount
+
+    var errorDescription: String? {
+        switch self {
+        case .canOnlyDeleteOwnAccount:
+            return "Вы можете удалить только свой аккаунт."
+        }
+    }
+}
 
 /// GDPR — полное удаление аккаунта
 /// 1. Серверная функция delete_user_account() удаляет profile, auth.user, каскадно aliases/claims/tokens
@@ -28,14 +41,39 @@ final class AccountDeletionService {
     // MARK: - Server
 
     private func deleteServerAccount(userId: UUID) async throws {
+        let session: Session
+        do {
+            session = try await SupabaseConfig.client.auth.session
+        } catch {
+            throw SupabaseServiceError.notAuthenticated
+        }
+        guard session.user.id == userId else {
+            throw AccountDeletionError.canOnlyDeleteOwnAccount
+        }
+
         struct DeleteParams: Codable, Sendable {
             let p_user_id: String
         }
         let params = DeleteParams(p_user_id: userId.uuidString)
 
-        try await SupabaseService.shared.rpc("delete_user_account", params: params)
+        do {
+            try await SupabaseService.shared.rpc("delete_user_account", params: params)
+        } catch {
+            if Self.isInsufficientPrivilege(error) {
+                throw AccountDeletionError.canOnlyDeleteOwnAccount
+            }
+            throw error
+        }
 
         try await SupabaseConfig.client.auth.signOut()
+    }
+
+    private static func isInsufficientPrivilege(_ error: Error) -> Bool {
+        if let pg = error as? PostgrestError, pg.code == "42501" {
+            return true
+        }
+        let text = String(describing: error).lowercased()
+        return text.contains("42501") || text.contains("insufficient_privilege")
     }
 
     // MARK: - Local

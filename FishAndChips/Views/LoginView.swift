@@ -154,7 +154,7 @@ struct LoginView: View {
                         }
                     }
                 } else {
-                    withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         isAppearing = true
                     }
                 }

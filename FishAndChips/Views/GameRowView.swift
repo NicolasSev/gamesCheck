@@ -16,7 +16,7 @@ struct GameRowView: View {
             // Конвертируем байин в тенге: 1 байин = 2000 тенге
             let buyin = Decimal(Int(gwp.buyin))
             let cashout = Decimal(Int(gwp.cashout))
-            let profit = cashout - (buyin * 2000)
+            let profit = cashout - buyin * Decimal(ChipValue.tengePerChip)
             
             return (name: name, profit: profit)
         }

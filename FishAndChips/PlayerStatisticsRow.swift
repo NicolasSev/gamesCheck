@@ -30,7 +30,7 @@ struct PlayerStatisticsRow: View {
         } else {
             let buyin = filtered.reduce(0) { $0 + Int($1.buyin) }
             let cashout = filtered.reduce(0) { $0 + Int($1.cashout) }
-            let final = cashout - (buyin * 2000)
+            let final = cashout - Int(ChipValue.chipsToTenge(buyin))
             let gamesCount = filtered.count
 
             VStack(alignment: .leading, spacing: 4) {
@@ -72,7 +72,7 @@ struct PlayerStatisticsRow: View {
         }
         let buyin = filtered.reduce(0) { $0 + Int($1.buyin) }
         let cashout = filtered.reduce(0) { $0 + Int($1.cashout) }
-        let final = cashout - (buyin * 2000)
+        let final = cashout - Int(ChipValue.chipsToTenge(buyin))
 
         UIPasteboard.general.string = """
         \(player.name ?? "Без имени")

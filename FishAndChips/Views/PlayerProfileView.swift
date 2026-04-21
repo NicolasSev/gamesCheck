@@ -237,13 +237,13 @@ struct PlayerProfileView: View {
             }
 
             let maxProfitInGame = participations.map { gwp in
-                Decimal(Int(gwp.cashout)) - (Decimal(Int(gwp.buyin)) * 2000)
+                Decimal(Int(gwp.cashout)) - (Decimal(Int(gwp.buyin)) * Decimal(ChipValue.tengePerChip))
             }.max() ?? 0
 
             for myParticipation in myParticipations {
                 let buyin = Decimal(Int(myParticipation.buyin))
                 let cashout = Decimal(Int(myParticipation.cashout))
-                let profit = cashout - (buyin * 2000)
+                let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
 
                 totalBuyinsRaw += buyin
                 totalCashoutsRaw += cashout
@@ -277,7 +277,7 @@ struct PlayerProfileView: View {
         }
 
         worstSession = sessionProfits.min() ?? 0
-        let currentBalance = totalCashoutsRaw - (totalBuyinsRaw * 2000)
+        let currentBalance = totalCashoutsRaw - (totalBuyinsRaw * Decimal(ChipValue.tengePerChip))
         let winRate = sessionsCount > 0 ? Double(sessionProfits.filter { $0 > 0 }.count) / Double(sessionsCount) : 0
         let averageProfit = sessionsCount > 0 ? currentBalance / Decimal(sessionsCount) : 0
 

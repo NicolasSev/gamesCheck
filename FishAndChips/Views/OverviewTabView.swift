@@ -113,6 +113,32 @@ struct OverviewTabView: View {
                         )
                     }
 
+                    if selectedPlayerNameForStats == nil {
+                        NavigationLink {
+                            EquityGuesserLobbyView()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "scope")
+                                    .font(.title2)
+                                    .foregroundColor(.casinoAccentGreen)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Тренажёр эквити")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    Text("Угадайте equity против конкретной руки")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.75))
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .padding()
+                            .liquidGlass(cornerRadius: 15)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+
                     if authViewModel != nil, selectedPlayerNameForStats == nil, let userId = authViewModel?.currentUserId,
                        let profile = persistence.fetchPlayerProfile(byUserId: userId) {
                         VStack(alignment: .leading, spacing: 12) {
@@ -296,7 +322,7 @@ struct OverviewTabView: View {
                 cashout = Decimal(Int(one.cashout))
             }
 
-            let profit = (buyin != 0 || cashout != 0) ? (cashout - (buyin * 2000)) : 0
+            let profit = (buyin != 0 || cashout != 0) ? (cashout - buyin * Decimal(ChipValue.tengePerChip)) : 0
             
             if yearGroups[year] == nil {
                 yearGroups[year] = [:]
@@ -305,7 +331,7 @@ struct OverviewTabView: View {
             if var monthData = yearGroups[year]![monthKey] {
                 monthData.games.append(game)
                 monthData.totalProfit += profit
-                monthData.totalBuyins += buyin * 2000
+                monthData.totalBuyins += buyin * Decimal(ChipValue.tengePerChip)
                 monthData.totalCashouts += cashout
                 monthData.gamesCount += 1
                 yearGroups[year]![monthKey] = monthData
@@ -315,7 +341,7 @@ struct OverviewTabView: View {
                     monthName: monthName,
                     games: [game],
                     totalProfit: profit,
-                    totalBuyins: buyin * 2000,
+                    totalBuyins: buyin * Decimal(ChipValue.tengePerChip),
                     totalCashouts: cashout,
                     gamesCount: 1
                 )

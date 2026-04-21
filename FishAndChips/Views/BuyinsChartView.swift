@@ -234,7 +234,7 @@ private struct ChartContentView: View {
                     let yPos = height - bottomPadding - (CGFloat(normalizedValue) * chartHeight)
                     
                     Circle()
-                        .fill(Color.blue)
+                        .fill(Color.casinoAccentGreen)
                         .frame(width: 8, height: 8)
                         .position(x: xPos, y: yPos)
                         .onTapGesture {
@@ -275,7 +275,7 @@ private struct GridLineView: View {
             path.move(to: CGPoint(x: leftPadding, y: yPosition))
             path.addLine(to: CGPoint(x: width - rightPadding, y: yPosition))
         }
-        .stroke(Color.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
+        .stroke(Color.white.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
     }
 }
 
@@ -336,7 +336,7 @@ private struct LinePathView: View {
                 }
             }
         }
-        .stroke(Color.blue, lineWidth: 2)
+        .stroke(Color.casinoAccentGreen, lineWidth: 2)
     }
 }
 
