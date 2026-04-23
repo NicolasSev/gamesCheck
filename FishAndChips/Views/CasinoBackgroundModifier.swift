@@ -5,14 +5,12 @@
 
 import SwiftUI
 
-/// Акценты в духе casino dark UI (web `fishchips-web` токены: `--accent-green`, `--accent-gold`).
-/// RGB ≈ #33C880 и #F2C74D (см. CSS variables в SPA).
-extension Color {
-    static let casinoAccentGreen = Color(red: 0.2, green: 0.78, blue: 0.5)
-    static let casinoAccentGold = Color(red: 0.95, green: 0.78, blue: 0.3)
-}
-
-/// Общий фон с casino-background для экранов приложения
+/// Общий фон с casino-background для экранов приложения.
+@available(
+    *,
+    deprecated,
+    message: "Use GameBackgroundView for V2 or `.background { GameBackgroundView() }`"
+)
 struct CasinoBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.background(
@@ -41,6 +39,11 @@ struct CasinoBackgroundModifier: ViewModifier {
 }
 
 extension View {
+    @available(
+        *,
+        deprecated,
+        message: "Use GameBackgroundView for V2 or `.background { GameBackgroundView() }`"
+    )
     func casinoBackground() -> some View {
         modifier(CasinoBackgroundModifier())
     }

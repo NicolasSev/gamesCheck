@@ -163,7 +163,7 @@ struct DebugView: View {
             .accessibilityIdentifier("debug_view_root")
             .navigationTitle("Debug")
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .casinoBackground()
+            .v2ScreenBackground()
             .preferredColorScheme(.dark)
             .onAppear {
                 loadUserInfo()

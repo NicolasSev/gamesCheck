@@ -33,7 +33,7 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .casinoBackground()
+                .v2ScreenBackground()
                 .transition(.opacity)
 
             case .error(let message):
@@ -63,7 +63,7 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .casinoBackground()
+                .v2ScreenBackground()
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }

@@ -47,7 +47,7 @@ struct HandRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
-            .liquidGlass(cornerRadius: 12)
+            .glassCardStyle(.plain)
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal)

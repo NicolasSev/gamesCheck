@@ -63,7 +63,6 @@ struct RangesTabView: View {
             }
             .padding(.top, 12)
         }
-        .casinoBackground()
         .overlay {
             if viewModel.isLoading {
                 ProgressView()

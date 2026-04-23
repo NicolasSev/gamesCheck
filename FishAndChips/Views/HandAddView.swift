@@ -240,7 +240,7 @@ struct HandAddView: View {
                 }
             }
             .accessibilityIdentifier("hand_add_root")
-            .casinoBackground()
+            .v2ScreenBackground()
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {

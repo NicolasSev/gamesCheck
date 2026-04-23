@@ -48,7 +48,7 @@ struct RegistrationView: View {
                                 .accessibilityIdentifier("register_username")
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
 
                         HStack(spacing: 12) {
                             Image(systemName: "envelope.fill")
@@ -68,7 +68,7 @@ struct RegistrationView: View {
                             }
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
                         
                         if !email.isEmpty && !authViewModel.validateEmail(email) {
                             Text("Неверный формат email")
@@ -78,7 +78,7 @@ struct RegistrationView: View {
                         }
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 15)
+                    .glassCardStyle(.plain)
 
                     // Пароль
                     VStack(alignment: .leading, spacing: 14) {
@@ -109,7 +109,7 @@ struct RegistrationView: View {
                             }
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
                         .accessibilityIdentifier("register_password")
 
                         HStack(spacing: 12) {
@@ -135,7 +135,7 @@ struct RegistrationView: View {
                             }
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
                         .accessibilityIdentifier("register_confirm_password")
 
                         if !password.isEmpty {
@@ -166,7 +166,7 @@ struct RegistrationView: View {
                             .padding(.leading, 4)
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 15)
+                    .glassCardStyle(.plain)
 
                     // Кнопка регистрации
                     Button(action: {
@@ -198,7 +198,7 @@ struct RegistrationView: View {
                 .padding(.vertical)
             }
             .scrollContentBackground(.hidden)
-            .casinoBackground()
+            .v2ScreenBackground()
             .navigationTitle("Регистрация")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

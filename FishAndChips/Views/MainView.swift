@@ -9,7 +9,6 @@ struct MainView: View {
     @StateObject private var viewModel = MainViewModel()
 
     @State private var selectedTab: MainTab = .overview
-    @State private var showingProfile = false
     @State private var showingAddGame = false
     @State private var showingImportGames = false
     @State private var deepLinkGame: Game?
@@ -23,10 +22,13 @@ struct MainView: View {
         case statistics
         case players
         case ranges
+        case profile
     }
 
     var body: some View {
-        NavigationStack {
+        ZStack {
+            GameBackgroundView(variant: .rich)
+            NavigationStack {
             TabView(selection: $selectedTab) {
                 OverviewTabView(
                     statistics: viewModel.statistics,
@@ -83,6 +85,14 @@ struct MainView: View {
                     .tabItem { Label("Диапазоны", systemImage: "square.grid.3x3.fill") }
                     .tag(MainTab.ranges)
                     .accessibilityIdentifier("tab_ranges")
+
+                ProfileView()
+                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                    .environmentObject(authViewModel)
+                    .environmentObject(NotificationService.shared)
+                    .tabItem { Label("Профиль", systemImage: "person.fill") }
+                    .tag(MainTab.profile)
+                    .accessibilityIdentifier("tab_profile")
             }
             .accessibilityIdentifier("screen.main")
             .navigationTitle(titleForTab(selectedTab))
@@ -90,7 +100,7 @@ struct MainView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        showingProfile = true
+                        selectedTab = .profile
                     } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "person.circle.fill")
@@ -120,6 +130,7 @@ struct MainView: View {
                             ProgressView()
                                 .scaleEffect(0.8)
                         }
+                        if selectedTab == .games {
                         Menu {
                         Button {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -140,14 +151,9 @@ struct MainView: View {
                             .font(.title2)
                     }
                     .accessibilityIdentifier("main_toolbar_menu_button")
+                        }
                     }
                 }
-            }
-            .sheet(isPresented: $showingProfile) {
-                ProfileView()
-                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
-                    .environmentObject(authViewModel)
-                    .environmentObject(NotificationService.shared)
             }
             .sheet(isPresented: $showingAddGame) {
                 AddGameSheet(isPresented: $showingAddGame)
@@ -215,6 +221,9 @@ struct MainView: View {
                 tabBarAppearance.stackedLayoutAppearance.selected.iconColor = accent
                 tabBarAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.white.withAlphaComponent(0.65)]
                 tabBarAppearance.stackedLayoutAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.65)
+                tabBarAppearance.backgroundColor = UIColor(red: 7/255, green: 7/255, blue: 18/255, alpha: 0.88)
+                UITabBar.appearance().isTranslucent = true
+                UITabBar.appearance().unselectedItemTintColor = UIColor.white.withAlphaComponent(0.5)
                 UITabBar.appearance().standardAppearance = tabBarAppearance
                 UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
                 
@@ -239,14 +248,14 @@ struct MainView: View {
                 // Обновляем счетчик заявок
                 updatePendingClaimsCount()
             }
-            .onChange(of: showingProfile) { isShowing in
-                // Обновляем счетчик заявок при закрытии профиля
-                if !isShowing {
+            .onChange(of: selectedTab) { _, new in
+                if new == .profile {
                     updatePendingClaimsCount()
                 }
             }
             .refreshable {
                 viewModel.refresh()
+            }
             }
         }
     }
@@ -258,6 +267,7 @@ struct MainView: View {
         case .statistics: return "Статистика"
         case .players: return "Игроки"
         case .ranges: return "Диапазоны"
+        case .profile: return "Профиль"
         }
     }
     

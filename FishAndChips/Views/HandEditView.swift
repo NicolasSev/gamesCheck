@@ -193,7 +193,7 @@ struct HandEditView: View {
                     }
                 }
             }
-            .casinoBackground()
+            .v2ScreenBackground()
             .preferredColorScheme(.dark)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)

@@ -341,7 +341,7 @@ struct PlayerProfileSelectionSheet: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .casinoBackground()
+            .v2ScreenBackground()
             .navigationTitle("Выберите игрока")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)

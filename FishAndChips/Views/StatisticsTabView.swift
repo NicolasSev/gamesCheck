@@ -71,7 +71,7 @@ struct StatisticsTabView: View {
                             .buttonStyle(.plain)
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 15)
+                        .glassCardStyle(.plain)
                     }
                     
                     // Топовая аналитика
@@ -181,7 +181,6 @@ struct StatisticsTabView: View {
                 .padding(.vertical)
             }
             .scrollContentBackground(.hidden)
-            .casinoBackground()
             .task(id: authViewModel.currentUserId) {
                 await refreshEquityGuesserStats()
             }
@@ -312,7 +311,7 @@ struct TopRecordCard: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
         .onTapGesture {
             onTap()
         }
@@ -378,7 +377,7 @@ struct StreakCard: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
         .onTapGesture {
             onTap()
         }
@@ -467,6 +466,6 @@ struct EfficiencyCard: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
     }
 }

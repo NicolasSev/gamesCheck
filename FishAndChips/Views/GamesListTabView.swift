@@ -288,7 +288,7 @@ struct GamesListTabView: View {
                         }
                     }
                     .padding(12)
-                    .liquidGlass(cornerRadius: 20)
+                    .glassCardStyle(.plain)
                     
                     // Divider между календарем и списком игр
                     Divider()
@@ -396,7 +396,6 @@ struct GamesListTabView: View {
             .accessibilityIdentifier("games_list")
             .scrollContentBackground(.hidden)
             .searchable(text: $searchText, prompt: "Поиск игр")
-            .casinoBackground()
         .refreshable {
             await refreshGames()
         }
@@ -522,7 +521,7 @@ struct GamesListTabView: View {
                 }
             }
             .padding()
-            .liquidGlass(cornerRadius: 12)
+            .glassCardStyle(.plain)
         }
     }
     

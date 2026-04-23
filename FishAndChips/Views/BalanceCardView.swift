@@ -39,7 +39,8 @@ struct BalanceCardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .liquidGlass()
+        .glassCardStyle(.hero)
+        .dsHeroGlowPulse()
         .onAppear { animateBalance() }
         .onChange(of: animationId) { _, _ in
             animateBalance()

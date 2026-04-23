@@ -81,7 +81,7 @@ struct MyClaimsView: View {
             .onAppear {
                 loadMyClaims()
             }
-            .casinoBackground()
+            .v2ScreenBackground()
         }
     }
     
@@ -158,7 +158,7 @@ struct MyClaimRow: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
     }
 }
 

@@ -38,6 +38,6 @@ struct EquityGuesserLobbyView: View {
         .navigationTitle("Тренажёр эквити")
         .navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden)
-        .casinoBackground()
+        .v2ScreenBackground()
     }
 }

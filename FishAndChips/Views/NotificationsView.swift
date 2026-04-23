@@ -43,7 +43,7 @@ struct NotificationsView: View {
         .accessibilityIdentifier("notifications_view_root")
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .casinoBackground()
+        .v2ScreenBackground()
         .navigationTitle("Уведомления")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -87,6 +87,6 @@ struct NotificationRowView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
     }
 }

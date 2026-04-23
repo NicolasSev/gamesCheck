@@ -26,6 +26,6 @@ struct EquityGuesserSummaryView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
         }
-        .casinoBackground()
+        .v2ScreenBackground()
     }
 }

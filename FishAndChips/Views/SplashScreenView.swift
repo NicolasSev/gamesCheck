@@ -58,7 +58,7 @@ struct SplashScreenView: View {
                 .padding(.bottom, 60)
             }
         }
-        .casinoBackground()
+        .v2ScreenBackground()
         .accessibilityIdentifier("splash_screen")
         .onAppear {
             isAnimating = true

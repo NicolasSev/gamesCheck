@@ -54,7 +54,7 @@ struct StatCardView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 15)
+        .glassCardStyle(.plain)
         .onAppear {
             if let numericValue = numericValue {
                 animateValue(to: numericValue)

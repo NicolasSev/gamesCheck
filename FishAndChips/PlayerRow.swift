@@ -100,6 +100,6 @@ struct PlayerRow: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
     }
 }

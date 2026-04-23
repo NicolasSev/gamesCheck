@@ -26,7 +26,7 @@ struct EquityGuesserPlayView: View {
         }
         .navigationTitle("Эквити")
         .navigationBarTitleDisplayMode(.inline)
-        .casinoBackground()
+        .v2ScreenBackground()
     }
 
     private var playContent: some View {

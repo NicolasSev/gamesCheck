@@ -140,7 +140,7 @@ struct ProfileView: View {
                         }
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 15)
+                    .glassCardStyle(.plain)
 
                     // Уведомления
                     VStack(alignment: .leading, spacing: 12) {
@@ -182,7 +182,7 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile_notifications_history_link")
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 15)
+                    .glassCardStyle(.plain)
 
                     // Безопасность
                     VStack(alignment: .leading, spacing: 8) {
@@ -198,7 +198,7 @@ struct ProfileView: View {
                         .foregroundColor(.white)
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 15)
+                    .glassCardStyle(.plain)
                     
                     // Синхронизация
                     VStack(alignment: .leading, spacing: 12) {
@@ -308,7 +308,7 @@ struct ProfileView: View {
                         }
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 15)
+                    .glassCardStyle(.plain)
 
                     // Утилиты (admin/debug) — скрыты от обычных пользователей
                     #if DEBUG
@@ -332,14 +332,13 @@ struct ProfileView: View {
                         .foregroundColor(.red.opacity(0.9))
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .liquidGlass(cornerRadius: 15)
+                        .glassCardStyle(.plain)
                     }
                     .accessibilityIdentifier("profile_logout_button")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical)
             }
-            .casinoBackground()
             .navigationTitle("Профиль")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -434,7 +433,7 @@ struct ProfileView: View {
             .accessibilityIdentifier("profile_debug_button")
         }
         .padding()
-        .liquidGlass(cornerRadius: 15)
+        .glassCardStyle(.plain)
     }
     
     private func performSyncWithVisualFeedback() async {

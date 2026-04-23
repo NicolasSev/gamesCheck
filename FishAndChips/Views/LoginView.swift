@@ -51,7 +51,7 @@ struct LoginView: View {
                                 .accessibilityIdentifier("login_email")
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
 
                         HStack(spacing: 12) {
                             Image(systemName: "lock.fill")
@@ -65,7 +65,7 @@ struct LoginView: View {
                                 .accessibilityIdentifier("login_password")
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
 
                         Button(action: {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -119,7 +119,7 @@ struct LoginView: View {
                 }
                 .padding()
             }
-            .casinoBackground()
+            .v2ScreenBackground()
             .accessibilityIdentifier("screen.login")
             .navigationBarHidden(true)
             .alert("Ошибка", isPresented: $showingError) {

@@ -114,7 +114,7 @@ struct GameResultsChart: View {
                 .padding(.bottom, 12)
             }
         }
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
         .popover(item: $selectedResult) { result in
             VStack(alignment: .leading, spacing: 12) {
                 Text(result.playerName)

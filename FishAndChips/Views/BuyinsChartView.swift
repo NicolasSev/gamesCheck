@@ -59,7 +59,7 @@ struct BuyinsChartView: View {
                 .frame(height: 300)
             }
         }
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
         .sheet(item: Binding(
             get: { selectedGameId.map { GameItem(id: $0) } },
             set: { selectedGameId = $0?.id }

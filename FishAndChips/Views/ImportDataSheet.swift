@@ -142,7 +142,7 @@ struct ImportDataSheet: View {
                     .foregroundColor(.white)
                 }
             }
-            .casinoBackground()
+            .v2ScreenBackground()
             .preferredColorScheme(.dark)
             .sheet(isPresented: $showPlayerSelection) {
                 PlayerSelectionSheet(

@@ -35,7 +35,7 @@ struct AddGameSheet: View {
                     Button("Отмена") {
                         isPresented = false
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.txt2)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Создать") {
@@ -43,11 +43,11 @@ struct AddGameSheet: View {
                         isPresented = false
                     }
                     .accessibilityIdentifier("add_game_save_button")
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.green)
                 }
             }
             .preferredColorScheme(.dark)
-            .casinoBackground()
+            .v2ScreenBackground()
         }
     }
 

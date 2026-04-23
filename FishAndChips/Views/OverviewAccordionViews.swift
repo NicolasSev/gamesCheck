@@ -61,7 +61,7 @@ struct YearAccordionView: View {
                         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isYearExpanded)
                 }
                 .padding()
-                .liquidGlass(cornerRadius: 12)
+                .glassCardStyle(.plain)
             }
             .buttonStyle(PlainButtonStyle())
             
@@ -172,7 +172,7 @@ struct MonthAccordionView: View {
                         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isExpanded)
                 }
                 .padding()
-                .liquidGlass(cornerRadius: 12)
+                .glassCardStyle(.plain)
             }
             .buttonStyle(PlainButtonStyle())
             

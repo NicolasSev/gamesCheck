@@ -79,7 +79,7 @@ struct BiometricPromptView: View {
         }
         .padding()
         .accessibilityIdentifier("biometric_prompt_root")
-        .casinoBackground()
+        .v2ScreenBackground()
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
                 isAppearing = true

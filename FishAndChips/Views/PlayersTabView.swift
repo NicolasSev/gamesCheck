@@ -72,7 +72,7 @@ struct PlayersTabView: View {
                                     .foregroundColor(.white.opacity(0.5))
                             }
                             .padding()
-                            .liquidGlass(cornerRadius: 12)
+                            .glassCardStyle(.plain)
                         }
                         .buttonStyle(PlainButtonStyle())
                         .accessibilityIdentifier(index == 0 ? "players_first_profile_row" : "players_profile_row")
@@ -83,7 +83,6 @@ struct PlayersTabView: View {
             .padding(.vertical)
         }
         .scrollContentBackground(.hidden)
-        .casinoBackground()
         .searchable(text: $searchText, prompt: "Поиск игрока")
         .navigationTitle("Игроки")
         .task {

@@ -40,76 +40,52 @@ struct OverviewTabView: View {
                         .accessibilityIdentifier("overview_balance_card")
 
                     LazyVGrid(columns: [GridItem(), GridItem()], spacing: 15) {
+                        let mvpRatePercent = stats.totalSessions > 0
+                            ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100
+                            : 0.0
                         // Первая строка: Всего игр / MVP раз
-                        StatCardView(
-                            title: "Всего игр",
+                        StatTileV2(
+                            systemIcon: "gamecontroller.fill",
                             value: "\(stats.totalSessions)",
-                            icon: "gamecontroller.fill",
-                            color: .blue,
-                            numericValue: Double(stats.totalSessions),
-                            isPercentage: false,
-                            isCurrency: false,
-                            animationId: animationId
+                            label: "Всего игр",
+                            accent: DS.Color.sky
                         )
 
-                        StatCardView(
-                            title: "MVP раз",
+                        StatTileV2(
+                            systemIcon: "trophy.fill",
                             value: "\(stats.mvpCount)",
-                            icon: "trophy.fill",
-                            color: .orange,
-                            numericValue: Double(stats.mvpCount),
-                            isPercentage: false,
-                            isCurrency: false,
-                            animationId: animationId
+                            label: "MVP раз",
+                            accent: DS.Color.orange
                         )
 
                         // Вторая строка: Win Rate / MVP Rate
-                        StatCardView(
-                            title: "Win Rate",
+                        StatTileV2(
+                            systemIcon: "chart.line.uptrend.xyaxis",
                             value: "\(Int(stats.winRate * 100))%",
-                            icon: "chart.line.uptrend.xyaxis",
-                            color: .green,
-                            numericValue: stats.winRate * 100,
-                            isPercentage: true,
-                            isCurrency: false,
-                            animationId: animationId
+                            label: "Win Rate",
+                            accent: DS.Color.green
                         )
 
-                        StatCardView(
-                            title: "MVP Rate",
-                            value: {
-                                let mvpRate = stats.totalSessions > 0 ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100 : 0.0
-                                return "\(Int(mvpRate))%"
-                            }(),
-                            icon: "trophy.circle.fill",
-                            color: .orange,
-                            numericValue: stats.totalSessions > 0 ? (Double(stats.mvpCount) / Double(stats.totalSessions)) * 100 : 0.0,
-                            isPercentage: true,
-                            isCurrency: false,
-                            animationId: animationId
+                        StatTileV2(
+                            systemIcon: "trophy.circle.fill",
+                            value: "\(Int(mvpRatePercent))%",
+                            label: "MVP Rate",
+                            accent: DS.Color.orange
                         )
 
                         // Третья строка: Лучшая сессия / Средний профит
-                        StatCardView(
-                            title: "Лучшая сессия",
+                        StatTileV2(
+                            systemIcon: "star.fill",
                             value: stats.bestSession.formatCurrency(),
-                            icon: "star.fill",
-                            color: .yellow,
-                            numericValue: Double(truncating: NSDecimalNumber(decimal: stats.bestSession)),
-                            isPercentage: false,
-                            isCurrency: true,
-                            animationId: animationId
+                            label: "Лучшая сессия",
+                            accent: DS.Color.gold
                         )
 
-                        StatCardView(
-                            title: "Средний профит",
+                        StatTileV2(
+                            systemIcon: "tengesign.circle.fill",
                             value: stats.averageProfit.formatCurrency(),
-                            icon: "tengesign.circle.fill",
-                            color: .purple,
-                            numericValue: Double(truncating: NSDecimalNumber(decimal: stats.averageProfit)),
-                            isPercentage: false,
-                            isCurrency: true,
-                            animationId: animationId
+                            label: "Средний профит",
+                            accent: DS.Color.violet
                         )
                     }
 
@@ -134,7 +110,7 @@ struct OverviewTabView: View {
                                     .foregroundColor(.white.opacity(0.5))
                             }
                             .padding()
-                            .liquidGlass(cornerRadius: 15)
+                            .glassCardStyle(.plain)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -192,7 +168,7 @@ struct OverviewTabView: View {
                             }
                         }
                         .padding()
-                        .liquidGlass(cornerRadius: 15)
+                        .glassCardStyle(.plain)
                         .padding(.horizontal)
                     }
 
@@ -265,7 +241,6 @@ struct OverviewTabView: View {
             animationId = UUID()
             onRefresh?()
         }
-        .casinoBackground()
     }
 
     // Группировка игр по годам и месяцам

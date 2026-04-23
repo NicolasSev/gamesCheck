@@ -249,7 +249,7 @@ struct ClaimPlayerRow: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
     }
 }
 

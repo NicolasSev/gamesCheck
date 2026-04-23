@@ -146,7 +146,7 @@ struct JoinGameByCodeSheet: View {
                     .accessibilityIdentifier("join_game_sheet_cancel")
                 }
             }
-            .casinoBackground()
+            .v2ScreenBackground()
             .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }

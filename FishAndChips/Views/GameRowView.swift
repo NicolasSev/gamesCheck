@@ -112,7 +112,7 @@ struct GameRowView: View {
                 .padding(.leading, 8)
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
     }
 }
 

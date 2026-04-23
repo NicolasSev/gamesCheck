@@ -117,7 +117,7 @@ struct PendingClaimsView: View {
                     Text(error)
                 }
             }
-            .casinoBackground()
+            .v2ScreenBackground()
         }
     }
     
@@ -173,7 +173,7 @@ struct PendingClaimRow: View {
                     .foregroundColor(.white.opacity(0.7))
             }
             .padding()
-            .liquidGlass(cornerRadius: 12)
+            .glassCardStyle(.plain)
         }
     }
 }
@@ -230,7 +230,7 @@ struct ClaimDetailView: View {
                         InfoRow(label: "Дата заявки", value: formatDate(claim.createdAt))
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 12)
+                    .glassCardStyle(.plain)
                     
                     // Комментарий
                     VStack(alignment: .leading, spacing: 8) {
@@ -246,7 +246,7 @@ struct ClaimDetailView: View {
                             .foregroundColor(.white)
                     }
                     .padding()
-                    .liquidGlass(cornerRadius: 12)
+                    .glassCardStyle(.plain)
                     
                     // Кнопки действий
                     VStack(spacing: 12) {
@@ -355,7 +355,7 @@ struct ClaimDetailView: View {
                     Text(error)
                 }
             }
-            .casinoBackground()
+            .v2ScreenBackground()
         }
     }
     
@@ -546,7 +546,7 @@ struct ResolvedClaimRow: View {
             }
         }
         .padding()
-        .liquidGlass(cornerRadius: 12)
+        .glassCardStyle(.plain)
         .opacity(0.8)
     }
 }

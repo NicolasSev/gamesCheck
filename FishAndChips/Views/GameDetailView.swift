@@ -212,7 +212,7 @@ struct GameDetailView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .liquidGlass(cornerRadius: 12)
+                        .glassCardStyle(.plain)
                         
                         // Кнопка поделиться ссылкой
                         Button(action: shareGameLink) {
@@ -225,7 +225,7 @@ struct GameDetailView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             .frame(maxWidth: .infinity)
-                            .liquidGlass(cornerRadius: 12)
+                            .glassCardStyle(.plain)
                         }
                         .accessibilityIdentifier("game_detail_share_link_button")
                     }
@@ -238,7 +238,7 @@ struct GameDetailView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             .frame(maxWidth: .infinity)
-                            .liquidGlass(cornerRadius: 12)
+                            .glassCardStyle(.plain)
                     }
                     .accessibilityIdentifier("game_detail_share_stats_button")
                 }
@@ -246,7 +246,6 @@ struct GameDetailView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 16)
             }
-        .casinoBackground()
         .navigationTitle("Детали игры")
         .task(id: game.gameId) {
             // Phase 2: Lazy load GWP при открытии игры (если ещё не загружены)
