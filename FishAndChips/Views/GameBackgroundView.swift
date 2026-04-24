@@ -39,6 +39,10 @@ struct GameBackgroundView: View {
                     suitLayer
                 }
             }
+            // Фиксированные orb-frame'ы (520/440/300 pt) шире экрана iPhone, поэтому
+            // без flexible-frame родитель-ZStack подтягивается под orb, а не под окно.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
     }
 
