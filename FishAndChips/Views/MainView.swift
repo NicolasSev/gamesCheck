@@ -26,9 +26,7 @@ struct MainView: View {
     }
 
     var body: some View {
-        ZStack {
-            GameBackgroundView(variant: .rich)
-            NavigationStack {
+        NavigationStack {
             TabView(selection: $selectedTab) {
                 OverviewTabView(
                     statistics: viewModel.statistics,
@@ -256,8 +254,8 @@ struct MainView: View {
             .refreshable {
                 viewModel.refresh()
             }
-            }
         }
+        .v2ScreenBackground(.rich)
     }
 
     private func titleForTab(_ tab: MainTab) -> String {
