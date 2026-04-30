@@ -8,9 +8,9 @@ struct GameDetailView: View {
 
     @State private var isAddPlayerSheetPresented = false
     @State private var showDeleteConfirmation = false
-    @State private var isClaimPlayerSheetPresented = false
     @State private var isHandAddSheetPresented = false
     @State private var refreshHandsToggle = false // Для обновления списка раздач
+    @State private var isPlacePickerPresented = false
 
     // Вместо флагов и массивов используем один @State shareData
     @State private var shareData: ShareData?
@@ -94,7 +94,32 @@ struct GameDetailView: View {
                                     .foregroundColor(.white)
                             }
                         }
-                        
+
+                        HStack {
+                            Text("Место:")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.7))
+                            Spacer()
+                            if isHost {
+                                Button(action: { isPlacePickerPresented = true }) {
+                                    HStack(spacing: 4) {
+                                        Text(game.place?.name ?? "Не указано")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.white)
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundColor(.white.opacity(0.4))
+                                    }
+                                }
+                            } else {
+                                Text(game.place?.name ?? "Не указано")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                            }
+                        }
+
                         HStack {
                             Text("Сумма байинов:")
                                 .font(.subheadline)
@@ -262,12 +287,12 @@ struct GameDetailView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                // Кнопка "Подать заявку" (только для не-хостов)
-                if canClaim {
-                    Button {
-                        isClaimPlayerSheetPresented = true
+                // Найти себя в других чужих играх — bulk Discovery (Phase 06)
+                if canClaim, let uid = currentUserId {
+                    NavigationLink {
+                        ClaimSelfView(userId: uid)
                     } label: {
-                        Label("Подать заявку", systemImage: "person.badge.plus")
+                        Label("Найти себя", systemImage: "person.crop.rectangle.stack")
                     }
                     .accessibilityIdentifier("game_detail_claim_button")
                 }
@@ -306,9 +331,9 @@ struct GameDetailView: View {
             AddPlayerToGameSheet(game: game, isPresented: $isAddPlayerSheetPresented)
                 .environment(\.managedObjectContext, viewContext)
         }
-        // Лист подачи заявки
-        .sheet(isPresented: $isClaimPlayerSheetPresented) {
-            ClaimPlayerView(game: game)
+        // Лист смены места
+        .sheet(isPresented: $isPlacePickerPresented) {
+            GamePlaceEditorSheet(game: game)
                 .environment(\.managedObjectContext, viewContext)
         }
         // Лист добавления раздачи

@@ -449,6 +449,46 @@ final class GameService {
         .sorted { $0.gamesCount > $1.gamesCount }
     }
 
+    func getPlaceStatistics(_ userId: UUID) -> [PlaceStatistics] {
+        let allGames = getAllGamesForUser(userId).filter { !$0.softDeleted }
+        guard let profile = persistence.fetchPlayerProfile(byUserId: userId) else { return [] }
+
+        // Group games by place name (fall back to game type if no place)
+        var byPlace: [String: (count: Int, profit: Decimal, wins: Int, profits: [Decimal])] = [:]
+
+        for game in allGames {
+            let participations = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
+            guard let myParticipation = participations.first(where: { $0.playerProfile == profile }) else { continue }
+
+            let placeName = game.place?.name ?? game.gameType ?? "Без места"
+            let buyin = Decimal(Int(myParticipation.buyin))
+            let cashout = Decimal(Int(myParticipation.cashout))
+            let profit = cashout - (buyin * Decimal(ChipValue.tengePerChip))
+
+            var entry = byPlace[placeName] ?? (count: 0, profit: 0, wins: 0, profits: [])
+            entry.count += 1
+            entry.profit += profit
+            entry.profits.append(profit)
+            if profit > 0 { entry.wins += 1 }
+            byPlace[placeName] = entry
+        }
+
+        return byPlace.map { (name, entry) in
+            let winRate = entry.count > 0 ? Double(entry.wins) / Double(entry.count) : 0
+            let average = entry.count > 0 ? entry.profit / Decimal(entry.count) : 0
+            let best = entry.profits.max() ?? 0
+            return PlaceStatistics(
+                placeName: name,
+                gamesCount: entry.count,
+                totalProfit: entry.profit,
+                winRate: winRate,
+                averageProfit: average,
+                bestSession: best
+            )
+        }
+        .sorted { $0.gamesCount > $1.gamesCount }
+    }
+
     // MARK: - Helpers
     private func gameProfit(for game: Game, userId: UUID) -> Decimal {
         guard let profile = persistence.fetchPlayerProfile(byUserId: userId) else { return 0 }

@@ -15,14 +15,20 @@ struct MainView: View {
     @State private var pendingClaimsCount = 0
     
     private let claimService = PlayerClaimService()
+    @ObservedObject private var claimDiscovery = ClaimDiscoveryService.shared
 
     enum MainTab: Hashable {
         case overview
         case games
+        case claimSelf
         case statistics
         case players
         case ranges
         case profile
+    }
+
+    private var freeClaimBadgeCount: Int {
+        claimDiscovery.rows.filter { $0.status == "free" }.count
     }
 
     var body: some View {
@@ -49,20 +55,47 @@ struct MainView: View {
                     .tag(MainTab.overview)
                     .accessibilityIdentifier("tab_overview")
 
-                GamesListTabView(
+                GamesViewV2(
                     games: viewModel.filteredGames,
                     userId: authViewModel.currentUserId,
                     selectedFilter: $viewModel.selectedFilter,
                     onFilterChange: viewModel.applyFilter,
                     onLoadMore: viewModel.loadMoreGames
                 )
-                .tabItem { Label("Игры", systemImage: "list.bullet") }
-                .tag(MainTab.games)
-                .accessibilityIdentifier("tab_games")
+                    .tabItem { Label("Игры", systemImage: "list.bullet") }
+                    .tag(MainTab.games)
+                    .accessibilityIdentifier("tab_games")
+
+                Group {
+                    if let uid = authViewModel.currentUserId {
+                        ClaimSelfView(userId: uid)
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.crop.rectangle.stack")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.white.opacity(0.6))
+                            Text("Войдите в аккаунт")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text("Чтобы искать себя среди записей игроков в чужих играх")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.72))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(32)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .v2ScreenBackground()
+                    }
+                }
+                    .tabItem { Label("Найти себя", systemImage: "person.crop.rectangle.stack") }
+                    .tag(MainTab.claimSelf)
+                    .accessibilityIdentifier("tab_claim_self")
+                    .modifier(BadgeOnlyIfPositive(count: freeClaimBadgeCount))
 
                 StatisticsTabView(
                     statistics: viewModel.statistics,
                     gameTypeStats: viewModel.gameTypeStats,
+                    placeStats: viewModel.placeStats,
                     topAnalytics: viewModel.topAnalytics,
                     chartData: viewModel.chartData
                 )
@@ -211,6 +244,12 @@ struct MainView: View {
                     viewModel.refresh()
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .fullResyncCompleted)) { _ in
+                viewModel.refresh()
+                if let uid = authViewModel.currentUserId {
+                    Task { await claimDiscovery.refresh(userId: uid) }
+                }
+            }
             .onAppear {
                 // Активный таб — акцент как в web v13 (`--accent-green`).
                 let tabBarAppearance = UITabBarAppearance()
@@ -245,10 +284,28 @@ struct MainView: View {
                 
                 // Обновляем счетчик заявок
                 updatePendingClaimsCount()
+
+                Task {
+                    if let id = authViewModel.currentUserId {
+                        await claimDiscovery.refresh(userId: id)
+                    }
+                }
+
+                Task {
+                    await PlayerMergeListenerService.shared.startListening()
+                }
+            }
+            .onDisappear {
+                Task {
+                    await PlayerMergeListenerService.shared.stopListening()
+                }
             }
             .onChange(of: selectedTab) { _, new in
                 if new == .profile {
                     updatePendingClaimsCount()
+                }
+                if new == .claimSelf, let uid = authViewModel.currentUserId {
+                    Task { await claimDiscovery.refresh(userId: uid) }
                 }
             }
             .refreshable {
@@ -262,6 +319,7 @@ struct MainView: View {
         switch tab {
         case .overview: return "Обзор"
         case .games: return "Игры"
+        case .claimSelf: return "Найти себя"
         case .statistics: return "Статистика"
         case .players: return "Игроки"
         case .ranges: return "Диапазоны"
@@ -295,5 +353,17 @@ struct MainView: View {
             return
         }
         pendingClaimsCount = claimService.getPendingClaimsForHost(hostUserId: userId).count
+    }
+}
+
+private struct BadgeOnlyIfPositive: ViewModifier {
+    let count: Int
+
+    func body(content: Content) -> some View {
+        if count > 0 {
+            content.badge(count)
+        } else {
+            content
+        }
     }
 }

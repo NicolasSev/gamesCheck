@@ -14,6 +14,11 @@ struct DesignPreviewView: View {
                     GoldNumber(size: .md, text: "1 240")
                     GreenNumber(size: .md, text: "+₸ 10k")
                 }
+                HStack(spacing: 12) {
+                    GreenNumber(size: .md, tone: .positive, text: "+₸ 12k")
+                    GreenNumber(size: .md, tone: .negative, text: "−₸ 4k")
+                    GreenNumber(size: .md, tone: .neutral, text: "₸ 0")
+                }
                 GlowDot()
                 HeroCard {
                     VStack(alignment: .leading, spacing: 6) {
@@ -33,10 +38,9 @@ struct DesignPreviewView: View {
                     type: "Cash",
                     place: "—",
                     date: "2 апр.",
-                    players: "5",
-                    result: "+₸ 1k",
+                    result: "+₸\u{00A0}1k",
                     win: 1,
-                    mvp: "A",
+                    mvpName: nil,
                     action: {}
                 )
                 HStack {

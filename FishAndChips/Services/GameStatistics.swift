@@ -57,6 +57,15 @@ struct GameTypeStatistics {
     let bestSession: Decimal
 }
 
+struct PlaceStatistics {
+    let placeName: String
+    let gamesCount: Int
+    let totalProfit: Decimal
+    let winRate: Double
+    let averageProfit: Decimal
+    let bestSession: Decimal
+}
+
 enum GameFilter: Hashable {
     case all
     case allGames // Все игры на устройстве независимо от пользователя

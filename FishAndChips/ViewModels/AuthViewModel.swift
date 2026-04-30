@@ -418,7 +418,9 @@ final class AuthViewModel: ObservableObject {
         currentUser = nil
         authState = .unauthenticated
         requiresReauth = true  // Требуем повторную аутентификацию
-        
+
+        Task { await PlayerMergeListenerService.shared.stopListening() }
+
         // НЕ очищаем Keychain - оставляем userId и username для Face ID
         // Только очищаем текущую сессию и устанавливаем флаг требования повторной аутентификации
         debugLog("✅ [LOGOUT] Logout complete (Keychain preserved, reauth required)")

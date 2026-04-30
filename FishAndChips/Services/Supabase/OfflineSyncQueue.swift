@@ -117,6 +117,20 @@ final class OfflineSyncQueue: ObservableObject {
         pendingCount = 0
     }
 
+    /// После admin merge на сервере pending upsert `game_players` конфликтуют с авторитетным состоянием — отбрасываем их.
+    func discardPendingGamePlayerUpserts() {
+        lock.lock()
+        defer { lock.unlock() }
+        var queue = loadQueue()
+        let before = queue.count
+        queue.removeAll { $0.table == "game_players" && $0.operation == .upsert }
+        saveQueue(queue)
+        pendingCount = queue.count
+        if before != pendingCount {
+            debugLog("OfflineSyncQueue: discarded \(before - pendingCount) pending game_players upserts (merge reconcile)")
+        }
+    }
+
     // MARK: - Processing
 
     private func processUpsert(service: SupabaseService, operation: QueuedOperation) async throws {

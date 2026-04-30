@@ -48,6 +48,7 @@ struct GameDTO: Codable, Identifiable, Sendable {
     var isPublic: Bool
     var softDeleted: Bool
     var notes: String?
+    var placeId: UUID?
     var timestamp: Date?
     var createdAt: Date?
     var updatedAt: Date?
@@ -59,9 +60,26 @@ struct GameDTO: Codable, Identifiable, Sendable {
         case isPublic = "is_public"
         case softDeleted = "soft_deleted"
         case notes
+        case placeId = "place_id"
         case timestamp
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Place
+
+struct PlaceDTO: Codable, Identifiable, Sendable {
+    let id: UUID
+    var name: String
+    var createdBy: UUID?
+    var createdAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case createdBy = "created_by"
+        case createdAt = "created_at"
     }
 }
 
@@ -112,7 +130,8 @@ struct PlayerAliasDTO: Codable, Identifiable, Sendable {
 struct PlayerClaimDTO: Codable, Identifiable, Sendable {
     let id: UUID
     var playerName: String
-    var gameId: UUID
+    /// Для bulk-заявок в БД может быть NULL.
+    var gameId: UUID?
     var gamePlayerId: UUID?
     var claimantId: UUID
     var hostId: UUID
@@ -121,6 +140,13 @@ struct PlayerClaimDTO: Codable, Identifiable, Sendable {
     var resolvedById: UUID?
     var notes: String?
     var createdAt: Date?
+    /// `single` | `bulk`; по умолчанию сервер ставит для старых записей через миграции.
+    var scope: String
+    var placeId: UUID?
+    var playerKey: String?
+    var affectedGamePlayerIds: [UUID]?
+    var blockReason: String?
+    var conflictProfileIds: [UUID]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -134,15 +160,126 @@ struct PlayerClaimDTO: Codable, Identifiable, Sendable {
         case resolvedById = "resolved_by_id"
         case notes
         case createdAt = "created_at"
+        case scope
+        case placeId = "place_id"
+        case playerKey = "player_key"
+        case affectedGamePlayerIds = "affected_game_player_ids"
+        case blockReason = "block_reason"
+        case conflictProfileIds = "conflict_profile_ids"
+    }
+
+    init(
+        id: UUID,
+        playerName: String,
+        gameId: UUID?,
+        gamePlayerId: UUID?,
+        claimantId: UUID,
+        hostId: UUID,
+        status: String,
+        resolvedAt: Date?,
+        resolvedById: UUID?,
+        notes: String?,
+        createdAt: Date?,
+        scope: String = "single",
+        placeId: UUID? = nil,
+        playerKey: String? = nil,
+        affectedGamePlayerIds: [UUID]? = nil,
+        blockReason: String? = nil,
+        conflictProfileIds: [UUID]? = nil
+    ) {
+        self.id = id
+        self.playerName = playerName
+        self.gameId = gameId
+        self.gamePlayerId = gamePlayerId
+        self.claimantId = claimantId
+        self.hostId = hostId
+        self.status = status
+        self.resolvedAt = resolvedAt
+        self.resolvedById = resolvedById
+        self.notes = notes
+        self.createdAt = createdAt
+        self.scope = scope
+        self.placeId = placeId
+        self.playerKey = playerKey
+        self.affectedGamePlayerIds = affectedGamePlayerIds
+        self.blockReason = blockReason
+        self.conflictProfileIds = conflictProfileIds
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        playerName = try c.decode(String.self, forKey: .playerName)
+        gameId = try c.decodeIfPresent(UUID.self, forKey: .gameId)
+        gamePlayerId = try c.decodeIfPresent(UUID.self, forKey: .gamePlayerId)
+        claimantId = try c.decode(UUID.self, forKey: .claimantId)
+        hostId = try c.decode(UUID.self, forKey: .hostId)
+        status = try c.decode(String.self, forKey: .status)
+        resolvedAt = try c.decodeIfPresent(Date.self, forKey: .resolvedAt)
+        resolvedById = try c.decodeIfPresent(UUID.self, forKey: .resolvedById)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        scope = try c.decodeIfPresent(String.self, forKey: .scope) ?? "single"
+        placeId = try c.decodeIfPresent(UUID.self, forKey: .placeId)
+        playerKey = try c.decodeIfPresent(String.self, forKey: .playerKey)
+        affectedGamePlayerIds = try Self.decodeUuidArrayOptional(forKey: .affectedGamePlayerIds, from: c)
+        blockReason = try c.decodeIfPresent(String.self, forKey: .blockReason)
+        conflictProfileIds = try Self.decodeUuidArrayOptional(forKey: .conflictProfileIds, from: c)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(playerName, forKey: .playerName)
+        try c.encodeIfPresent(gameId, forKey: .gameId)
+        try c.encodeIfPresent(gamePlayerId, forKey: .gamePlayerId)
+        try c.encode(claimantId, forKey: .claimantId)
+        try c.encode(hostId, forKey: .hostId)
+        try c.encode(status, forKey: .status)
+        try c.encodeIfPresent(resolvedAt, forKey: .resolvedAt)
+        try c.encodeIfPresent(resolvedById, forKey: .resolvedById)
+        try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encode(scope, forKey: .scope)
+        try c.encodeIfPresent(placeId, forKey: .placeId)
+        try c.encodeIfPresent(playerKey, forKey: .playerKey)
+        try PlayerClaimDTO.encodeUuidArrayOptional(affectedGamePlayerIds, to: &c, key: .affectedGamePlayerIds)
+        try c.encodeIfPresent(blockReason, forKey: .blockReason)
+        try PlayerClaimDTO.encodeUuidArrayOptional(conflictProfileIds, to: &c, key: .conflictProfileIds)
+    }
+
+    private static func decodeUuidArrayOptional(
+        forKey key: CodingKeys,
+        from c: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [UUID]? {
+        guard c.contains(key), try !c.decodeNil(forKey: key) else {
+            return nil
+        }
+        if let uuids = try? c.decode([UUID].self, forKey: key) {
+            return uuids
+        }
+        if let strings = try? c.decode([String].self, forKey: key) {
+            return strings.compactMap { UUID(uuidString: $0) }
+        }
+        return []
+    }
+
+    private static func encodeUuidArrayOptional(
+        _ value: [UUID]?,
+        to c: inout KeyedEncodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) throws {
+        guard let value else {
+            try c.encodeNil(forKey: key)
+            return
+        }
+        try c.encode(value, forKey: key)
     }
 
     var isPending: Bool { status == "pending" }
     var isApproved: Bool { status == "approved" }
     var isRejected: Bool { status == "rejected" }
 }
-
-// MARK: - Materialized Views (read-only)
-
 struct GameSummaryDTO: Codable, Identifiable, Sendable {
     let gameId: UUID
     let creatorId: UUID?

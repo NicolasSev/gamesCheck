@@ -197,8 +197,25 @@ final class SupabaseRealtimeService: ObservableObject {
 
         debugLog("Realtime: claim \(isNew ? "created" : "updated")")
 
+        let status = record["status"]?.stringValue
+        let scope = record["scope"]?.stringValue
+        let claimantIdString = record["claimant_id"]?.stringValue
+        let claimantId = claimantIdString.flatMap { UUID(uuidString: $0) }
+        let hostIdString = record["host_id"]?.stringValue
+        let hostId = hostIdString.flatMap { UUID(uuidString: $0) }
+        let myId = await SupabaseService.shared.currentUserId()
+
+        let needFullAfterBulkApprove =
+            status == "approved"
+            && scope == "bulk"
+            && (claimantId == myId || hostId == myId)
+
         do {
-            try await SupabaseSyncService.shared.performIncrementalSync()
+            if needFullAfterBulkApprove {
+                try await SyncCoordinator.shared.fullResyncAfterClaim()
+            } else {
+                try await SupabaseSyncService.shared.performIncrementalSync()
+            }
         } catch {
             debugLog("Realtime claim handler error: \(error)")
         }

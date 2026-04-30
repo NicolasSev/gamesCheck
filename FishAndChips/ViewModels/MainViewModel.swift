@@ -5,6 +5,7 @@ import Combine
 final class MainViewModel: ObservableObject {
     @Published var statistics: UserStatistics?
     @Published var gameTypeStats: [GameTypeStatistics] = []
+    @Published var placeStats: [PlaceStatistics] = []
     @Published var recentGames: [GameSummary] = []
     @Published var selectedFilter: GameFilter = .all
     @Published var filteredGames: [Game] = []
@@ -36,12 +37,14 @@ final class MainViewModel: ObservableObject {
         Task {
             let stats = gameService.getUserStatistics(userId)
             let typeStats = gameService.getGameTypeStatistics(userId)
+            let placeStatsData = gameService.getPlaceStatistics(userId)
             let allGames = gameService.getGames(filter: selectedFilter, forUser: userId)
             allGamesForPagination = allGames
             let topAnalytics = gameService.getTopAnalytics()
 
             self.statistics = stats
             self.gameTypeStats = typeStats
+            self.placeStats = placeStatsData
             self.recentGames = stats.recentGames
             self.filteredGames = allGames
             self.hasMoreGames = false
@@ -75,6 +78,7 @@ final class MainViewModel: ObservableObject {
 
             self.statistics = stats
             self.gameTypeStats = typeStats
+            self.placeStats = []
             self.recentGames = stats.recentGames
             self.filteredGames = sortedGames
             self.hasMoreGames = false

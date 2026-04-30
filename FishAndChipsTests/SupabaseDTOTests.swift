@@ -106,18 +106,36 @@ struct SupabaseDTOTests {
 
     @Test func playerClaimDTO_statusHelpers() async throws {
         let pending = PlayerClaimDTO(
-            id: UUID(), playerName: "Test", gameId: UUID(), gamePlayerId: nil,
-            claimantId: UUID(), hostId: UUID(), status: "pending",
-            resolvedAt: nil, resolvedById: nil, notes: nil, createdAt: Date()
+            id: UUID(),
+            playerName: "Test",
+            gameId: UUID(),
+            gamePlayerId: nil,
+            claimantId: UUID(),
+            hostId: UUID(),
+            status: "pending",
+            resolvedAt: nil,
+            resolvedById: nil,
+            notes: nil,
+            createdAt: Date(),
+            scope: "single"
         )
         #expect(pending.isPending == true)
         #expect(pending.isApproved == false)
         #expect(pending.isRejected == false)
 
         let approved = PlayerClaimDTO(
-            id: UUID(), playerName: "Test", gameId: UUID(), gamePlayerId: nil,
-            claimantId: UUID(), hostId: UUID(), status: "approved",
-            resolvedAt: Date(), resolvedById: UUID(), notes: nil, createdAt: Date()
+            id: UUID(),
+            playerName: "Test",
+            gameId: UUID(),
+            gamePlayerId: nil,
+            claimantId: UUID(),
+            hostId: UUID(),
+            status: "approved",
+            resolvedAt: Date(),
+            resolvedById: UUID(),
+            notes: nil,
+            createdAt: Date(),
+            scope: "single"
         )
         #expect(approved.isPending == false)
         #expect(approved.isApproved == true)
@@ -126,15 +144,21 @@ struct SupabaseDTOTests {
     // MARK: - GamePlayerDTO
 
     @Test func gamePlayerDTO_profitCalculation() async throws {
+        let buyinChips = 100
+        let buyinTenge = ChipValue.chipsToTenge(buyinChips)
         let dto = GamePlayerDTO(
             id: UUID(), gameId: UUID(), profileId: nil,
-            playerName: "Test", buyin: 100, cashout: 250, createdAt: nil
+            playerName: "Test", buyin: buyinChips,
+            cashout: buyinTenge + 150, createdAt: nil
         )
         #expect(dto.profit == 150)
 
+        let losingBuyin = 200
+        let losingTenge = ChipValue.chipsToTenge(losingBuyin)
         let losing = GamePlayerDTO(
             id: UUID(), gameId: UUID(), profileId: nil,
-            playerName: "Loser", buyin: 200, cashout: 50, createdAt: nil
+            playerName: "Loser", buyin: losingBuyin,
+            cashout: losingTenge - 150, createdAt: nil
         )
         #expect(losing.profit == -150)
     }
@@ -142,13 +166,17 @@ struct SupabaseDTOTests {
     // MARK: - ProfileDTO
 
     @Test func profileDTO_balanceCalculation() async throws {
+        let totalBuyinsChips: Double = 10
+        let totalCashoutsTenge: Double =
+            ChipValue.chipsToTenge(totalBuyinsChips) + 2_500
         let dto = ProfileDTO(
             id: UUID(), username: "test", displayName: "Test",
             isAnonymous: false, isPublic: true, isSuperAdmin: false,
             subscriptionStatus: "free", subscriptionExpiresAt: nil,
-            totalGamesPlayed: 10, totalBuyins: 5000, totalCashouts: 7500,
+            totalGamesPlayed: 10, totalBuyins: totalBuyinsChips,
+            totalCashouts: totalCashoutsTenge,
             createdAt: Date(), lastLoginAt: nil, updatedAt: nil
         )
-        #expect(dto.balance == 2500)
+        #expect(dto.balance == 2_500)
     }
 }

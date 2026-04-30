@@ -24,6 +24,11 @@ extension PersistenceController {
         claim.hostUserId = hostUserId
         claim.status = "pending"
         claim.createdAt = Date()
+        claim.scope = "single"
+        claim.placeId = game.place?.placeId ?? game.placeId
+        claim.playerKey = playerName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        claim.affectedGamePlayerIdsJson = "[]"
+        claim.conflictProfileIdsJson = "[]"
         claim.claimantUser = fetchUser(byId: claimantUserId)
         claim.hostUser = fetchUser(byId: hostUserId)
         claim.game = game

@@ -520,4 +520,8 @@ extension NotificationService: UNUserNotificationCenterDelegate {
 extension Notification.Name {
     static let openNotificationsTab = Notification.Name("FishAndChips.openNotificationsTab")
     static let openGameFromNotification = Notification.Name("FishAndChips.openGameFromNotification")
+    /// После полного resync кэша после bulk-approve / массовых мутаций `player_claims`.
+    static let fullResyncCompleted = Notification.Name("FishAndChips.fullResyncCompleted")
+    /// После admin merge имени игрока (до/параллельно с полным sync); часто затем следует `.fullResyncCompleted`.
+    static let playerMergeApplied = Notification.Name("FishAndChips.playerMergeApplied")
 }

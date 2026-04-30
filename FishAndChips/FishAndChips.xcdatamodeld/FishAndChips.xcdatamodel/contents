@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788" systemVersion="24D81" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788" systemVersion="24D81" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="2">
     <entity name="Game" representedClassName="Game" syncable="YES">
         <attribute name="attribute" optional="YES" attributeType="String"/>
         <attribute name="attribute1" optional="YES" attributeType="String"/>
@@ -10,11 +10,23 @@
         <attribute name="softDeleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="placeId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <relationship name="creator" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="createdGames" inverseEntity="User"/>
         <relationship name="gameWithPlayers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GameWithPlayer" inverseName="game" inverseEntity="GameWithPlayer"/>
+        <relationship name="place" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Place" inverseName="games" inverseEntity="Place"/>
         <relationship name="player1" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player"/>
         <relationship name="player2" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Player"/>
         <relationship name="players" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Player" inverseName="game" inverseEntity="Player"/>
+    </entity>
+    <entity name="Place" representedClassName="Place" syncable="YES">
+        <attribute name="placeId" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="createdByUserId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="games" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Game" inverseName="place" inverseEntity="Game"/>
+        <uniquenessConstraints>
+            <constraint value="placeId"/>
+        </uniquenessConstraints>
     </entity>
     <entity name="GameWithPlayer" representedClassName="GameWithPlayer" syncable="YES">
         <attribute name="buyin" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
@@ -125,8 +137,8 @@
     <entity name="PlayerClaim" representedClassName="PlayerClaim" syncable="YES">
         <attribute name="claimId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="playerName" attributeType="String"/>
-        <attribute name="gameId" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="gameWithPlayerObjectId" attributeType="String"/>
+        <attribute name="gameId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="gameWithPlayerObjectId" optional="YES" attributeType="String"/>
         <attribute name="claimantUserId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="hostUserId" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="status" attributeType="String" defaultValueString="pending"/>
@@ -134,6 +146,12 @@
         <attribute name="resolvedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="resolvedByUserId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="scope" optional="YES" attributeType="String" defaultValueString="single"/>
+        <attribute name="placeId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="playerKey" optional="YES" attributeType="String"/>
+        <attribute name="affectedGamePlayerIdsJson" optional="YES" attributeType="String" defaultValueString="[]"/>
+        <attribute name="blockReason" optional="YES" attributeType="String"/>
+        <attribute name="conflictProfileIdsJson" optional="YES" attributeType="String" defaultValueString="[]"/>
         <relationship name="claimantUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User"/>
         <relationship name="hostUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User"/>
         <relationship name="resolvedByUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User"/>

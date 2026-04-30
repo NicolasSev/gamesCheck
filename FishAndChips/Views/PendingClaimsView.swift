@@ -13,7 +13,6 @@ struct PendingClaimsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var allClaims: [PlayerClaim] = []
     @State private var selectedClaim: PlayerClaim?
-    @State private var showingClaimDetail = false
     @State private var errorMessage: String?
     @State private var showingError = false
     
@@ -31,10 +30,17 @@ struct PendingClaimsView: View {
     
     private var pendingClaims: [PlayerClaim] {
         allClaims.filter { $0.status == "pending" }
+            .sorted { $0.createdAt > $1.createdAt }
     }
-    
-    private var resolvedClaims: [PlayerClaim] {
-        allClaims.filter { $0.status != "pending" }
+
+    private var blockedClaims: [PlayerClaim] {
+        allClaims.filter { $0.status == "blocked" }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var finalizedClaims: [PlayerClaim] {
+        allClaims.filter { $0.status == "approved" || $0.status == "rejected" }
+            .sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
     }
     
     var body: some View {
@@ -66,22 +72,37 @@ struct PendingClaimsView: View {
                                     ForEach(pendingClaims, id: \.claimId) { claim in
                                         PendingClaimRow(claim: claim) {
                                             selectedClaim = claim
-                                            showingClaimDetail = true
                                         }
                                     }
                                 }
                             }
                             
-                            // Обработанные заявки
-                            if !resolvedClaims.isEmpty {
+                            if !blockedClaims.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Обработанные (\(resolvedClaims.count))")
+                                    Text("Заблокированы — требуют действия (\(blockedClaims.count))")
+                                        .font(.headline)
+                                        .foregroundColor(.red.opacity(0.95))
+                                        .padding(.horizontal)
+                                        .padding(.top, (pendingClaims.isEmpty ? 0 : 8))
+
+                                    ForEach(blockedClaims, id: \.claimId) { claim in
+                                        PendingClaimRow(claim: claim) {
+                                            selectedClaim = claim
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Обработанные заявки
+                            if !finalizedClaims.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Обработанные (\(finalizedClaims.count))")
                                         .font(.headline)
                                         .foregroundColor(.white.opacity(0.7))
                                         .padding(.horizontal)
-                                        .padding(.top, pendingClaims.isEmpty ? 0 : 8)
-                                    
-                                    ForEach(resolvedClaims, id: \.claimId) { claim in
+                                        .padding(.top, (pendingClaims.isEmpty && blockedClaims.isEmpty) ? 0 : 8)
+
+                                    ForEach(finalizedClaims, id: \.claimId) { claim in
                                         ResolvedClaimRow(claim: claim)
                                     }
                                 }
@@ -130,6 +151,21 @@ struct PendingClaimsView: View {
 struct PendingClaimRow: View {
     let claim: PlayerClaim
     let onTap: () -> Void
+
+    private var placeLabel: String {
+        guard let pid = claim.placeId,
+              let name = PersistenceController.shared.fetchPlace(byId: pid)?.name else {
+            return "Без места"
+        }
+        return name
+    }
+
+    private var bulkGamesLine: String? {
+        guard claim.isBulk else { return nil }
+        let n = claim.affectedGamePlayerIds.count
+        if n <= 0 { return "Сводная заявка по имени" }
+        return "\(n) \(RussianPlural.pick(n, one: "игра", few: "игры", many: "игр")) в сводной заявке"
+    }
     
     private var formattedDate: String {
         let formatter = DateFormatter()
@@ -160,7 +196,14 @@ struct PendingClaimRow: View {
                             .foregroundColor(.white.opacity(0.8))
                     }
                     
-                    if let game = claim.game {
+                    if claim.isBulk {
+                        Text(bulkGamesLine ?? "Сводная заявка")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.75))
+                        Text("Место: \(placeLabel)")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.65))
+                    } else if let game = claim.game {
                         Text("Игра: \(game.gameType ?? "Unknown")")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
@@ -185,13 +228,12 @@ struct ClaimDetailView: View {
     
     @State private var notes: String = ""
     @State private var showingApproveConfirmation = false
-    @State private var showingApproveAllConfirmation = false
     @State private var showingRejectConfirmation = false
     @State private var errorMessage: String?
     @State private var showingError = false
-    @State private var isApprovingAll = false
-    @State private var approveAllSuccessMessage: String?
-    
+    @State private var showMergeRequestSheet = false
+    @State private var conflictHandles: [String] = []
+
     private let claimService = PlayerClaimService()
     private let keychain = KeychainService.shared
     
@@ -202,7 +244,134 @@ struct ClaimDetailView: View {
         }
         return userId
     }
-    
+
+    private static let mergeReadyReason = "merge_resolved_pending_host_approval"
+
+    private var blockedAwaitingMerge: Bool {
+        claim.isBlocked && claim.blockReason != Self.mergeReadyReason
+    }
+
+    private var blockedReadyToApprove: Bool {
+        claim.isBlocked && claim.blockReason == Self.mergeReadyReason
+    }
+
+    private var bulkPlaceDisplay: String {
+        guard let pid = claim.placeId,
+              let name = PersistenceController.shared.fetchPlace(byId: pid)?.name else {
+            return "Без места"
+        }
+        return name
+    }
+
+    private var bulkGamesNote: String? {
+        guard claim.isBulk else { return nil }
+        let n = claim.affectedGamePlayerIds.count
+        if n <= 0 { return nil }
+        return "\(n) \(RussianPlural.pick(n, one: "игра", few: "игры", many: "игр"))"
+    }
+
+    private var blockedConflictExplanation: String {
+        let base =
+            "Имя «\(claim.playerName)» уже связано с другими учётными записями. Пока админ не выполнит merge имён, одобрение невозможно."
+        if conflictHandles.isEmpty {
+            return base
+        }
+        let handles = conflictHandles.map { "@\($0)" }.joined(separator: ", ")
+        return base + " Связано с: \(handles)."
+    }
+
+    @ViewBuilder
+    private var blockedOrNormalActionsCard: some View {
+        if blockedReadyToApprove {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(
+                    "Админ объединил имена. Подтвердите заявку, чтобы связать статистику с профилем заявителя."
+                )
+                .font(.subheadline)
+                .foregroundColor(Color.green.opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 16) {
+                    Button(action: { showingRejectConfirmation = true }) {
+                        Text("Отклонить")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red.opacity(0.65))
+                            .cornerRadius(12)
+                    }
+                    Button(action: { showingApproveConfirmation = true }) {
+                        Text("Подтвердить")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green.opacity(0.82))
+                            .cornerRadius(12)
+                    }
+                }
+            }
+            .padding()
+        } else if blockedAwaitingMerge {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Конфликт профилей")
+                    .font(.headline)
+                    .foregroundColor(Color.red.opacity(0.9))
+                Text(blockedConflictExplanation)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(action: { showMergeRequestSheet = true }) {
+                    Text("Запросить merge у админа")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue.opacity(0.72))
+                        .cornerRadius(12)
+                }
+                Button(action: { showingRejectConfirmation = true }) {
+                    Text("Отклонить заявку")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red.opacity(0.62))
+                        .cornerRadius(12)
+                }
+            }
+            .padding()
+        } else {
+            VStack(spacing: 12) {
+                HStack(spacing: 16) {
+                    Button(action: {
+                        showingRejectConfirmation = true
+                    }) {
+                        Text("Отклонить")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red.opacity(0.7))
+                            .cornerRadius(12)
+                    }
+                    Button(action: {
+                        showingApproveConfirmation = true
+                    }) {
+                        Text("Одобрить")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green.opacity(0.7))
+                            .cornerRadius(12)
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -228,6 +397,16 @@ struct ClaimDetailView: View {
                         }
                         
                         InfoRow(label: "Дата заявки", value: formatDate(claim.createdAt))
+                        if claim.isBulk {
+                            InfoRow(label: "Тип", value: "Сводная по месту · bulk")
+                            InfoRow(label: "Место", value: bulkPlaceDisplay)
+                            if bulkGamesNote != nil {
+                                InfoRow(label: "Охват", value: bulkGamesNote!)
+                            }
+                        }
+                        if claim.status == "blocked", let br = claim.blockReason, !br.isEmpty {
+                            InfoRow(label: "Причина блока", value: br)
+                        }
                     }
                     .padding()
                     .glassCardStyle(.plain)
@@ -248,69 +427,8 @@ struct ClaimDetailView: View {
                     .padding()
                     .glassCardStyle(.plain)
                     
-                    // Кнопки действий
-                    VStack(spacing: 12) {
-                        // Основные кнопки
-                        HStack(spacing: 16) {
-                            Button(action: {
-                                showingRejectConfirmation = true
-                            }) {
-                                Text("Отклонить")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.red.opacity(0.7))
-                                    .cornerRadius(12)
-                            }
-                            
-                            Button(action: {
-                                showingApproveConfirmation = true
-                            }) {
-                                Text("Одобрить")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.green.opacity(0.7))
-                                    .cornerRadius(12)
-                            }
-                        }
-                        
-                        // Кнопка "Одобрить все"
-                        Button(action: {
-                            showingApproveAllConfirmation = true
-                        }) {
-                            HStack {
-                                if isApprovingAll {
-                                    ProgressView()
-                                        .progressViewStyle(.circular)
-                                        .tint(.white)
-                                        .scaleEffect(0.8)
-                                    Text("Обработка...")
-                                } else {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text("Одобрить все игры с '\(claim.playerName)'")
-                                }
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue.opacity(0.7))
-                            .cornerRadius(12)
-                        }
-                        .disabled(isApprovingAll)
-                        
-                        // Сообщение об успехе
-                        if let successMessage = approveAllSuccessMessage {
-                            Text(successMessage)
-                                .font(.caption)
-                                .foregroundColor(.green)
-                                .padding(.top, 4)
-                        }
-                    }
-                    .padding()
+                    // Действия
+                    blockedOrNormalActionsCard
                 }
                 .padding()
             }
@@ -330,15 +448,11 @@ struct ClaimDetailView: View {
                     approveClaim()
                 }
             } message: {
-                Text("Пользователь получит доступ к статистике по этому игроку в этой игре.")
-            }
-            .alert("Одобрить все игры?", isPresented: $showingApproveAllConfirmation) {
-                Button("Отмена", role: .cancel) { }
-                Button("Одобрить все") {
-                    approveAllClaims()
-                }
-            } message: {
-                Text("Пользователь будет привязан ко ВСЕМ играм, где есть игрок '\(claim.playerName)'. Это одобрит одну заявку, но привяжет профиль ко всем подходящим GameWithPlayer.")
+                Text(
+                    claim.isBulk
+                        ? "Одобрить сводную заявку: все совпадающие игроки могут быть привязаны к профилю заявителя согласно правилам на сервере."
+                        : "Пользователь получит доступ к статистике по этому игроку в этой игре."
+                )
             }
             .alert("Отклонить заявку?", isPresented: $showingRejectConfirmation) {
                 Button("Отмена", role: .cancel) { }
@@ -354,6 +468,28 @@ struct ClaimDetailView: View {
                 if let error = errorMessage {
                     Text(error)
                 }
+            }
+            .onAppear {
+                guard claim.isBlocked else { return }
+                Task {
+                    guard !claim.conflictProfileIds.isEmpty else {
+                        await MainActor.run { conflictHandles = [] }
+                        return
+                    }
+                    do {
+                        let names = try await claimService.conflictProfileDisplayNames(
+                            for: claim.conflictProfileIds
+                        )
+                        await MainActor.run { conflictHandles = names }
+                    } catch {
+                        await MainActor.run { conflictHandles = [] }
+                    }
+                }
+            }
+            .sheet(isPresented: $showMergeRequestSheet) {
+                RequestMergeRequestSheet(claim: claim, onSent: {
+                    onResolved()
+                })
             }
             .v2ScreenBackground()
         }
@@ -381,48 +517,6 @@ struct ClaimDetailView: View {
             }
         }
     }
-    
-    private func approveAllClaims() {
-        guard let userId = currentUserId else {
-            errorMessage = "Не удалось определить пользователя"
-            showingError = true
-            return
-        }
-        
-        isApprovingAll = true
-        approveAllSuccessMessage = nil
-        
-        Task {
-            do {
-                // Используем новый метод с флагом linkAllGames = true
-                let linkedCount = try await claimService.approveClaimAndLinkAllGWP(
-                    claimId: claim.claimId,
-                    resolverUserId: userId,
-                    linkAllGames: true,
-                    notes: notes.isEmpty ? nil : notes
-                )
-                
-                isApprovingAll = false
-                
-                if linkedCount > 0 {
-                    approveAllSuccessMessage = "✅ Привязано игр: \(linkedCount)"
-                    
-                    // Закрыть через 2 секунды
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    onResolved()
-                    dismiss()
-                } else {
-                    errorMessage = "Не найдено игр для привязки"
-                    showingError = true
-                }
-            } catch {
-                isApprovingAll = false
-                errorMessage = "Ошибка при массовом одобрении: \(error.localizedDescription)"
-                showingError = true
-            }
-        }
-    }
-    
     private func rejectClaim() {
         guard let userId = currentUserId else {
             errorMessage = "Не удалось определить пользователя"
@@ -455,6 +549,152 @@ struct ClaimDetailView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Host: ask super-admin to merge names (admin_merge_requests)
+
+struct RequestMergeRequestSheet: View {
+    let claim: PlayerClaim
+    var onSent: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var keysText: String
+    @State private var canonicalText: String
+    @State private var notesExtra: String = ""
+    @State private var busy = false
+    @State private var errorMessage: String?
+    @State private var showError = false
+
+    private let service = PlayerClaimService()
+
+    init(claim: PlayerClaim, onSent: @escaping () -> Void) {
+        self.claim = claim
+        self.onSent = onSent
+        let pk = claim.playerKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawName = claim.playerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = rawName.lowercased()
+        _keysText = State(initialValue: (pk?.isEmpty == false) ? pk!.lowercased() : lowered)
+        _canonicalText = State(initialValue: claim.playerName)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Хост отправляет админам список имён для merge. Укажите все варианты написания (через запятую), которые нужно слить.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Ключи имён")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("рус, руслан", text: $keysText, axis: .vertical)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(10)
+                            .background(Color.gray.opacity(0.12))
+                            .cornerRadius(10)
+                            .foregroundStyle(.primary)
+                            .lineLimit(3 ... 9)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Каноническое имя")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Отображение после merge", text: $canonicalText)
+                            .padding(10)
+                            .background(Color.gray.opacity(0.12))
+                            .cornerRadius(10)
+                            .foregroundStyle(.primary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Комментарий (необязательно)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Контекст для админа", text: $notesExtra, axis: .vertical)
+                            .padding(10)
+                            .background(Color.gray.opacity(0.12))
+                            .cornerRadius(10)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2 ... 6)
+                    }
+
+                    Button(action: { Task { await send() } }) {
+                        Text(busy ? "Отправка…" : "Отправить админу")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue.opacity(0.72))
+                            .cornerRadius(12)
+                    }
+                    .disabled(busy)
+                }
+                .padding()
+            }
+            .navigationTitle("Запрос merge")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                }
+            }
+            .alert("Ошибка", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                if let msg = errorMessage {
+                    Text(msg)
+                }
+            }
+        }
+    }
+
+    private func send() async {
+        let keys: [String] = keysText.split { separator in
+            separator == "," || separator == ";" || separator.isNewline
+        }
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+
+        guard !keys.isEmpty else {
+            await MainActor.run {
+                errorMessage = "Добавьте хотя бы один ключ имени."
+                showError = true
+            }
+            return
+        }
+
+        let unique = Array(Set(keys))
+        busy = true
+        defer { busy = false }
+
+        do {
+            try await service.submitAdminMergeRequest(
+                blockedClaimId: claim.claimId,
+                sourceKeys: unique,
+                suggestedCanonical: canonicalText,
+                notes: notesExtra.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? nil
+                    : notesExtra
+            )
+            await MainActor.run {
+                dismiss()
+                onSent()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
     }
 }
 

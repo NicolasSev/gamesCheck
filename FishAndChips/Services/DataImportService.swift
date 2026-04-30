@@ -321,18 +321,21 @@ class DataImportService {
     }
     
     /// Импортирует игры в CoreData, заменяя существующие если нужно.
+    /// - Parameter placeId: id места проведения (опционально); проставляется всем играм в пачке.
     /// - Parameter replaceExistingForDate: если задано, для каждой даты решает, заменять ли существующую игру (перекрывает `replaceExisting`).
     func importGames(
         _ parsedGames: [ParsedGame],
         selectedPlayerNames: Set<String>,
+        placeId: UUID? = nil,
         replaceExisting: Bool = false,
         replaceExistingForDate: ((Date) -> Bool)? = nil
     ) throws {
         guard !parsedGames.isEmpty else {
             throw ImportError.noGamesFound
         }
-        
+
         let calendar = Calendar.current
+        let place: Place? = placeId.flatMap { persistence.fetchPlace(byId: $0, context: viewContext) }
         
         for parsedGame in parsedGames {
             guard !parsedGame.players.isEmpty else {
@@ -395,6 +398,14 @@ class DataImportService {
             game.creatorUserId = userId
             if let userId = userId, let creator = persistence.fetchUser(byId: userId) {
                 game.creator = creator
+            }
+
+            // Привязка места (если указано — перекрываем при replace; иначе только если место не задано)
+            if let place {
+                if mustReplace || game.place == nil {
+                    game.placeId = place.placeId
+                    game.place = place
+                }
             }
             
             // Создаем или находим игроков и связываем их с игрой

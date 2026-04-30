@@ -101,14 +101,32 @@ struct MockSupabaseServiceTests {
         let claimantId = UUID()
 
         let pendingClaim = PlayerClaimDTO(
-            id: UUID(), playerName: "Test", gameId: UUID(), gamePlayerId: nil,
-            claimantId: claimantId, hostId: hostId, status: "pending",
-            resolvedAt: nil, resolvedById: nil, notes: nil, createdAt: Date()
+            id: UUID(),
+            playerName: "Test",
+            gameId: UUID(),
+            gamePlayerId: nil,
+            claimantId: claimantId,
+            hostId: hostId,
+            status: "pending",
+            resolvedAt: nil,
+            resolvedById: nil,
+            notes: nil,
+            createdAt: Date(),
+            scope: "single"
         )
         let resolvedClaim = PlayerClaimDTO(
-            id: UUID(), playerName: "Resolved", gameId: UUID(), gamePlayerId: nil,
-            claimantId: claimantId, hostId: hostId, status: "approved",
-            resolvedAt: Date(), resolvedById: hostId, notes: nil, createdAt: Date()
+            id: UUID(),
+            playerName: "Resolved",
+            gameId: UUID(),
+            gamePlayerId: nil,
+            claimantId: claimantId,
+            hostId: hostId,
+            status: "approved",
+            resolvedAt: Date(),
+            resolvedById: hostId,
+            notes: nil,
+            createdAt: Date(),
+            scope: "single"
         )
 
         let _ = try mock.upsertClaims([pendingClaim, resolvedClaim])

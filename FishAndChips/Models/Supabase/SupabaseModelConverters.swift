@@ -52,6 +52,7 @@ extension Game {
             isPublic: isPublic,
             softDeleted: softDeleted,
             notes: notes,
+            placeId: placeId,
             timestamp: timestamp,
             createdAt: nil,
             updatedAt: nil
@@ -64,7 +65,15 @@ extension Game {
         isPublic = dto.isPublic
         softDeleted = dto.softDeleted
         notes = dto.notes
+        placeId = dto.placeId
         timestamp = dto.timestamp
+        if let pid = dto.placeId,
+           let context = managedObjectContext,
+           let place = PersistenceController.shared.fetchPlace(byId: pid, context: context) {
+            self.place = place
+        } else if dto.placeId == nil {
+            self.place = nil
+        }
     }
 
     static func createFromGameDTO(_ dto: GameDTO, context: NSManagedObjectContext) -> Game {
@@ -75,8 +84,41 @@ extension Game {
         game.isPublic = dto.isPublic
         game.softDeleted = dto.softDeleted
         game.notes = dto.notes
+        game.placeId = dto.placeId
         game.timestamp = dto.timestamp
+        if let pid = dto.placeId,
+           let place = PersistenceController.shared.fetchPlace(byId: pid, context: context) {
+            game.place = place
+        }
         return game
+    }
+}
+
+// MARK: - Place <-> PlaceDTO
+
+extension Place {
+    func toPlaceDTO() -> PlaceDTO {
+        PlaceDTO(
+            id: placeId,
+            name: name ?? "",
+            createdBy: createdByUserId,
+            createdAt: createdAt
+        )
+    }
+
+    func updateFromPlaceDTO(_ dto: PlaceDTO) {
+        name = dto.name
+        createdByUserId = dto.createdBy
+        createdAt = dto.createdAt
+    }
+
+    static func createFromPlaceDTO(_ dto: PlaceDTO, context: NSManagedObjectContext) -> Place {
+        let place = Place(context: context)
+        place.placeId = dto.id
+        place.name = dto.name
+        place.createdByUserId = dto.createdBy
+        place.createdAt = dto.createdAt
+        return place
     }
 }
 
@@ -112,6 +154,21 @@ extension GameWithPlayer {
         gwp.cashout = dto.cashout
         gwp.game = game
         gwp.playerProfile = profile
+
+        if let raw = dto.playerName?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            let fetch = Player.fetchRequest()
+            fetch.predicate = NSPredicate(format: "name == %@", raw)
+            fetch.fetchLimit = 1
+            let player: Player
+            if let found = try? context.fetch(fetch).first {
+                player = found
+            } else {
+                player = Player(context: context)
+                player.name = raw
+            }
+            gwp.player = player
+        }
+
         return gwp
     }
 }
@@ -215,16 +272,46 @@ extension PlayerClaim {
             resolvedAt: resolvedAt,
             resolvedById: resolvedByUserId,
             notes: notes,
-            createdAt: createdAt
+            createdAt: createdAt,
+            scope: String(scope ?? "single"),
+            placeId: placeId,
+            playerKey: playerKey,
+            affectedGamePlayerIds: affectedGamePlayerIds.isEmpty ? nil : affectedGamePlayerIds,
+            blockReason: blockReason,
+            conflictProfileIds: conflictProfileIds.isEmpty ? nil : conflictProfileIds
         )
     }
 
     func updateFromPlayerClaimDTO(_ dto: PlayerClaimDTO) {
         playerName = dto.playerName
+        gameId = dto.gameId
         status = dto.status
         resolvedAt = dto.resolvedAt
         resolvedByUserId = dto.resolvedById
         notes = dto.notes
+        scope = dto.scope
+        placeId = dto.placeId
+        playerKey = dto.playerKey
+        if let arr = dto.affectedGamePlayerIds, !arr.isEmpty {
+            affectedGamePlayerIdsJson = PlayerClaim.encodeUuidArray(arr)
+        } else if dto.affectedGamePlayerIds?.isEmpty == true {
+            affectedGamePlayerIdsJson = "[]"
+        }
+        blockReason = dto.blockReason
+        if let cp = dto.conflictProfileIds, !cp.isEmpty {
+            conflictProfileIdsJson = PlayerClaim.encodeUuidArray(cp)
+        } else if dto.conflictProfileIds?.isEmpty == true {
+            conflictProfileIdsJson = "[]"
+        }
+
+        if let gid = dto.gameId, let ctx = managedObjectContext {
+            let rq: NSFetchRequest<Game> = Game.fetchRequest()
+            rq.predicate = NSPredicate(format: "gameId == %@", gid as CVarArg)
+            rq.fetchLimit = 1
+            game = try? ctx.fetch(rq).first
+        } else if dto.gameId == nil {
+            game = nil
+        }
     }
 
     static func createFromPlayerClaimDTO(
@@ -235,7 +322,11 @@ extension PlayerClaim {
         claim.claimId = dto.id
         claim.playerName = dto.playerName
         claim.gameId = dto.gameId
-        claim.gameWithPlayerObjectId = dto.gamePlayerId?.uuidString ?? ""
+        if let gpid = dto.gamePlayerId {
+            claim.gameWithPlayerObjectId = gpid.uuidString
+        } else {
+            claim.gameWithPlayerObjectId = nil
+        }
         claim.claimantUserId = dto.claimantId
         claim.hostUserId = dto.hostId
         claim.status = dto.status
@@ -243,6 +334,26 @@ extension PlayerClaim {
         claim.resolvedAt = dto.resolvedAt
         claim.resolvedByUserId = dto.resolvedById
         claim.notes = dto.notes
+        claim.scope = dto.scope
+        claim.placeId = dto.placeId
+        claim.playerKey = dto.playerKey
+        if let arr = dto.affectedGamePlayerIds, !arr.isEmpty {
+            claim.affectedGamePlayerIdsJson = PlayerClaim.encodeUuidArray(arr)
+        } else {
+            claim.affectedGamePlayerIdsJson = "[]"
+        }
+        claim.blockReason = dto.blockReason
+        if let cp = dto.conflictProfileIds, !cp.isEmpty {
+            claim.conflictProfileIdsJson = PlayerClaim.encodeUuidArray(cp)
+        } else {
+            claim.conflictProfileIdsJson = "[]"
+        }
+        if let gid = dto.gameId {
+            let rq: NSFetchRequest<Game> = Game.fetchRequest()
+            rq.predicate = NSPredicate(format: "gameId == %@", gid as CVarArg)
+            rq.fetchLimit = 1
+            claim.game = try? context.fetch(rq).first
+        }
         return claim
     }
 }

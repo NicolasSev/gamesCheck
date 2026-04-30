@@ -30,13 +30,16 @@ final class RangeChartRepository {
                 byPosition[model.position.rawValue] = model
             }
         }
-        // Гарантируем наличие всех 6 позиций
+        // Гарантируем наличие всех 6 позиций; без сохранённой строки в Core Data — стартовый словарь из bundled JSON.
         return RangePosition.allCases.map { pos in
-            byPosition[pos.rawValue] ?? RangeChartModel(
+            if let model = byPosition[pos.rawValue] {
+                return model
+            }
+            return RangeChartModel(
                 id: UUID(),
                 userId: userId,
                 position: pos,
-                selectedHands: [],
+                selectedHands: OpeningRangeDefaults.hands(for: pos),
                 updatedAt: Date()
             )
         }

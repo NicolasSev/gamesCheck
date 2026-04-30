@@ -177,6 +177,22 @@ final class SyncCoordinator: ObservableObject {
         }
     }
 
+    func quickSyncPlace(_ place: Place) async {
+        if isOnline {
+            await supabaseSync.quickSyncPlace(place)
+        } else {
+            offlineQueue.enqueue(table: "places", operation: .upsert, item: place.toPlaceDTO())
+        }
+    }
+
+    func fetchAllPlaces() async throws {
+        if isOnline {
+            try await supabaseSync.fetchAllPlaces()
+        } else {
+            debugLog("SyncCoordinator: offline — fetchAllPlaces из Core Data")
+        }
+    }
+
     // MARK: - Entity Sync
 
     func syncPlayerClaims() async throws {
@@ -222,6 +238,53 @@ final class SyncCoordinator: ObservableObject {
 
     func cleanupInvalidClaims() async throws {
         try await supabaseSync.cleanupInvalidClaims()
+    }
+
+    /// После мутаций `player_claims`, когда на сервере массово меняются `game_players` (bulk-approve и т.п.) —
+    /// полный pull в Core Data + локальные агрегаты и нотификация UI.
+    func fullResyncAfterClaim() async throws {
+        debugLog("🔄 [FULL_RESYNC] start (CLAIM)")
+        guard isOnline else {
+            offlineQueue.enqueueFullSync()
+            NotificationCenter.default.post(name: .fullResyncCompleted, object: nil)
+            debugLog("🔄 [FULL_RESYNC] offline — full sync enqueued (CLAIM)")
+            return
+        }
+        try await performOnlineFullResyncAfterServerMutation()
+    }
+
+    /// После admin merge (`admin_player_merges`): сброс конфликтующей офлайн-очереди + тот же пайплайн, что после claim.
+    func fullResyncAfterMerge() async throws {
+        debugLog("🔄 [FULL_RESYNC] start (MERGE)")
+        offlineQueue.discardPendingGamePlayerUpserts()
+        guard isOnline else {
+            offlineQueue.enqueueFullSync()
+            NotificationCenter.default.post(name: .playerMergeApplied, object: nil)
+            NotificationCenter.default.post(name: .fullResyncCompleted, object: nil)
+            debugLog("🔄 [FULL_RESYNC] offline — full sync enqueued (MERGE)")
+            return
+        }
+        NotificationCenter.default.post(name: .playerMergeApplied, object: nil)
+        try await performOnlineFullResyncAfterServerMutation()
+    }
+
+    /// Полный pull + пересчёт локальных агрегатов; в конце всегда `.fullResyncCompleted`.
+    private func performOnlineFullResyncAfterServerMutation() async throws {
+        try await supabaseSync.performFullSync()
+
+        let profiles = persistence.fetchAllPlayerProfiles()
+        for profile in profiles {
+            profile.recalculateStatistics()
+        }
+        persistence.saveContext()
+
+        try await MaterializedViewsService.shared.rebuildAllGameSummaries()
+        if let userId = await SupabaseService.shared.currentUserId() {
+            try? await MaterializedViewsService.shared.updateUserStatisticsSummary(userId: userId)
+        }
+
+        NotificationCenter.default.post(name: .fullResyncCompleted, object: nil)
+        debugLog("✅ [FULL_RESYNC] done")
     }
 
     // MARK: - Range Charts

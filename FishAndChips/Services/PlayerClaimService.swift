@@ -2,141 +2,151 @@
 //  PlayerClaimService.swift
 //  PokerCardRecognizer
 //
-//  Created by Cursor Agent on 21.12.2025.
-//
 
 import Foundation
 import CoreData
 
+// MARK: - RPC row
+
+/// Ответ строки функции `host_resolve_claim`.
+struct HostResolveResult: Codable, Sendable {
+    let status: String?
+    let blockReason: String?
+    let conflictProfileIds: [UUID]?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case blockReason = "block_reason"
+        case conflictProfileIds = "conflict_profile_ids"
+    }
+}
+
+// MARK: - Errors
+
+enum ClaimError: LocalizedError, Equatable {
+    case claimNotFound
+    case claimAlreadyResolved
+    case unauthorized
+    /// После успешного RPC сервер сохранил `blocked`.
+    case claimBlocked(reason: String)
+    /// Пустой или некорректный список ключей для запроса merge.
+    case mergeRequestInvalid
+
+    var errorDescription: String? {
+        switch self {
+        case .claimNotFound:
+            return "Заявка не найдена"
+        case .claimAlreadyResolved:
+            return "Заявка уже обработана"
+        case .unauthorized:
+            return "Нет прав для выполнения операции"
+        case let .claimBlocked(reason):
+            return "Заявка заблокирована: \(reason)"
+        case .mergeRequestInvalid:
+            return "Укажите хотя бы один ключ имени для запроса админу"
+        }
+    }
+
+    static func == (lhs: ClaimError, rhs: ClaimError) -> Bool {
+        switch (lhs, rhs) {
+        case (.claimNotFound, .claimNotFound),
+             (.claimAlreadyResolved, .claimAlreadyResolved),
+             (.unauthorized, .unauthorized):
+            return true
+        case let (.claimBlocked(a), .claimBlocked(b)):
+            return a == b
+        case (.mergeRequestInvalid, .mergeRequestInvalid):
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+// MARK: - Service
+
 class PlayerClaimService {
+    typealias HostResolveRpc = @Sendable (
+        _ claimId: UUID,
+        _ action: String,
+        _ notes: String?
+    ) async throws -> [HostResolveResult]
+
+    typealias AfterClaimMutationSync = @Sendable () async throws -> Void
+
     private let persistence: PersistenceController
     private let notificationService: NotificationService
-    
+    private let hostResolveRpc: HostResolveRpc
+    private let afterClaimMutationSync: AfterClaimMutationSync
+
     init(
         persistence: PersistenceController = .shared,
-        notificationService: NotificationService = .shared
+        notificationService: NotificationService = .shared,
+        hostResolveRpc: HostResolveRpc? = nil,
+        afterClaimMutationSync: AfterClaimMutationSync? = nil
     ) {
         self.persistence = persistence
         self.notificationService = notificationService
+        self.hostResolveRpc = hostResolveRpc ?? Self.liveHostResolveRpc
+        self.afterClaimMutationSync =
+            afterClaimMutationSync ?? Self.liveAfterClaimMutation
     }
-    
-    // MARK: - Submit Claim
-    
-    /// Подать заявку на присвоение игрока в конкретной игре
-    func submitClaim(
-        gameWithPlayer: GameWithPlayer,
-        claimantUserId: UUID
-    ) throws -> PlayerClaim {
-        let context = persistence.container.viewContext
-        
-        // Проверка что GameWithPlayer существует
-        guard let game = gameWithPlayer.game,
-              let player = gameWithPlayer.player,
-              let playerName = player.name else {
-            throw ClaimError.invalidGameWithPlayer
+
+    private static func liveHostResolveRpc(
+        claimId: UUID,
+        action: String,
+        notes: String?
+    ) async throws -> [HostResolveResult] {
+        struct Params: Codable, Sendable {
+            let p_claim_id: UUID
+            let p_action: String
+            let p_notes: String?
         }
-        
-        // Проверка что пользователь существует
-        guard let claimantUser = persistence.fetchUser(byId: claimantUserId) else {
-            throw ClaimError.userNotFound
-        }
-        
-        // Проверка что это не хост игры
-        guard let hostUserId = game.creatorUserId,
-              hostUserId != claimantUserId else {
-            throw ClaimError.cannotClaimOwnGame
-        }
-        
-        // Проверка что заявка еще не существует
-        if let existingClaim = fetchClaim(
-            gameWithPlayerObjectId: gameWithPlayer.objectID.uriRepresentation().absoluteString,
-            claimantUserId: claimantUserId
-        ) {
-            if existingClaim.isPending {
-                throw ClaimError.claimAlreadyExists
-            }
-        }
-        
-        // Создать заявку
-        let claim = PlayerClaim(context: context)
-        claim.claimId = UUID()
-        claim.playerName = playerName
-        claim.gameId = game.gameId
-        claim.gameWithPlayerObjectId = gameWithPlayer.objectID.uriRepresentation().absoluteString
-        claim.claimantUserId = claimantUserId
-        claim.hostUserId = hostUserId
-        claim.status = "pending"
-        claim.createdAt = Date()
-        claim.claimantUser = claimantUser
-        claim.hostUser = persistence.fetchUser(byId: hostUserId)
-        claim.game = game
-        
-        try context.save()
-        
-        Task {
-            do {
-                debugLog("☁️ [SUBMIT_CLAIM] Отправка заявки в Supabase...")
-                try await SyncCoordinator.shared.syncPlayerClaims()
-                debugLog("✅ [SUBMIT_CLAIM] Заявка синхронизирована")
-            } catch {
-                debugLog("❌ [SUBMIT_CLAIM] Ошибка синхронизации заявки: \(error)")
-                // Помечаем как pending для последующей синхронизации
-                PendingSyncTracker.shared.addPendingPlayerClaim(claim.claimId)
-            }
-        }
-        
-        // Send notification to host
-        Task { @MainActor in
-            do {
-                try await notificationService.notifyNewClaim(
-                    claimId: claim.claimId.uuidString,
-                    playerName: playerName,
-                    gameName: "игра от \(game.timestamp?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")",
-                    hostUserId: hostUserId.uuidString
-                )
-            } catch {
-                debugLog("Failed to send notification: \(error)")
-            }
-        }
-        
-        return claim
+        let trimmed = notes.flatMap(trimNotes)
+        return try await SupabaseService.shared.rpc(
+            "host_resolve_claim",
+            params: Params(p_claim_id: claimId, p_action: action, p_notes: trimmed)
+        )
     }
-    
-    // MARK: - Get Claims
-    
-    /// Получить все заявки пользователя (сначала pending, потом остальные по дате)
+
+    private static func trimNotes(_ notes: String) -> String? {
+        let t = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
+    private static func liveAfterClaimMutation() async throws {
+        try await SyncCoordinator.shared.fullResyncAfterClaim()
+    }
+
+    // MARK: - Queries
+
     func getMyClaims(userId: UUID) -> [PlayerClaim] {
         let context = persistence.container.viewContext
         let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         request.predicate = NSPredicate(format: "claimantUserId == %@", userId as CVarArg)
-        // Сначала pending (status = "pending"), потом остальные
-        // Внутри каждой группы - по убыванию даты (новые сверху)
         request.sortDescriptors = [
-            NSSortDescriptor(key: "status", ascending: true), // pending идет первым (алфавитный порядок)
-            NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false)
+            NSSortDescriptor(key: "status", ascending: true),
+            NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false),
         ]
-        
+
         do {
             let allClaims = try context.fetch(request)
-            // Дополнительная сортировка: pending сверху, потом approved/rejected по дате
             let pending = allClaims.filter { $0.status == "pending" }
             let resolved = allClaims.filter { $0.status != "pending" }
                 .sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
-            
             return pending + resolved
         } catch {
             debugLog("Error fetching my claims: \(error)")
             return []
         }
     }
-    
-    /// Получить все ожидающие заявки для хоста
+
     func getPendingClaimsForHost(hostUserId: UUID) -> [PlayerClaim] {
         let context = persistence.container.viewContext
         let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         request.predicate = NSPredicate(format: "hostUserId == %@ AND status == %@", hostUserId as CVarArg, "pending")
         request.sortDescriptors = [NSSortDescriptor(keyPath: \PlayerClaim.createdAt, ascending: false)]
-        
+
         do {
             return try context.fetch(request)
         } catch {
@@ -144,35 +154,36 @@ class PlayerClaimService {
             return []
         }
     }
-    
-    /// Получить все заявки для хоста (сначала pending, потом остальные по дате)
+
     func getAllClaimsForHost(hostUserId: UUID) -> [PlayerClaim] {
         let context = persistence.container.viewContext
         let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         request.predicate = NSPredicate(format: "hostUserId == %@", hostUserId as CVarArg)
-        
+
         do {
             let allClaims = try context.fetch(request)
-            // Сортировка: pending сверху, потом approved/rejected по дате разрешения
             let pending = allClaims.filter { $0.status == "pending" }
                 .sorted { $0.createdAt > $1.createdAt }
-            let resolved = allClaims.filter { $0.status != "pending" }
+            let blocked = allClaims.filter { $0.status == "blocked" }
+                .sorted { $0.createdAt > $1.createdAt }
+            let finalized = allClaims.filter {
+                $0.status == "approved" || $0.status == "rejected"
+            }
                 .sorted { ($0.resolvedAt ?? $0.createdAt) > ($1.resolvedAt ?? $1.createdAt) }
-            
-            return pending + resolved
+
+            return pending + blocked + finalized
         } catch {
             debugLog("Error fetching all claims for host: \(error)")
             return []
         }
     }
-    
-    /// Получить заявку по ID
+
     func getClaim(byId claimId: UUID) -> PlayerClaim? {
         let context = persistence.container.viewContext
         let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
         request.predicate = NSPredicate(format: "claimId == %@", claimId as CVarArg)
         request.fetchLimit = 1
-        
+
         do {
             return try context.fetch(request).first
         } catch {
@@ -180,446 +191,161 @@ class PlayerClaimService {
             return nil
         }
     }
-    
-    /// Найти существующую заявку
-    private func fetchClaim(
-        gameWithPlayerObjectId: String,
-        claimantUserId: UUID
-    ) -> PlayerClaim? {
-        let context = persistence.container.viewContext
-        let request: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "gameWithPlayerObjectId == %@ AND claimantUserId == %@",
-            gameWithPlayerObjectId,
-            claimantUserId as CVarArg
-        )
-        request.fetchLimit = 1
-        
-        do {
-            return try context.fetch(request).first
-        } catch {
-            return nil
-        }
-    }
-    
-    // MARK: - Approve/Reject Claims
-    
-    /// Одобрить заявку
-    
-    /// Одобрить заявку и автоматически привязать ко всем GWP с таким же playerName
-    func approveClaimAndLinkAllGWP(
-        claimId: UUID,
-        resolverUserId: UUID,
-        linkAllGames: Bool = false,
-        notes: String? = nil
-    ) async throws -> Int {
-        let context = persistence.container.viewContext
-        
-        guard let claim = getClaim(byId: claimId) else {
-            throw ClaimError.claimNotFound
-        }
-        
-        // Проверка что это хост игры
-        guard claim.hostUserId == resolverUserId else {
-            throw ClaimError.unauthorized
-        }
-        
-        // Проверка что заявка еще pending
-        guard claim.isPending else {
-            throw ClaimError.claimAlreadyResolved
-        }
-        
-        debugLog("🔍 [APPROVE_LINK_ALL] Starting approval for claim \(claim.claimId)")
-        debugLog("   - playerName: \(claim.playerName)")
-        debugLog("   - claimantUserId: \(claim.claimantUserId)")
-        debugLog("   - linkAllGames: \(linkAllGames)")
-        
-        // Получить или создать PlayerProfile для пользователя
-        debugLog("🔍 [APPROVE_LINK_ALL] Looking for PlayerProfile for user \(claim.claimantUserId)...")
-        var profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
-        
-        if profile == nil {
-            debugLog("⚠️ [APPROVE_LINK_ALL] PlayerProfile не найден локально...")
-            let user: User
-            if let local = persistence.fetchUser(byId: claim.claimantUserId) {
-                user = local
-            } else {
-                do {
-                    user = try await ensureClaimantUserFromSupabase(claimantUserId: claim.claimantUserId, context: context)
-                } catch {
-                    debugLog("❌ [APPROVE_LINK_ALL] Нет локального User и не удалось подтянуть profiles из Supabase: \(error)")
-                    throw ClaimError.userNotFound
-                }
-            }
-            profile = persistence.fetchPlayerProfile(byUserId: claim.claimantUserId)
-                ?? persistence.createPlayerProfile(displayName: user.username, userId: claim.claimantUserId)
-            debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile готов")
-        }
-        
-        guard let profile = profile else {
-            throw ClaimError.profileCreationFailed
-        }
-        
-        debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile ready: \(profile.displayName)")
-        
-        // Создать alias если нужно
-        if persistence.fetchAlias(byName: claim.playerName) == nil {
-            _ = persistence.createAlias(aliasName: claim.playerName, forProfile: profile)
-            debugLog("✅ [APPROVE_LINK_ALL] Created alias '\(claim.playerName)'")
-        }
-        
-        var linkedCount = 0
-        var gwpToSync: [GameWithPlayer] = []
-        
-        if linkAllGames {
-            // МАССОВОЕ ОДОБРЕНИЕ: Найти ВСЕ GWP с таким playerName у хоста
-            debugLog("🔍 [APPROVE_LINK_ALL] Searching for ALL GWP with playerName '\(claim.playerName)' from host...")
-            
-            let fetchRequest: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
-            // Найти все GWP где:
-            // 1. playerName совпадает
-            // 2. игра принадлежит хосту (resolverUserId)
-            fetchRequest.predicate = NSPredicate(
-                format: "player.name == %@ AND game.creatorUserId == %@",
-                claim.playerName, resolverUserId as CVarArg
-            )
-            
-            let allMatchingGWP = try context.fetch(fetchRequest)
-            debugLog("✅ [APPROVE_LINK_ALL] Found \(allMatchingGWP.count) GWP with playerName '\(claim.playerName)'")
-            
-            // Привязать каждый GWP к профилю
-            for gwp in allMatchingGWP {
-                // Пропускаем если уже привязан к профилю
-                if gwp.playerProfile == nil {
-                    gwp.playerProfile = profile
-                    gwpToSync.append(gwp)
-                    linkedCount += 1
-                    
-                    if let game = gwp.game, let gameDate = game.timestamp {
-                        debugLog("✅ [APPROVE_LINK_ALL] Linked GWP in game \(gameDate.formatted(date: .abbreviated, time: .omitted))")
-                    }
-                }
-            }
-            
-            debugLog("✅ [APPROVE_LINK_ALL] Linked \(linkedCount) GWP to profile '\(profile.displayName)'")
-            
-        } else {
-            // ОБЫЧНОЕ ОДОБРЕНИЕ: Только для одной игры из заявки
-            debugLog("🔍 [APPROVE_LINK_ALL] Linking only single game GWP...")
-            
-            let gameWithPlayer = findGameWithPlayer(gameId: claim.gameId, playerName: claim.playerName)
-            
-            guard let gameWithPlayer = gameWithPlayer else {
-                debugLog("❌ [APPROVE_LINK_ALL] GameWithPlayer not found!")
-                throw ClaimError.gameWithPlayerNotFound
-            }
-            
-            gameWithPlayer.playerProfile = profile
-            gwpToSync.append(gameWithPlayer)
-            linkedCount = 1
-            debugLog("✅ [APPROVE_LINK_ALL] Linked single GWP")
-        }
-        
-        // Обновить статистику профиля
-        profile.recalculateStatistics()
-        
-        // Обновить заявку
-        claim.status = "approved"
-        claim.resolvedAt = Date()
-        claim.resolvedByUserId = resolverUserId
-        claim.resolvedByUser = persistence.fetchUser(byId: resolverUserId)
-        claim.notes = notes
-        
-        try context.save()
-        
-        debugLog("☁️ [APPROVE_LINK_ALL] Синхронизация в Supabase...")
-        do {
-            // 1. Синхронизируем PlayerClaim (обновленный статус)
-            try await SyncCoordinator.shared.syncPlayerClaims()
-            debugLog("✅ [APPROVE_LINK_ALL] PlayerClaim synced")
-            
-            // 2. Синхронизируем все измененные GameWithPlayer
-            if !gwpToSync.isEmpty {
-                await SyncCoordinator.shared.quickSyncGameWithPlayers(gwpToSync)
-                debugLog("✅ [APPROVE_LINK_ALL] \(gwpToSync.count) GameWithPlayer synced")
-            }
-            
-            // 3. Синхронизируем PlayerProfile (обновленная статистика)
-            await SyncCoordinator.shared.quickSyncPlayerProfile(profile)
-            debugLog("✅ [APPROVE_LINK_ALL] PlayerProfile synced")
-            
-            // 4. Синхронизируем PlayerAliases
-            try await SyncCoordinator.shared.syncPlayerAliases()
-            debugLog("✅ [APPROVE_LINK_ALL] PlayerAliases synced")
 
-            // 5. Phase 2: Обновить materialized views для клаиманта
-            try? await MaterializedViewsService.shared.updateUserStatisticsSummary(userId: claim.claimantUserId)
+    // MARK: - Approve / Reject
 
-            debugLog("✅ [APPROVE_LINK_ALL] Изменения отправлены в Supabase")
-        } catch {
-            debugLog("⚠️ [APPROVE_LINK_ALL] Ошибка синхронизации Supabase: \(error)")
-            // Не бросаем ошибку, т.к. локально все сохранено
-        }
-        
-        // Send notification to claimant
-        let claimIdString = claim.claimId.uuidString
-        let playerName = claim.playerName
-        let gameTimestamp = claim.game?.timestamp
-        let claimantUserIdString = claim.claimantUserId.uuidString
-        
-        Task { @MainActor in
-            do {
-                try await notificationService.notifyClaimApproved(
-                    claimId: claimIdString,
-                    playerName: playerName,
-                    gameName: "игра от \(gameTimestamp?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")",
-                    claimantUserId: claimantUserIdString
-                )
-            } catch {
-                debugLog("Failed to send notification: \(error)")
-            }
-        }
-        
-        return linkedCount
-    }
-    
-    /// Одобрить заявку (старый метод, теперь использует новый)
     func approveClaim(
         claimId: UUID,
         resolverUserId: UUID,
         notes: String? = nil
     ) async throws {
-        _ = try await approveClaimAndLinkAllGWP(
-            claimId: claimId,
-            resolverUserId: resolverUserId,
-            linkAllGames: false,
-            notes: notes
-        )
-    }
-    
-    /// Одобрить все заявки для данного playerName от конкретного клаиманта
-    func approveAllClaimsForPlayer(
-        playerName: String,
-        claimantUserId: UUID,
-        hostUserId: UUID,
-        notes: String? = nil
-    ) async throws -> Int {
-        let context = persistence.container.viewContext
-        
-        // Получить все pending заявки для данного игрока от данного клаиманта
-        let fetchRequest: NSFetchRequest<PlayerClaim> = PlayerClaim.fetchRequest()
-        fetchRequest.predicate = NSPredicate(
-            format: "playerName == %@ AND claimantUserId == %@ AND hostUserId == %@ AND status == %@",
-            playerName, claimantUserId as CVarArg, hostUserId as CVarArg, "pending"
-        )
-        
-        let claims = try context.fetch(fetchRequest)
-        
-        guard !claims.isEmpty else {
-            return 0
+        guard let claim = getClaim(byId: claimId) else {
+            throw ClaimError.claimNotFound
         }
-        
-        debugLog("📋 [APPROVE_ALL] Found \(claims.count) claims for player '\(playerName)' from user \(claimantUserId)")
-        
-        var approvedCount = 0
-        var errors: [Error] = []
-        
-        // Одобряем каждую заявку
-        for claim in claims {
-            do {
-                debugLog("🔄 [APPROVE_ALL] Approving claim \(claim.claimId)...")
-                try await approveClaim(
-                    claimId: claim.claimId,
-                    resolverUserId: hostUserId,
-                    notes: notes
-                )
-                approvedCount += 1
-                debugLog("✅ [APPROVE_ALL] Approved claim \(claim.claimId)")
-            } catch {
-                debugLog("❌ [APPROVE_ALL] Failed to approve claim \(claim.claimId): \(error)")
-                errors.append(error)
+        guard claim.hostUserId == resolverUserId else {
+            throw ClaimError.unauthorized
+        }
+        guard claim.status == "pending" || claim.status == "blocked" else {
+            throw ClaimError.claimAlreadyResolved
+        }
+
+        do {
+            let rows = try await hostResolveRpc(claimId, "approve", notes)
+            guard let row = rows.first else { throw ClaimError.claimNotFound }
+
+            try await afterClaimMutationSync()
+
+            if row.status == "blocked" {
+                throw ClaimError.claimBlocked(reason: row.blockReason ?? "conflict")
             }
+
+            notifyClaimApproved(snapshot: claim)
+        } catch let e as ClaimError {
+            throw e
+        } catch {
+            PendingSyncTracker.shared.addPendingPlayerClaim(claimId)
+            debugLog("[approveClaim] RPC/sync: \(error)")
+            throw error
         }
-        
-        debugLog("✅ [APPROVE_ALL] Completed: \(approvedCount)/\(claims.count) claims approved")
-        
-        // Если есть ошибки, но хотя бы одна заявка одобрена - считаем успехом
-        if approvedCount > 0 {
-            return approvedCount
-        } else if let firstError = errors.first {
-            throw firstError
-        }
-        
-        return 0
     }
-    
-    /// Отклонить заявку
+
     func rejectClaim(
         claimId: UUID,
         resolverUserId: UUID,
         notes: String? = nil
     ) async throws {
-        let context = persistence.container.viewContext
-
         guard let claim = getClaim(byId: claimId) else {
             throw ClaimError.claimNotFound
         }
-
-        // Проверка что это хост игры
         guard claim.hostUserId == resolverUserId else {
             throw ClaimError.unauthorized
         }
-
-        // Проверка что заявка еще pending
-        guard claim.isPending else {
+        guard claim.status == "pending" || claim.status == "blocked" else {
             throw ClaimError.claimAlreadyResolved
         }
 
-        // Обновить заявку
-        claim.status = "rejected"
-        claim.resolvedAt = Date()
-        claim.resolvedByUserId = resolverUserId
-        claim.resolvedByUser = persistence.fetchUser(byId: resolverUserId)
-        claim.notes = notes
-
-        try context.save()
-
         do {
-            try await SyncCoordinator.shared.syncPlayerClaims()
-            debugLog("✅ [REJECT_CLAIM] Статус заявки отправлен в Supabase")
+            _ = try await hostResolveRpc(claimId, "reject", notes)
+            try await afterClaimMutationSync()
+            notifyClaimRejected(snapshot: claim, notes: notes)
+        } catch let e as ClaimError {
+            throw e
         } catch {
-            debugLog("❌ [REJECT_CLAIM] Ошибка синхронизации: \(error)")
             PendingSyncTracker.shared.addPendingPlayerClaim(claimId)
+            debugLog("[rejectClaim] RPC/sync: \(error)")
+            throw error
         }
+    }
 
-        // Send notification to claimant
+    // MARK: - Admin merge requests (blocked → host asks super-admin)
+
+    private struct ProfileUsernamePick: Codable, Sendable {
+        let id: UUID
+        let username: String
+    }
+
+    private struct AdminMergeRequestInsert: Codable, Sendable {
+        let requester_id: UUID
+        let blocked_claim_id: UUID
+        let source_keys: [String]
+        let suggested_canonical: String?
+        let notes: String?
+    }
+
+    private static func normalizeMergeKeyLocal(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Usernames конфликтующих профилей (из `conflict_profile_ids`).
+    func conflictProfileDisplayNames(for profileIds: [UUID]) async throws -> [String] {
+        guard !profileIds.isEmpty else { return [] }
+        let rows: [ProfileUsernamePick] =
+            try await SupabaseService.shared.fetchByFilter(table: "profiles") { query in
+                query.in("id", values: profileIds.map(\.uuidString))
+            }
+        let map = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.username) })
+        return profileIds.compactMap { map[$0] }.filter { !$0.isEmpty }
+    }
+
+    func submitAdminMergeRequest(
+        blockedClaimId: UUID,
+        sourceKeys: [String],
+        suggestedCanonical: String?,
+        notes: String?
+    ) async throws {
+        guard let uid = await SupabaseService.shared.currentUserId() else {
+            throw ClaimError.unauthorized
+        }
+        let keys = Array(Set(sourceKeys.map { Self.normalizeMergeKeyLocal($0) }.filter { !$0.isEmpty }))
+        guard !keys.isEmpty else { throw ClaimError.mergeRequestInvalid }
+        let canon = suggestedCanonical?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canonField: String? = (canon?.isEmpty == false) ? canon : nil
+        let noteField = notes.flatMap(Self.trimNotes)
+
+        let insert = AdminMergeRequestInsert(
+            requester_id: uid,
+            blocked_claim_id: blockedClaimId,
+            source_keys: keys,
+            suggested_canonical: canonField,
+            notes: noteField,
+        )
+
+        _ = try await SupabaseService.shared.insert(
+            table: "admin_merge_requests",
+            values: insert,
+        )
+    }
+
+    private func notifyClaimApproved(snapshot: PlayerClaim) {
+        let ts = snapshot.game?.timestamp ?? snapshot.createdAt
+        Task { @MainActor in
+            do {
+                try await notificationService.notifyClaimApproved(
+                    claimId: snapshot.claimId.uuidString,
+                    playerName: snapshot.playerName,
+                    gameName: "игра от \(ts.formatted(date: .abbreviated, time: .omitted))",
+                    claimantUserId: snapshot.claimantUserId.uuidString
+                )
+            } catch {
+                debugLog("Failed to notify claim approved: \(error)")
+            }
+        }
+    }
+
+    private func notifyClaimRejected(snapshot: PlayerClaim, notes: String?) {
         Task { @MainActor in
             do {
                 try await notificationService.notifyClaimRejected(
-                    claimId: claim.claimId.uuidString,
-                    playerName: claim.playerName,
-                    gameName: "игра от \(claim.game?.timestamp?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")",
+                    claimId: snapshot.claimId.uuidString,
+                    playerName: snapshot.playerName,
+                    gameName:
+                        "игра от \(snapshot.game?.timestamp?.formatted(date: .abbreviated, time: .omitted) ?? "")",
                     reason: notes,
-                    claimantUserId: claim.claimantUserId.uuidString
+                    claimantUserId: snapshot.claimantUserId.uuidString
                 )
             } catch {
-                debugLog("Failed to send notification: \(error)")
+                debugLog("Failed to notify claim rejected: \(error)")
             }
-        }
-    }
-    
-    // MARK: - Helpers
-
-    /// Локальный `User` + `PlayerProfile` из таблицы `profiles` Supabase (хост одобряет claim без локального клаиманта).
-    private func ensureClaimantUserFromSupabase(claimantUserId: UUID, context: NSManagedObjectContext) async throws -> User {
-        if let u = persistence.fetchUser(byId: claimantUserId) { return u }
-        guard let dto: ProfileDTO = try await SupabaseService.shared.fetchById(table: "profiles", id: claimantUserId) else {
-            throw ClaimError.userNotFound
-        }
-        return try await MainActor.run {
-            if let existing = persistence.fetchPlayerProfile(byProfileId: dto.id) {
-                existing.updateFromProfileDTO(dto)
-            } else {
-                _ = PlayerProfile.createFromProfileDTO(dto, context: context)
-            }
-            if let u = persistence.fetchUser(byId: claimantUserId) { return u }
-            let newUser = User(context: context)
-            newUser.userId = claimantUserId
-            var uname = dto.username.trimmingCharacters(in: .whitespacesAndNewlines)
-            if uname.isEmpty { uname = dto.displayName.trimmingCharacters(in: .whitespacesAndNewlines) }
-            if uname.isEmpty { uname = "user_\(String(claimantUserId.uuidString.prefix(8)))" }
-            newUser.username = uname
-            newUser.passwordHash = "remote_user_no_auth"
-            newUser.email = nil
-            newUser.createdAt = dto.createdAt
-            newUser.subscriptionStatus = dto.subscriptionStatus
-            newUser.isSuperAdmin = dto.isSuperAdmin
-            newUser.subscriptionExpiresAt = dto.subscriptionExpiresAt
-            if let prof = persistence.fetchPlayerProfile(byProfileId: claimantUserId) {
-                prof.user = newUser
-                newUser.playerProfile = prof
-            }
-            try context.save()
-            return newUser
-        }
-    }
-    
-    /// Найти GameWithPlayer по objectId строке
-    private func findGameWithPlayer(byObjectId objectIdString: String) -> GameWithPlayer? {
-        guard let url = URL(string: objectIdString),
-              let objectId = persistence.container.persistentStoreCoordinator.managedObjectID(forURIRepresentation: url) else {
-            return nil
-        }
-        
-        let context = persistence.container.viewContext
-        
-        do {
-            return try context.existingObject(with: objectId) as? GameWithPlayer
-        } catch {
-            debugLog("Error finding GameWithPlayer: \(error)")
-            return nil
-        }
-    }
-    
-    /// Находит GameWithPlayer по стабильным идентификаторам (gameId + playerName)
-    private func findGameWithPlayer(gameId: UUID, playerName: String) -> GameWithPlayer? {
-        let context = persistence.container.viewContext
-        
-        // Fetch GameWithPlayer по gameId и playerName
-        let gwpFetch: NSFetchRequest<GameWithPlayer> = GameWithPlayer.fetchRequest()
-        gwpFetch.predicate = NSPredicate(
-            format: "game.gameId == %@ AND player.name == %@",
-            gameId as CVarArg,
-            playerName as NSString
-        )
-        
-        do {
-            let results = try context.fetch(gwpFetch)
-            if results.count > 1 {
-                debugLog("⚠️ Found multiple GameWithPlayer for gameId=\(gameId), playerName=\(playerName). Using first.")
-            }
-            return results.first
-        } catch {
-            debugLog("❌ Error finding GameWithPlayer: \(error)")
-            return nil
         }
     }
 }
-
-// MARK: - Errors
-
-enum ClaimError: LocalizedError {
-    case userNotFound
-    case profileCreationFailed
-    case invalidGameWithPlayer
-    case cannotClaimOwnGame
-    case claimAlreadyExists
-    case claimNotFound
-    case claimAlreadyResolved
-    case unauthorized
-    case gameWithPlayerNotFound
-    
-    var errorDescription: String? {
-        switch self {
-        case .userNotFound:
-            return "Пользователь не найден"
-        case .profileCreationFailed:
-            return "Не удалось создать профиль"
-        case .invalidGameWithPlayer:
-            return "Некорректная запись участия в игре"
-        case .cannotClaimOwnGame:
-            return "Нельзя подать заявку на свою игру"
-        case .claimAlreadyExists:
-            return "Заявка уже существует"
-        case .claimNotFound:
-            return "Заявка не найдена"
-        case .claimAlreadyResolved:
-            return "Заявка уже обработана"
-        case .unauthorized:
-            return "Нет прав для выполнения операции"
-        case .gameWithPlayerNotFound:
-            return "Запись участия в игре не найдена"
-        }
-    }
-}
-

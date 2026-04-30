@@ -171,7 +171,13 @@ final class DataMigrationToSupabase {
                     resolvedAt: claimDTO.resolvedAt,
                     resolvedById: claimDTO.resolvedById,
                     notes: claimDTO.notes,
-                    createdAt: claimDTO.createdAt
+                    createdAt: claimDTO.createdAt,
+                    scope: claimDTO.scope,
+                    placeId: claimDTO.placeId,
+                    playerKey: claimDTO.playerKey,
+                    affectedGamePlayerIds: claimDTO.affectedGamePlayerIds,
+                    blockReason: claimDTO.blockReason,
+                    conflictProfileIds: claimDTO.conflictProfileIds
                 )
             }
             if claim.hostUserId == localUser.userId {
@@ -186,7 +192,13 @@ final class DataMigrationToSupabase {
                     resolvedAt: claimDTO.resolvedAt,
                     resolvedById: claimDTO.resolvedById,
                     notes: claimDTO.notes,
-                    createdAt: claimDTO.createdAt
+                    createdAt: claimDTO.createdAt,
+                    scope: claimDTO.scope,
+                    placeId: claimDTO.placeId,
+                    playerKey: claimDTO.playerKey,
+                    affectedGamePlayerIds: claimDTO.affectedGamePlayerIds,
+                    blockReason: claimDTO.blockReason,
+                    conflictProfileIds: claimDTO.conflictProfileIds
                 )
             }
             do {

@@ -23,10 +23,12 @@ extension Game {
     @NSManaged public var gameId: UUID
     @NSManaged public var isPublic: Bool
     @NSManaged public var notes: String?
+    @NSManaged public var placeId: UUID?
     @NSManaged public var softDeleted: Bool
     @NSManaged public var timestamp: Date?
     @NSManaged public var creator: User?
     @NSManaged public var gameWithPlayers: NSSet?
+    @NSManaged public var place: Place?
     @NSManaged public var player1: Player?
     @NSManaged public var player2: Player?
     @NSManaged public var players: NSSet?

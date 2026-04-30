@@ -13,6 +13,8 @@ struct AddGameSheet: View {
     @Binding var isPresented: Bool
 
     @State private var selectedDate: Date = Date()
+    @State private var selectedPlaceId: UUID? = nil
+    @State private var showPlaceRequiredAlert = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +23,11 @@ struct AddGameSheet: View {
                     Text("Покер")
                         .foregroundColor(.secondary)
                 }
+
+                Section(header: Text("Место")) {
+                    PlacePickerView(selectedPlaceId: $selectedPlaceId)
+                }
+                .listRowBackground(Color.white.opacity(0.06))
 
                 Section(header: Text("Дата и время игры")) {
                     DatePicker("Дата и время игры", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
@@ -39,6 +46,10 @@ struct AddGameSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Создать") {
+                        guard selectedPlaceId != nil else {
+                            showPlaceRequiredAlert = true
+                            return
+                        }
                         createGame()
                         isPresented = false
                     }
@@ -48,6 +59,9 @@ struct AddGameSheet: View {
             }
             .preferredColorScheme(.dark)
             .v2ScreenBackground()
+            .alert("Выберите место", isPresented: $showPlaceRequiredAlert) {
+                Button("Ок", role: .cancel) {}
+            }
         }
     }
 
@@ -58,6 +72,11 @@ struct AddGameSheet: View {
         newGame.gameType = GameType.poker.rawValue
         newGame.creatorUserId = authViewModel.currentUserId
         newGame.softDeleted = false
+        if let placeId = selectedPlaceId,
+           let place = PersistenceController.shared.fetchPlace(byId: placeId, context: viewContext) {
+            newGame.placeId = placeId
+            newGame.place = place
+        }
         do {
             try viewContext.save()
 

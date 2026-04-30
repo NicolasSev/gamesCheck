@@ -10,53 +10,96 @@ import CoreData
 
 extension PlayerClaim {
     @nonobjc public class func fetchRequest() -> NSFetchRequest<PlayerClaim> {
-        return NSFetchRequest<PlayerClaim>(entityName: "PlayerClaim")
+        NSFetchRequest<PlayerClaim>(entityName: "PlayerClaim")
     }
 
     @NSManaged public var claimId: UUID
     @NSManaged public var playerName: String
-    @NSManaged public var gameId: UUID
-    @NSManaged public var gameWithPlayerObjectId: String // NSManagedObjectID как строка
-    @NSManaged public var claimantUserId: UUID // Пользователь, подающий заявку
-    @NSManaged public var hostUserId: UUID // Создатель игры (хост)
-    @NSManaged public var status: String // "pending" | "approved" | "rejected"
+    /// Для bulk-заявок может быть nil (нет одной строки игры).
+    @NSManaged public var gameId: UUID?
+    /// Ссылка на Core Data object id GWP для single-потоков; для bulk часто "".
+    @NSManaged public var gameWithPlayerObjectId: String?
+    @NSManaged public var claimantUserId: UUID
+    @NSManaged public var hostUserId: UUID
+    @NSManaged public var status: String
     @NSManaged public var createdAt: Date
     @NSManaged public var resolvedAt: Date?
     @NSManaged public var resolvedByUserId: UUID?
-    @NSManaged public var notes: String? // Комментарий при одобрении/отклонении
-    
-    // Relationships
-    @NSManaged public var claimantUser: User? // Пользователь, подающий заявку
-    @NSManaged public var hostUser: User? // Хост (создатель игры)
-    @NSManaged public var resolvedByUser: User? // Кто разрешил заявку
-    @NSManaged public var game: Game? // Игра, к которой относится заявка
+    @NSManaged public var notes: String?
+
+    @NSManaged public var scope: String?
+    /// Место из bulk-контекста (совпадает с `places.id` при наличии).
+    @NSManaged public var placeId: UUID?
+    @NSManaged public var playerKey: String?
+    @NSManaged public var affectedGamePlayerIdsJson: String?
+    @NSManaged public var blockReason: String?
+    @NSManaged public var conflictProfileIdsJson: String?
+
+    @NSManaged public var claimantUser: User?
+    @NSManaged public var hostUser: User?
+    @NSManaged public var resolvedByUser: User?
+    @NSManaged public var game: Game?
 }
 
-// MARK: - Computed Properties
+// MARK: - Computed
 extension PlayerClaim {
-    var isPending: Bool {
-        status == "pending"
+    var isPending: Bool { status == "pending" }
+
+    var isApproved: Bool { status == "approved" }
+
+    var isRejected: Bool { status == "rejected" }
+
+    /// Блок-состояние при конфликте профилей (сервер `host_resolve_claim`).
+    var isBlocked: Bool { status == "blocked" }
+
+    /// JSON-массив UUID строк: `["…"]`; пустые → [].
+    var affectedGamePlayerIds: [UUID] {
+        get {
+            Self.decodeUuidArray(from: affectedGamePlayerIdsJson)
+        }
+        set {
+            affectedGamePlayerIdsJson = Self.encodeUuidArray(newValue)
+        }
     }
-    
-    var isApproved: Bool {
-        status == "approved"
+
+    var conflictProfileIds: [UUID] {
+        get {
+            Self.decodeUuidArray(from: conflictProfileIdsJson)
+        }
+        set {
+            conflictProfileIdsJson = Self.encodeUuidArray(newValue)
+        }
     }
-    
-    var isRejected: Bool {
-        status == "rejected"
-    }
-    
+
     var statusDisplayName: String {
         switch status {
         case "pending": return "Ожидает"
         case "approved": return "Одобрено"
         case "rejected": return "Отклонено"
+        case "blocked": return "Блок (конфликт)"
         default: return status
         }
     }
+
+    static func encodeUuidArray(_ ids: [UUID]) -> String? {
+        guard !ids.isEmpty else { return "[]" }
+        let strings = ids.map(\.uuidString)
+        guard let data = try? JSONEncoder().encode(strings),
+              let s = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return s
+    }
+
+    static func decodeUuidArray(from json: String?) -> [UUID] {
+        guard let json, let data = json.data(using: .utf8) else {
+            return []
+        }
+        if let strings = try? JSONDecoder().decode([String].self, from: data) {
+            return strings.compactMap { UUID(uuidString: $0) }
+        }
+        return []
+    }
 }
 
-extension PlayerClaim : Identifiable {
-
-}
-
+extension PlayerClaim: Identifiable {}

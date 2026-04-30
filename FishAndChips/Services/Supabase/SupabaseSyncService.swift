@@ -108,6 +108,10 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
             await mergeProfile(profile)
         }
 
+        // Места: тянем заранее, чтобы при merge games можно было привязать FK
+        let places: [PlaceDTO] = try await supabase.fetchAll(table: "places")
+        await mergePlaces(places)
+
         // 1. Игры, созданные пользователем
         let createdGames: [GameDTO] = try await supabase.fetchByFilter(table: "games") { query in
             query
@@ -194,6 +198,9 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
             for profile in profiles {
                 await mergeProfile(profile)
             }
+
+            let places: [PlaceDTO] = try await supabase.fetchAll(table: "places")
+            await mergePlaces(places)
 
             let games: [GameDTO] = try await supabase.fetchByFilter(table: "games") { query in
                 query.eq("soft_deleted", value: false)
@@ -292,6 +299,34 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
         guard !dtos.isEmpty else { return }
         let _: [PlayerClaimDTO] = try await supabase.batchUpsert(table: "player_claims", values: dtos)
         debugLog("Pushed \(dtos.count) claims to Supabase")
+    }
+
+    func pushPlace(_ place: Place) async throws {
+        let dto = place.toPlaceDTO()
+        let _: PlaceDTO = try await supabase.upsert(table: "places", values: dto)
+        debugLog("Pushed place \(place.placeId) to Supabase")
+    }
+
+    func quickSyncPlace(_ place: Place) async {
+        do { try await pushPlace(place) }
+        catch { debugLog("SupabaseSyncService: quickSyncPlace failed: \(error)") }
+    }
+
+    func fetchAllPlaces() async throws {
+        let dtos: [PlaceDTO] = try await supabase.fetchAll(table: "places")
+        await mergePlaces(dtos)
+    }
+
+    private func mergePlaces(_ dtos: [PlaceDTO]) async {
+        let context = persistence.container.viewContext
+        for dto in dtos {
+            if let existing = persistence.fetchPlace(byId: dto.id, context: context) {
+                existing.updateFromPlaceDTO(dto)
+            } else {
+                _ = Place.createFromPlaceDTO(dto, context: context)
+            }
+        }
+        saveContextIfNeeded(context)
     }
 
     // MARK: - Pull Single Game (for DeepLink / lazy load)
@@ -469,6 +504,11 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
     private func mergeGamePlayers(_ dtos: [GamePlayerDTO], forGameId gameId: UUID) async {
         let context = persistence.container.viewContext
         guard let game = persistence.fetchGame(byId: gameId) else { return }
+
+        let existing = game.gameWithPlayers as? Set<GameWithPlayer> ?? []
+        for gwp in existing {
+            context.delete(gwp)
+        }
 
         for dto in dtos {
             let profile = dto.profileId.flatMap { persistence.fetchPlayerProfile(byProfileId: $0) }

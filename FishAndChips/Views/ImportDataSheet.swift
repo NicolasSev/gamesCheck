@@ -24,6 +24,7 @@ struct ImportDataSheet: View {
     @State private var uniquePlayerNames: [String] = []
     @State private var selectedPlayerNames: Set<String> = []
     @State private var showPlayerSelection = false
+    @State private var selectedPlaceId: UUID? = nil
     
     struct ConflictData: Identifiable {
         let id = UUID()
@@ -68,6 +69,11 @@ struct ImportDataSheet: View {
                     .listRowBackground(Color.white.opacity(0.06))
                 }
                 
+                Section(header: Text("Место проведения")) {
+                    PlacePickerView(selectedPlaceId: $selectedPlaceId)
+                }
+                .listRowBackground(Color.white.opacity(0.06))
+
                 Section {
                     SimpleTextEditor(text: $inputText)
                         .frame(minHeight: 200)
@@ -167,7 +173,11 @@ struct ImportDataSheet: View {
     
     private func importData() {
         guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
+        guard selectedPlaceId != nil else {
+            errorMessage = "Выберите место проведения"
+            return
+        }
+
         isImporting = true
         errorMessage = nil
         successMessage = nil
@@ -276,7 +286,7 @@ struct ImportDataSheet: View {
         let importedCount: Int
         let totalPlayers: Int
         do {
-            try service.importGames(validatedGames, selectedPlayerNames: selectedPlayerNames, replaceExisting: false)
+            try service.importGames(validatedGames, selectedPlayerNames: selectedPlayerNames, placeId: selectedPlaceId, replaceExisting: false)
             importedCount = validatedGames.count
             totalPlayers = validatedGames.reduce(0) { $0 + $1.players.count }
         } catch {
@@ -347,6 +357,7 @@ struct ImportDataSheet: View {
             try service.importGames(
                 gamesToImport,
                 selectedPlayerNames: selectedPlayerNames,
+                placeId: selectedPlaceId,
                 replaceExisting: false,
                 replaceExistingForDate: { date in
                     let d = calendar.startOfDay(for: date)
