@@ -131,6 +131,17 @@ final class PlaceSessionManager: ObservableObject {
         return try await supabase.fetchAll(table: "places_directory")
     }
 
+    /// Свои pending заявки на создание места (для onboarding-экрана).
+    /// RLS: applicant_id = auth.uid().
+    func fetchMyPendingCreateRequests() async throws -> [MyPlaceCreateRequestDTO] {
+        guard let uid = await supabase.currentUserId() else { return [] }
+        return try await supabase.fetchByFilter(table: "place_create_requests") { q in
+            q.eq("applicant_id", value: uid)
+                .eq("status", value: "pending")
+                .order("created_at", ascending: false)
+        }
+    }
+
     /// Имена игроков активного места, без финансов. Доступно только members места
     /// (RLS на `place_players`). Используется в PostAccessPlayerLinkView.
     func fetchPlacePlayersNamesOnly(placeId: UUID) async throws -> [PlacePlayerNameOnlyDTO] {

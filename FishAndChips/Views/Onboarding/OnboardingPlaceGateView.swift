@@ -12,8 +12,10 @@ struct OnboardingPlaceGateView: View {
     @EnvironmentObject var placeSession: PlaceSessionManager
 
     @State private var entries: [PlaceDirectoryEntryDTO] = []
+    @State private var pendingCreateRequests: [MyPlaceCreateRequestDTO] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var cancellingRequestId: UUID?
 
     @State private var showingRequestAccess = false
     @State private var requestAccessForPlace: PlaceDirectoryEntryDTO?
@@ -26,6 +28,10 @@ struct OnboardingPlaceGateView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
+
+                    if !pendingCreateRequests.isEmpty {
+                        pendingCreateSection
+                    }
 
                     if isLoading {
                         ProgressView()
@@ -191,6 +197,51 @@ struct OnboardingPlaceGateView: View {
         .padding(.top, 40)
     }
 
+    @ViewBuilder
+    private var pendingCreateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Ваши заявки на создание места")
+                .font(.caption.bold())
+                .foregroundColor(DS.Color.txt2)
+                .textCase(.uppercase)
+
+            ForEach(pendingCreateRequests) { req in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("«\(req.proposedName)»")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Label("Ожидает одобрения супер-админом", systemImage: "clock.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    Spacer()
+                    Button {
+                        cancelCreateRequest(req)
+                    } label: {
+                        if cancellingRequestId == req.id {
+                            ProgressView().tint(DS.Color.txt2)
+                        } else {
+                            Text("Отменить")
+                                .font(.caption.bold())
+                                .foregroundColor(DS.Color.txt2)
+                        }
+                    }
+                    .disabled(cancellingRequestId == req.id)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.orange.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        )
+                )
+            }
+        }
+    }
+
     private var createNewPlaceButton: some View {
         Button(action: { showingCreatePlace = true }) {
             HStack {
@@ -217,10 +268,26 @@ struct OnboardingPlaceGateView: View {
         isLoading = true
         errorMessage = nil
         do {
-            entries = try await placeSession.fetchPlacesDirectory()
+            async let dir = placeSession.fetchPlacesDirectory()
+            async let pend = placeSession.fetchMyPendingCreateRequests()
+            entries = try await dir
+            pendingCreateRequests = (try? await pend) ?? []
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func cancelCreateRequest(_ req: MyPlaceCreateRequestDTO) {
+        cancellingRequestId = req.id
+        Task {
+            do {
+                try await placeSession.cancelPlaceCreateRequest(requestId: req.id)
+                await reload()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            await MainActor.run { cancellingRequestId = nil }
+        }
     }
 }

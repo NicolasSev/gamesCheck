@@ -144,6 +144,22 @@ struct PlaceDirectoryEntryDTO: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - MyPlaceCreateRequest (для onboarding gate — pending заявки на создание места)
+
+struct MyPlaceCreateRequestDTO: Codable, Identifiable, Sendable {
+    let id: UUID
+    let proposedName: String
+    let status: String
+    let createdAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case proposedName = "proposed_name"
+        case status
+        case createdAt = "created_at"
+    }
+}
+
 // MARK: - PlacePlayerNameOnly (только имя, без финансов; view place_players_names_only)
 
 struct PlacePlayerNameOnlyDTO: Codable, Identifiable, Sendable {
