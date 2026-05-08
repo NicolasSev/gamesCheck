@@ -45,14 +45,20 @@ final class PlaceSessionManager: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        // hasLoaded = true ставим ВСЕГДА (даже при ошибке), иначе gate
+        // никогда не покажется при сетевой проблеме / отсутствующем сервисе
+        // и user застрянет в TabView с пустыми данными.
+        defer { hasLoaded = true }
         do {
             struct NoParams: Codable {}
             let rows: [PlaceMembershipDTO] = try await supabase.rpc("get_my_place_memberships", params: NoParams())
             memberships = rows
             reconcileActivePlace()
-            hasLoaded = true
         } catch {
             debugLog("PlaceSessionManager: fetchMemberships error: \(error)")
+            // При ошибке очищаем — это единственный сигнал «нет membership»
+            // для gate'а. Лучше показать gate, чем заблокировать flicker'ом.
+            memberships = []
         }
     }
 

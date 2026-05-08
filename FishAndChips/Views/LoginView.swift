@@ -5,6 +5,7 @@ struct LoginView: View {
 
     @State private var email = ""
     @State private var password = ""
+    @State private var showPassword = false
     @State private var showingRegistration = false
     @State private var showingError = false
     @State private var isAppearing = false
@@ -57,12 +58,28 @@ struct LoginView: View {
                             Image(systemName: "lock.fill")
                                 .foregroundColor(.white.opacity(0.6))
                                 .frame(width: 20)
-                            SecureField("Пароль", text: $password)
-                                .keyboardType(.asciiCapable)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .foregroundColor(.white)
-                                .accessibilityIdentifier("login_password")
+                            Group {
+                                if showPassword {
+                                    TextField("Пароль", text: $password)
+                                        .textContentType(.password)
+                                } else {
+                                    SecureField("Пароль", text: $password)
+                                        .textContentType(.password)
+                                }
+                            }
+                            .keyboardType(.asciiCapable)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .foregroundColor(.white)
+                            .accessibilityIdentifier("login_password")
+
+                            Button(action: { showPassword.toggle() }) {
+                                Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .frame(width: 20, height: 20)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(showPassword ? "Скрыть пароль" : "Показать пароль")
                         }
                         .padding()
                         .glassCardStyle(.plain)

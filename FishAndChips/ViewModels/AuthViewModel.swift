@@ -335,6 +335,7 @@ final class AuthViewModel: ObservableObject {
         }
         
         // Попытка 2: Если не найден локально — Supabase Auth (online)
+        var lastSupabaseError: Error?
         if user == nil {
             if networkMonitor.isOnline {
                 debugLog("🔍 [LOGIN] Attempt 2: Trying Supabase Auth signIn...")
@@ -364,16 +365,35 @@ final class AuthViewModel: ObservableObject {
                     user = persistence.fetchUser(byEmail: normEmail)
                 } catch {
                     debugLog("⚠️ [LOGIN] Supabase signIn failed: \(error)")
+                    lastSupabaseError = error
                 }
             }
 
         }
-        
+
         // Если пользователь все еще не найден - ошибка
         guard let foundUser = user else {
             debugLog("❌ [LOGIN] FAILED: User not found (локально или через Supabase при сети)")
             isLoading = false
-            authState = .error("Пользователь не найден")
+            // Если был сетевой signIn с ошибкой — показываем её причину, иначе общая.
+            let msg: String
+            if let supabaseErr = lastSupabaseError {
+                let raw = String(describing: supabaseErr).lowercased()
+                if raw.contains("invalid login") || raw.contains("invalid_credentials") || raw.contains("invalid grant") {
+                    msg = "Неверный email или пароль"
+                } else if raw.contains("email not confirmed") || raw.contains("email_not_confirmed") {
+                    msg = "Email не подтверждён"
+                } else if raw.contains("rate limit") || raw.contains("too many") {
+                    msg = "Слишком много попыток. Попробуйте позже."
+                } else {
+                    msg = "Не удалось войти: \(supabaseErr.localizedDescription)"
+                }
+            } else if !networkMonitor.isOnline {
+                msg = "Нет интернета. Проверьте подключение."
+            } else {
+                msg = "Пользователь не найден"
+            }
+            authState = .error(msg)
             throw AuthenticationError.userNotFound
         }
 
