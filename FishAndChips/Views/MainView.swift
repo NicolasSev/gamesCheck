@@ -6,6 +6,7 @@ struct MainView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @EnvironmentObject var deepLinkService: DeepLinkService
     @EnvironmentObject var syncCoordinator: SyncCoordinator
+    @EnvironmentObject var placeSession: PlaceSessionManager
     @StateObject private var viewModel = MainViewModel()
 
     @State private var selectedTab: MainTab = .overview
@@ -29,6 +30,39 @@ struct MainView: View {
 
     private var freeClaimBadgeCount: Int {
         claimDiscovery.rows.filter { $0.status == "free" }.count
+    }
+
+    /// Onboarding-gate: показывается, когда у залогиненого пользователя нет
+    /// ни одной membership-записи. До прохождения gate юзер не видит чужих
+    /// игр и финансов (фаза 9, migration 052 закрывает это и на уровне БД).
+    private var shouldShowPlaceGate: Bool {
+        guard authViewModel.currentUserId != nil else { return false }
+        return placeSession.hasLoaded && placeSession.memberships.isEmpty
+    }
+
+    /// Promo-gate: member выбрал место, но не привязан к `place_players`.
+    /// Админам места и тем, кто явно skip'нул, не показываем.
+    private var shouldShowPlayerLinkGate: Bool {
+        guard authViewModel.currentUserId != nil else { return false }
+        guard let pid = placeSession.activePlaceId else { return false }
+        guard placeSession.hasLoaded, placeSession.linkCheckDone else { return false }
+        if placeSession.isAdminInActivePlace { return false }
+        if placeSession.isLinkedInActivePlace { return false }
+        let skipped = UserDefaults.standard.bool(forKey: "link_skipped:\(pid.uuidString)")
+        if skipped { return false }
+        return true
+    }
+
+    /// Может ли пользователь видеть финансовые табы (Игры/Статистика/Игроки)?
+    /// True если он admin места ИЛИ привязан к карточке place_player ИЛИ super-admin
+    /// (последнее автоматически проверяется RLS на уровне БД — view даже if shown будет пустой).
+    /// Для not-linked members скрываем табы целиком, чтобы не показывать пустые экраны.
+    private var canSeeFinancialTabs: Bool {
+        // Если ещё не загрузились — скрываем (gate отрабатывает первым).
+        guard placeSession.hasLoaded, placeSession.linkCheckDone else { return false }
+        if placeSession.isAdminInActivePlace { return true }
+        if placeSession.isLinkedInActivePlace { return true }
+        return false
     }
 
     var body: some View {
@@ -55,16 +89,18 @@ struct MainView: View {
                     .tag(MainTab.overview)
                     .accessibilityIdentifier("tab_overview")
 
-                GamesViewV2(
-                    games: viewModel.filteredGames,
-                    userId: authViewModel.currentUserId,
-                    selectedFilter: $viewModel.selectedFilter,
-                    onFilterChange: viewModel.applyFilter,
-                    onLoadMore: viewModel.loadMoreGames
-                )
-                    .tabItem { Label("Игры", systemImage: "list.bullet") }
-                    .tag(MainTab.games)
-                    .accessibilityIdentifier("tab_games")
+                if canSeeFinancialTabs {
+                    GamesViewV2(
+                        games: viewModel.filteredGames,
+                        userId: authViewModel.currentUserId,
+                        selectedFilter: $viewModel.selectedFilter,
+                        onFilterChange: viewModel.applyFilter,
+                        onLoadMore: viewModel.loadMoreGames
+                    )
+                        .tabItem { Label("Игры", systemImage: "list.bullet") }
+                        .tag(MainTab.games)
+                        .accessibilityIdentifier("tab_games")
+                }
 
                 Group {
                     if let uid = authViewModel.currentUserId {
@@ -92,24 +128,26 @@ struct MainView: View {
                     .accessibilityIdentifier("tab_claim_self")
                     .modifier(BadgeOnlyIfPositive(count: freeClaimBadgeCount))
 
-                StatisticsTabView(
-                    statistics: viewModel.statistics,
-                    gameTypeStats: viewModel.gameTypeStats,
-                    placeStats: viewModel.placeStats,
-                    topAnalytics: viewModel.topAnalytics,
-                    chartData: viewModel.chartData
-                )
-                .environmentObject(authViewModel)
-                .tabItem { Label("Статистика", systemImage: "chart.pie.fill") }
-                .tag(MainTab.statistics)
-                .accessibilityIdentifier("tab_statistics")
-
-                PlayersTabView()
+                if canSeeFinancialTabs {
+                    StatisticsTabView(
+                        statistics: viewModel.statistics,
+                        gameTypeStats: viewModel.gameTypeStats,
+                        placeStats: viewModel.placeStats,
+                        topAnalytics: viewModel.topAnalytics,
+                        chartData: viewModel.chartData
+                    )
                     .environmentObject(authViewModel)
-                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
-                    .tabItem { Label("Игроки", systemImage: "person.2.fill") }
-                    .tag(MainTab.players)
-                    .accessibilityIdentifier("tab_players")
+                    .tabItem { Label("Статистика", systemImage: "chart.pie.fill") }
+                    .tag(MainTab.statistics)
+                    .accessibilityIdentifier("tab_statistics")
+
+                    PlayersTabView()
+                        .environmentObject(authViewModel)
+                        .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                        .tabItem { Label("Игроки", systemImage: "person.2.fill") }
+                        .tag(MainTab.players)
+                        .accessibilityIdentifier("tab_players")
+                }
 
                 RangesTabView()
                     .environmentObject(authViewModel)
@@ -294,10 +332,22 @@ struct MainView: View {
                 Task {
                     await PlayerMergeListenerService.shared.startListening()
                 }
+
+                Task {
+                    await PlaceUpdatesListenerService.shared.startListening()
+                }
+
+                Task {
+                    await placeSession.fetchMemberships()
+                    await placeSession.refreshLinkInActivePlace()
+                }
             }
             .onDisappear {
                 Task {
                     await PlayerMergeListenerService.shared.stopListening()
+                }
+                Task {
+                    await PlaceUpdatesListenerService.shared.stopListening()
                 }
             }
             .onChange(of: selectedTab) { _, new in
@@ -313,6 +363,35 @@ struct MainView: View {
             }
         }
         .v2ScreenBackground(.rich)
+        .fullScreenCover(isPresented: Binding(
+            get: { shouldShowPlaceGate },
+            set: { _ in }
+        )) {
+            OnboardingPlaceGateView()
+                .environmentObject(placeSession)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { !shouldShowPlaceGate && shouldShowPlayerLinkGate },
+            set: { _ in }
+        )) {
+            if let pid = placeSession.activePlaceId {
+                PostAccessPlayerLinkView(
+                    placeId: pid,
+                    placeName: placeSession.activePlaceName ?? ""
+                )
+                .environmentObject(placeSession)
+            }
+        }
+        .onChange(of: placeSession.activePlaceId) { _, _ in
+            Task { await placeSession.refreshLinkInActivePlace() }
+        }
+        .onChange(of: canSeeFinancialTabs) { _, canSee in
+            // Если финансовые табы скрылись (user разлинкнут / поменял место) —
+            // переключиться на overview, чтобы не зависнуть в исчезнувшем табе.
+            if !canSee, [.games, .statistics, .players].contains(selectedTab) {
+                selectedTab = .overview
+            }
+        }
     }
 
     private func titleForTab(_ tab: MainTab) -> String {

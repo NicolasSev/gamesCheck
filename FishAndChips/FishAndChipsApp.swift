@@ -15,6 +15,7 @@ struct FishAndChipsApp: App {
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var deepLinkService = DeepLinkService()
     @StateObject private var syncCoordinator = SyncCoordinator.shared
+    @StateObject private var placeSession = PlaceSessionManager.shared
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     @State private var isInitialSyncComplete = false
@@ -62,7 +63,8 @@ struct FishAndChipsApp: App {
                 persistenceController: persistenceController,
                 notificationService: notificationService,
                 deepLinkService: deepLinkService,
-                syncCoordinator: syncCoordinator
+                syncCoordinator: syncCoordinator,
+                placeSession: placeSession
             )
         }
     }
@@ -74,6 +76,7 @@ struct AppBodyView: View {
     @ObservedObject var notificationService: NotificationService
     @ObservedObject var deepLinkService: DeepLinkService
     @ObservedObject var syncCoordinator: SyncCoordinator
+    @ObservedObject var placeSession: PlaceSessionManager
     
     @Environment(\.scenePhase) private var scenePhase
     
@@ -85,6 +88,7 @@ struct AppBodyView: View {
                     .environmentObject(notificationService)
                     .environmentObject(deepLinkService)
                     .environmentObject(syncCoordinator)
+                    .environmentObject(placeSession)
                     .onOpenURL { url in
                         debugLog("🔗 App received URL: \(url)")
                         deepLinkService.handleURL(url)

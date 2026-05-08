@@ -72,14 +72,95 @@ struct GameDTO: Codable, Identifiable, Sendable {
 struct PlaceDTO: Codable, Identifiable, Sendable {
     let id: UUID
     var name: String
+    var slug: String?
+    var isArchived: Bool?
     var createdBy: UUID?
     var createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
         case name
+        case slug
+        case isArchived = "is_archived"
         case createdBy = "created_by"
         case createdAt = "created_at"
+    }
+}
+
+// MARK: - PlaceMembership
+
+struct PlaceMembershipDTO: Codable, Identifiable, Sendable {
+    let placeId: UUID
+    let role: String
+    let placeName: String
+    let placeSlug: String?
+    let isArchived: Bool
+
+    var id: UUID { placeId }
+    var isAdmin: Bool { role == "admin" }
+
+    enum CodingKeys: String, CodingKey {
+        case placeId = "place_id"
+        case role
+        case placeName = "place_name"
+        case placeSlug = "place_slug"
+        case isArchived = "is_archived"
+    }
+}
+
+// MARK: - PlacePlayer (for link request flow)
+
+struct PlacePlayerDTO: Codable, Identifiable, Sendable {
+    let id: UUID
+    let placeId: UUID
+    let displayName: String
+    let profileId: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case placeId = "place_id"
+        case displayName = "display_name"
+        case profileId = "profile_id"
+    }
+}
+
+// MARK: - PlaceDirectoryEntry (для onboarding gate; view places_directory)
+
+struct PlaceDirectoryEntryDTO: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let slug: String?
+    let hasPendingAccessRequestFromMe: Bool
+    let iAmMember: Bool
+    let memberRole: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case slug
+        case hasPendingAccessRequestFromMe = "has_pending_access_request_from_me"
+        case iAmMember = "i_am_member"
+        case memberRole = "member_role"
+    }
+}
+
+// MARK: - PlacePlayerNameOnly (только имя, без финансов; view place_players_names_only)
+
+struct PlacePlayerNameOnlyDTO: Codable, Identifiable, Sendable {
+    let id: UUID
+    let placeId: UUID
+    let displayName: String
+    let displayKey: String
+    let isClaimed: Bool
+    let isMe: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case placeId = "place_id"
+        case displayName = "display_name"
+        case displayKey = "display_key"
+        case isClaimed = "is_claimed"
+        case isMe = "is_me"
     }
 }
 

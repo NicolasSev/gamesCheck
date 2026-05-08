@@ -202,8 +202,11 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
             let places: [PlaceDTO] = try await supabase.fetchAll(table: "places")
             await mergePlaces(places)
 
+            let activePlaceId = await PlaceSessionManager.shared.activePlaceId
             let games: [GameDTO] = try await supabase.fetchByFilter(table: "games") { query in
-                query.eq("soft_deleted", value: false)
+                var q = query.eq("soft_deleted", value: false)
+                if let pid = activePlaceId { q = q.eq("place_id", value: pid) }
+                return q
             }
             await mergeGames(games)
 
@@ -241,7 +244,12 @@ class SupabaseSyncService: ObservableObject, SyncServiceProtocol {
             await mergeProfile(profile)
         }
 
-        let games: [GameDTO] = try await supabase.fetchSince(table: "games", since: since)
+        let activePlaceId = await PlaceSessionManager.shared.activePlaceId
+        let games: [GameDTO] = try await supabase.fetchByFilter(table: "games") { query in
+            var q = query.gte("updated_at", value: ISO8601DateFormatter().string(from: since))
+            if let pid = activePlaceId { q = q.eq("place_id", value: pid) }
+            return q
+        }
         await mergeGames(games)
 
         // Batch: загружаем game_players для обновлённых игр одним запросом

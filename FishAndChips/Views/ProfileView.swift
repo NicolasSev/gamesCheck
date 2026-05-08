@@ -5,10 +5,13 @@ struct ProfileView: View {
     @EnvironmentObject var notificationService: NotificationService
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var placeSession: PlaceSessionManager
     @State private var showingPendingClaims = false
     @State private var showingMyClaims = false
     @State private var showingEditUsername = false
     @State private var showingDebug = false
+    @State private var showingRequestAccess = false
+    @State private var showingRequestLink = false
     @State private var newUsername = ""
     @State private var isUpdatingUsername = false
     @State private var showingError = false
@@ -137,6 +140,43 @@ struct ProfileView: View {
                                 }
                             }
                             .accessibilityIdentifier("profile_pending_claims_button")
+                        }
+                    }
+                    .padding()
+                    .glassCardStyle(.plain)
+
+                    // Место (venue)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Место", systemImage: "mappin.circle.fill")
+                            .font(.headline)
+                            .foregroundColor(.white)
+
+                        if !placeSession.memberships.isEmpty {
+                            PlaceSwitcherView()
+
+                            if placeSession.activePlaceId != nil {
+                                Divider().background(Color.white.opacity(0.1))
+                                Button(action: { showingRequestLink = true }) {
+                                    HStack {
+                                        Text("Привязать к игроку")
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.5))
+                                    }
+                                }
+                            }
+                        }
+
+                        Button(action: { showingRequestAccess = true }) {
+                            HStack {
+                                Text("Запросить доступ к месту")
+                                    .foregroundColor(DS.Color.green)
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                                    .foregroundColor(DS.Color.green)
+                            }
                         }
                     }
                     .padding()
@@ -359,6 +399,14 @@ struct ProfileView: View {
             .sheet(isPresented: $showingDebug) {
                 DebugView()
                     .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+            }
+            .sheet(isPresented: $showingRequestAccess) {
+                RequestPlaceAccessView()
+                    .environmentObject(placeSession)
+            }
+            .sheet(isPresented: $showingRequestLink) {
+                RequestPlayerLinkView()
+                    .environmentObject(placeSession)
             }
             .alert("Изменить имя пользователя", isPresented: $showingEditUsername) {
                 TextField("Новое имя", text: $newUsername)
