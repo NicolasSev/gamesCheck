@@ -80,6 +80,20 @@ struct AddGameSheet: View {
         do {
             try viewContext.save()
 
+            TelegramNotifier.shared.notify(
+                event: "game.created",
+                message: "Создана игра (iOS)",
+                level: .important,
+                meta: [
+                    "gameId": newGame.gameId.uuidString,
+                    "placeId": newGame.placeId?.uuidString ?? "",
+                    "creatorId": authViewModel.currentUserId?.uuidString ?? "",
+                    "gameType": newGame.gameType ?? "",
+                    "timestamp": ISO8601DateFormatter().string(from: selectedDate),
+                ],
+                userLabel: authViewModel.currentUsername
+            )
+
             Task {
                 await SyncCoordinator.shared.quickSyncGame(newGame)
                 try? await MaterializedViewsService.shared.updateGameSummary(gameId: newGame.gameId)

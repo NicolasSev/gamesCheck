@@ -84,9 +84,21 @@ final class ClaimDiscoveryService: ObservableObject {
             let p_player_name: String
         }
 
+        let trimmedName = playerName.trimmingCharacters(in: .whitespacesAndNewlines)
         let id: UUID = try await SupabaseService.shared.rpc(
             "submit_bulk_claim",
-            params: Params(p_host_id: hostId, p_place_id: placeId, p_player_name: playerName.trimmingCharacters(in: .whitespacesAndNewlines)),
+            params: Params(p_host_id: hostId, p_place_id: placeId, p_player_name: trimmedName),
+        )
+        TelegramNotifier.shared.notify(
+            event: "claim.bulk_submitted",
+            message: "Заявка на игрока «\(trimmedName)» (iOS)",
+            level: .important,
+            meta: [
+                "claimId": id.uuidString,
+                "hostId": hostId.uuidString,
+                "placeId": placeId?.uuidString ?? "",
+                "playerName": trimmedName,
+            ]
         )
         return id
     }

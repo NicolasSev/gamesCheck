@@ -290,9 +290,17 @@ final class AuthViewModel: ObservableObject {
         await syncCoordinator.quickSyncPlayerProfile(profile)
         debugLog("☁️ [REGISTER] Profile sync completed")
 
+        TelegramNotifier.shared.notify(
+            event: "user.registered",
+            message: "Регистрация с iOS",
+            level: .important,
+            meta: ["userId": user.userId.uuidString, "username": username],
+            userLabel: "\(username) <\(normEmail)>"
+        )
+
         debugLog("🔑 [REGISTER] Auto-login after registration...")
         try await login(email: normEmail, password: regPassword)
-        
+
         // Показываем уведомление об успешной регистрации
         await MainActor.run {
             authState = .authenticated
@@ -425,7 +433,14 @@ final class AuthViewModel: ObservableObject {
         authState = .authenticated
         errorMessage = nil
         requiresReauth = false  // Сбрасываем флаг после успешного входа
-        
+
+        TelegramNotifier.shared.notify(
+            event: "user.login",
+            message: "Логин с iOS",
+            meta: ["userId": foundUser.userId.uuidString],
+            userLabel: "\(foundUser.username) <\(normEmail)>"
+        )
+
         debugLog("✅ [LOGIN] Login successful! User: \(foundUser.username)\n")
     }
 

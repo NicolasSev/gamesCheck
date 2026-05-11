@@ -314,6 +314,18 @@ class PlayerClaimService {
             table: "admin_merge_requests",
             values: insert,
         )
+
+        TelegramNotifier.shared.notify(
+            event: "claim.merge_requested",
+            message: "Запрос на merge (iOS): \(keys.joined(separator: ", "))",
+            level: .important,
+            meta: [
+                "blockedClaimId": blockedClaimId.uuidString,
+                "sourceKeys": keys,
+                "suggestedCanonical": canonField ?? "",
+                "requesterId": uid.uuidString,
+            ]
+        )
     }
 
     private func notifyClaimApproved(snapshot: PlayerClaim) {

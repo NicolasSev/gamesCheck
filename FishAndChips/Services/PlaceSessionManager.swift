@@ -86,6 +86,12 @@ final class PlaceSessionManager: ObservableObject {
             let p_message: String?
         }
         try await supabase.rpc("request_place_access", params: Params(p_place_id: placeId, p_message: message))
+        TelegramNotifier.shared.notify(
+            event: "place.access_requested",
+            message: "Запрос доступа к заведению (iOS)",
+            level: .important,
+            meta: ["placeId": placeId.uuidString, "comment": message ?? ""]
+        )
     }
 
     // MARK: - Request to link profile to a place_player
@@ -96,6 +102,12 @@ final class PlaceSessionManager: ObservableObject {
             let p_message: String?
         }
         try await supabase.rpc("request_place_link", params: Params(p_place_player_id: placePlayerId, p_message: message))
+        TelegramNotifier.shared.notify(
+            event: "place.link_requested",
+            message: "Запрос привязки к игроку места (iOS)",
+            level: .important,
+            meta: ["placePlayerId": placePlayerId.uuidString, "comment": message ?? ""]
+        )
     }
 
     // MARK: - Request to create a new place
@@ -106,6 +118,12 @@ final class PlaceSessionManager: ObservableObject {
             let p_message: String?
         }
         try await supabase.rpc("request_create_place", params: Params(p_proposed_name: proposedName, p_message: message))
+        TelegramNotifier.shared.notify(
+            event: "place.create_requested",
+            message: "Запрос создания заведения «\(proposedName)» (iOS)",
+            level: .important,
+            meta: ["proposedName": proposedName, "comment": message ?? ""]
+        )
     }
 
     // MARK: - Fetch available places (for access request flow)
